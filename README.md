@@ -86,6 +86,12 @@ a new agent session. Rerun it to upgrade.
 curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh
 ```
 
+In Claude Code, install the plugin. Project settings enable it but don't install it.
+
+```sh
+claude plugin install codeguard@codeguard --scope project
+```
+
 In Codex, trust codeguard's hook in `/hooks`.
 
 ## CLI

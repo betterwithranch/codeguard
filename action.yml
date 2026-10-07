@@ -9,8 +9,13 @@ runs:
   steps:
     - uses: astral-sh/setup-uv@v10.2.0
     - name: Check changed files
+      id: review
       shell: bash
       run: uv run --frozen --project "${{ github.action_path }}/plugins/codeguard" codeguard review --base "${{ inputs.base }}"
+    - name: Point to the plugin
+      if: failure() && steps.review.outcome == 'failure'
+      shell: bash
+      run: echo "::error::Install the codeguard plugin so your agent catches these before you push. See https://github.com/betterwithranch/codeguard#setup"
     - name: Test rules
       shell: bash
       run: uv run --frozen --project "${{ github.action_path }}/plugins/codeguard" codeguard test
