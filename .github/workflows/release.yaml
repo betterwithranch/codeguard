@@ -1,0 +1,29 @@
+name: codeguard release
+on:
+  push:
+    tags:
+      - "v*.*.*"
+permissions:
+  contents: write
+jobs:
+  move-major-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Check the plugin versions match the tag
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          for manifest in plugins/codeguard/.claude-plugin/plugin.json plugins/codeguard/.codex-plugin/plugin.json; do
+            manifest_version="$(jq -r .version "$manifest")"
+            if [ "$manifest_version" != "$version" ]; then
+              echo "::error file=$manifest::version is $manifest_version, but the tag is $GITHUB_REF_NAME"
+              exit 1
+            fi
+          done
+      - name: Move the major tag to this release
+        shell: bash
+        run: |
+          major="${GITHUB_REF_NAME%%.*}"
+          git tag --force "$major" "$GITHUB_SHA"
+          git push --force origin "$major"

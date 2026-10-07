@@ -152,10 +152,10 @@ Point a project's hooks at this checkout.
    claude plugin validate .
    claude plugin validate plugins/codeguard
    ```
-3. Commit, then tag the release, move `v0` to it, and push both:
+3. Commit, then tag the release and push the tag:
    ```sh
    git tag v<version>
-   git tag --force v0
    git push origin v<version>
-   git push --force origin v0
    ```
+   The release workflow checks the tag matches both manifests' `version`, then moves
+   the major tag (`v0`) to the release.
