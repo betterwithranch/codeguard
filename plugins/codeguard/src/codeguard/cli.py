@@ -42,7 +42,7 @@ def main() -> int:
     stop_command = hook_events.add_parser(
         "stop", help="Block the agent's Stop when its uncommitted changes break a rule."
     )
-    stop_command.set_defaults(run=lambda _: stop_hook.respond(sys.stdin, sys.stderr))
+    stop_command.set_defaults(run=_stop)
 
     args = parser.parse_args()
     try:
@@ -66,3 +66,7 @@ def _test(args: argparse.Namespace) -> int:
     result = tests.update_snapshots() if args.update_all else tests.run()
     result.write(sys.stderr)
     return 0 if result.passed else 1
+
+
+def _stop(args: argparse.Namespace) -> int:
+    return stop_hook.respond(sys.stdin, sys.stderr)

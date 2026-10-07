@@ -34,12 +34,12 @@ class Snapshots:
     def load(cls, test_dir: Path) -> Self:
         snapshot_dir = test_dir / SNAPSHOT_DIR
         paths = sorted(test_dir.rglob("*.y*ml"))
-        tests = [_read(path) for path in paths if snapshot_dir not in path.parents]
+        snapshot_paths = [path for path in paths if snapshot_dir in path.parents]
+        test_paths = [path for path in paths if path not in snapshot_paths]
+        tests = [_read(path) for path in test_paths]
         return cls(
             invalid_cases={test["id"]: frozenset(test.get("invalid", [])) for test in tests},
-            snapshots=tuple(
-                SnapshotFile.load(path) for path in paths if snapshot_dir in path.parents
-            ),
+            snapshots=tuple(SnapshotFile.load(path) for path in snapshot_paths),
         )
 
     def stale(self) -> list[SnapshotFile]:

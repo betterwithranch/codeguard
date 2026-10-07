@@ -10,10 +10,10 @@ class RuleTestResult:
 
     @classmethod
     def merge(cls, results: Iterable[Self]) -> Self:
-        results = list(results)
+        collected = list(results)
         return cls(
-            failed=any(result.failed for result in results),
-            problems=tuple(problem for result in results for problem in result.problems),
+            failed=any(result.failed for result in collected),
+            problems=tuple(problem for result in collected for problem in result.problems),
         )
 
     @property
