@@ -1,0 +1,16 @@
+name: codeguard
+description: Check a pull request's changed files against the project's rules, and run the rule tests.
+inputs:
+  base:
+    description: Ref the changes are compared against. The checkout needs its history (fetch-depth 0).
+    default: origin/${{ github.base_ref }}
+runs:
+  using: composite
+  steps:
+    - uses: astral-sh/setup-uv@v10.2.0
+    - name: Check changed files
+      shell: bash
+      run: uv run --frozen --project "${{ github.action_path }}/plugins/codeguard" codeguard review --base "${{ inputs.base }}"
+    - name: Test rules
+      shell: bash
+      run: uv run --frozen --project "${{ github.action_path }}/plugins/codeguard" codeguard test

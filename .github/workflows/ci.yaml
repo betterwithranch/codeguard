@@ -1,0 +1,12 @@
+name: codeguard CI
+on:
+  push:
+  pull_request:
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv run --frozen --project plugins/codeguard pytest plugins/codeguard/tests
+      - run: uv run --frozen --directory plugins/codeguard lint-imports

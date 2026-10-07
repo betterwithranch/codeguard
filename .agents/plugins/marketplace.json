@@ -1,0 +1,15 @@
+{
+  "name": "codeguard",
+  "interface": {
+    "displayName": "codeguard"
+  },
+  "plugins": [
+    {
+      "name": "codeguard",
+      "source": {
+        "source": "local",
+        "path": "./plugins/codeguard"
+      }
+    }
+  ]
+}

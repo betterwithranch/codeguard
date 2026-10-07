@@ -1,0 +1,49 @@
+[project]
+name = "codeguard"
+version = "0.1.0"
+description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
+authors = [
+    { name = "Craig Israel", email = "craig@theisraels.net" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "ast-grep-cli>=0.45.3",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+codeguard = "codeguard.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.10.11,<0.11.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["tests"]
+addopts = ["--import-mode=importlib"]
+
+[tool.importlinter]
+root_packages = ["codeguard"]
+
+[[tool.importlinter.contracts]]
+name = "codeguard packages depend one way"
+type = "layers"
+containers = ["codeguard"]
+exhaustive = true
+layers = [
+    "cli",
+    "stop_hook",
+    "rules | stop_event",
+    "ast_grep",
+    "review | rule_tests",
+    "checkout",
+]
+
+[dependency-groups]
+dev = [
+    "factory-boy>=3.3.3",
+    "import-linter>=2.15",
+    "pytest>=9.1.1",
+    "pytest-factoryboy>=2.8.1",
+]

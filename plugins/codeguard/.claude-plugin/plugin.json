@@ -1,0 +1,8 @@
+{
+  "name": "codeguard",
+  "version": "0.1.0",
+  "description": "Makes coding agents follow your project's coding conventions.",
+  "author": {
+    "name": "Craig Israel"
+  }
+}

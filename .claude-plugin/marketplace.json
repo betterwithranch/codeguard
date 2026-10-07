@@ -1,0 +1,14 @@
+{
+  "name": "codeguard",
+  "owner": {
+    "name": "Craig Israel"
+  },
+  "description": "Checks an agent's changes against the project's rules.",
+  "plugins": [
+    {
+      "name": "codeguard",
+      "source": "./plugins/codeguard",
+      "description": "Makes coding agents follow your project's coding conventions."
+    }
+  ]
+}
