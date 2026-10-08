@@ -1,11 +1,14 @@
 from pathlib import Path
 
 import pytest
+from factories.concern import MakeConcern, MakeSkill
 from factories.finding import MakeFinding
 from git_repo import GitRepo
 from pytest_factoryboy import register
 
 register(MakeFinding)
+register(MakeSkill)
+register(MakeConcern)
 
 
 @pytest.fixture

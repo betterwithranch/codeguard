@@ -11,6 +11,11 @@ class Severity(StrEnum):
     HINT = "hint"
 
 
+class Confidence(StrEnum):
+    HIGH = "high"
+    LOW = "low"
+
+
 @dataclass(frozen=True)
 class Finding:
     rule: str
@@ -19,11 +24,16 @@ class Finding:
     message: str
     severity: Severity
     note: str | None
+    confidence: Confidence
 
     @property
     def id(self) -> str:
         key = f"{self.rule}:{self.file}:{self.line}"
         return hashlib.sha256(key.encode()).hexdigest()[:12]
+
+    @property
+    def blocks(self) -> bool:
+        return self.severity is Severity.ERROR and self.confidence is Confidence.HIGH
 
     def __str__(self) -> str:
         summary = f"{self.file}:{self.line}: {self.severity} {self.rule}: {self.message} [{self.id}]"

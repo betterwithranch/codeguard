@@ -1,6 +1,6 @@
 import factory
 
-from codeguard.review import Finding, Severity
+from codeguard.review import Confidence, Finding, Severity
 
 
 class MakeFinding(factory.Factory):
@@ -14,6 +14,7 @@ class MakeFinding(factory.Factory):
             severity=Severity.WARNING,
             note=None,
         )
+        low_confidence = factory.Trait(confidence=Confidence.LOW)
 
     rule = "no-print"
     file = "a.py"
@@ -21,3 +22,4 @@ class MakeFinding(factory.Factory):
     message = "Use logging, not print."
     severity = Severity.ERROR
     note = "print bypasses log levels.\nCall logger.info instead.\n"
+    confidence = Confidence.HIGH
