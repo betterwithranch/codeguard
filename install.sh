@@ -13,4 +13,4 @@ if ! command -v uv >/dev/null 2>&1; then
 fi
 
 uv tool install --force \
-  "git+https://github.com/betterwithranch/codeguard@${ref}#subdirectory=plugins/codeguard"
+  "git+https://github.com/betterwithranch/codeguard@${ref}"

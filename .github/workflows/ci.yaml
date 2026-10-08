@@ -8,5 +8,5 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
-      - run: uv run --frozen --project plugins/codeguard pytest plugins/codeguard/tests
-      - run: uv run --frozen --directory plugins/codeguard lint-imports
+      - run: uv run --frozen pytest
+      - run: uv run --frozen lint-imports

@@ -118,14 +118,14 @@ codeguard test --update-all   # rule tests, regenerating snapshots
 Tests:
 
 ```sh
-uv run --directory plugins/codeguard pytest
+uv run pytest
 ```
 
 Run the CLI from this checkout. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
 
 ```sh
-uv tool install --editable plugins/codeguard
+uv tool install --editable .
 ```
 
 Point a project's hooks at this checkout.
