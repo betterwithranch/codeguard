@@ -136,6 +136,14 @@ class TestTestCommand:
 
         assert not (repo.root / NO_PRINT_SNAPSHOT).exists()
 
+    def test_invalid_binding_does_not_stop_rule_tests(self, repo):
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+        repo.write(".codeguard/bindings/broken.yaml", "path: [a.py]\n")
+
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True)
+
+        assert result.returncode == 0
+
     def test_failing_rule_tests_exit_1(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - print(1)\n")
 

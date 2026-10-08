@@ -56,13 +56,13 @@ def main() -> int:
 def _review(args: argparse.Namespace) -> int:
     checkout = Checkout.containing(Path.cwd())
     files = checkout.all_files() if args.all else checkout.changes(args.base)
-    result = Rules.load(checkout).review(files)
+    result = Rules(checkout).review(files)
     result.write(sys.stdout)
     return 1 if result.blocks else 0
 
 
 def _test(args: argparse.Namespace) -> int:
-    tests = Rules.load(Checkout.containing(Path.cwd())).tests
+    tests = Rules(Checkout.containing(Path.cwd())).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
     result.write(sys.stderr)
     return 0 if result.passed else 1

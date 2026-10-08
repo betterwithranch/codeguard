@@ -9,7 +9,7 @@ from codeguard.review.judge_stage import JudgeStage
 from codeguard.review.review import Review
 from codeguard.review.reviewer import Reviewer
 from codeguard.review.stage import Stage
-from codeguard.review.verdict import JudgedFinding, Verdict
+from codeguard.review.verdict import Verdict
 
 __all__ = [
     "Check",
@@ -21,7 +21,6 @@ __all__ = [
     "Judge",
     "JudgeRequest",
     "JudgeStage",
-    "JudgedFinding",
     "Review",
     "Reviewer",
     "Severity",

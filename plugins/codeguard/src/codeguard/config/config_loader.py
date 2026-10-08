@@ -50,7 +50,7 @@ class ConfigLoader:
 
     def _skill(self, binding_path: Path, name: str, skill_roots: tuple[str, ...]) -> Skill:
         roots = [self.root / skill_root for skill_root in skill_roots]
-        found = [root / name / SKILL_FILE for root in roots if (root / name / SKILL_FILE).is_file()]
+        found = [path for root in roots if (path := root / name / SKILL_FILE).is_file()]
         if len(found) != 1:
             where = "no skill root" if not found else "more than one skill root"
             listed = ", ".join(str(root) for root in roots)

@@ -27,7 +27,7 @@ def review_at_stop(event: StopEvent) -> Review:
         checkout = Checkout.containing(event.cwd)
         if checkout.operation_in_progress():
             return SKIPPED
-        return Rules.load(checkout).review(checkout.changes("HEAD"))
+        return Rules(checkout).review(checkout.changes("HEAD"))
     except (subprocess.CalledProcessError, FileNotFoundError):
         if event.cwd.is_dir():
             raise
