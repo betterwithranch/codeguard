@@ -1,11 +1,15 @@
 import argparse
 import subprocess
 import sys
+import traceback
 from pathlib import Path
 
-from codeguard import stop_hook
 from codeguard.checkout import Checkout
 from codeguard.rules import Rules
+
+PASSED = 0
+FAILED = 1
+ERROR = 2
 
 
 def main() -> int:
@@ -37,36 +41,29 @@ def main() -> int:
     )
     test_command.set_defaults(run=_test)
 
-    hook_command = commands.add_parser("hook", help="Run as an agent hook.")
-    hook_events = hook_command.add_subparsers(required=True)
-    stop_command = hook_events.add_parser(
-        "stop", help="Block the agent's Stop when its uncommitted changes break a rule."
-    )
-    stop_command.set_defaults(run=_stop)
-
     args = parser.parse_args()
     try:
         return args.run(args)
     except subprocess.CalledProcessError as error:
         if error.stderr:
             sys.stderr.write(error.stderr)
-        raise
+        traceback.print_exc()
+        return ERROR
+    except Exception:
+        traceback.print_exc()
+        return ERROR
 
 
 def _review(args: argparse.Namespace) -> int:
     checkout = Checkout.containing(Path.cwd())
-    files = checkout.all_files() if args.all else checkout.changes(args.base)
+    files = checkout.all_files() if args.all else checkout.changed_files(args.base)
     result = Rules(checkout).review(files)
     result.write(sys.stdout)
-    return 1 if result.blocks else 0
+    return FAILED if result.blocks else PASSED
 
 
 def _test(args: argparse.Namespace) -> int:
     tests = Rules(Checkout.containing(Path.cwd())).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
     result.write(sys.stderr)
-    return 0 if result.passed else 1
-
-
-def _stop(args: argparse.Namespace) -> int:
-    return stop_hook.respond(sys.stdin, sys.stderr)
+    return PASSED if result.passed else FAILED

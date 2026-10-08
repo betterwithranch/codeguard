@@ -9,7 +9,7 @@ from pathlib import Path
 from codeguard.review import Concern, Finding, JudgeRequest, Verdict
 
 CLAUDE = "claude"
-JUDGE_DIRECTORY = Path(tempfile.gettempdir()) / "codeguard-judge"
+JUDGE_DIR = Path(tempfile.gettempdir()) / "codeguard-judge"
 VERDICT_SCHEMA = json.dumps(Verdict.model_json_schema())
 
 
@@ -21,7 +21,7 @@ class ClaudeJudge:
     def judge(self, concerns: Sequence[Concern]) -> list[Finding]:
         if not concerns:
             return []
-        JUDGE_DIRECTORY.mkdir(exist_ok=True)
+        JUDGE_DIR.mkdir(exist_ok=True)
         with ThreadPoolExecutor(max_workers=len(concerns)) as executor:
             verdicts = list(executor.map(self._judge_concern, concerns))
         return [finding for findings in verdicts for finding in findings]
@@ -40,7 +40,7 @@ class ClaudeJudge:
                 "--no-session-persistence",
             ],
             input=request.prompt,
-            cwd=JUDGE_DIRECTORY,
+            cwd=JUDGE_DIR,
             capture_output=True,
             text=True,
             check=True,

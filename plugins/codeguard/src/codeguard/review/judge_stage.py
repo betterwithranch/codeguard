@@ -12,6 +12,6 @@ class JudgeStage:
     selector: ConcernSelector
 
     def run(self, files: Sequence[str], findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
-        failed = {finding.file for finding in findings if finding.blocks}
-        passing = [file for file in files if file not in failed]
-        return (*findings, *self.judge.judge(self.selector.concerns(passing)))
+        blocked = {finding.file for finding in findings if finding.blocks}
+        unblocked = [file for file in files if file not in blocked]
+        return (*findings, *self.judge.judge(self.selector.concerns(unblocked)))

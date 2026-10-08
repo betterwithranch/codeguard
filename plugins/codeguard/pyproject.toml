@@ -34,8 +34,7 @@ containers = ["codeguard"]
 exhaustive = true
 layers = [
     "cli",
-    "stop_hook",
-    "rules | stop_event",
+    "rules",
     "ast_grep | claude | config",
     "review | rule_tests",
     "checkout",

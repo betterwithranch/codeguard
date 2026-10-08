@@ -92,7 +92,14 @@ In Claude Code, install the plugin. Project settings enable it but don't install
 claude plugin install codeguard@codeguard --scope project
 ```
 
-In Codex, trust codeguard's hook in `/hooks`.
+In Codex, trust codeguard's hooks in `/hooks`.
+
+## What the hooks check
+
+When an agent or subagent stops, the hook runs `codeguard review` in its working
+directory: the uncommitted and untracked files, whoever changed them and however. A
+high-confidence error blocks the stop, and the agent sees the findings. It runs the
+`codeguard` the installer put on your PATH, the same one you run from the command line.
 
 ## CLI
 

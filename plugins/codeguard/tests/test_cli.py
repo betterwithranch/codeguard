@@ -1,4 +1,3 @@
-import json
 import subprocess
 import sysconfig
 from pathlib import Path
@@ -80,24 +79,13 @@ class TestReviewCommand:
         assert result.stderr.splitlines()[0] == (
             f"Error: Cannot parse rule {repo.root}/.codeguard/rules/pattern/broken.yml"
         )
-        assert result.returncode == 1
+        assert result.returncode == 2
 
-
-class TestHookStopCommand:
-    def test_error_finding_prints_to_stderr_and_exits_2(self, repo, make_finding):
-        repo.write("a.py", "print(1)\n")
-        finding = make_finding()
-        payload = json.dumps({"cwd": str(repo.root), "permission_mode": "default"})
-
+    def test_outside_a_checkout_exits_2(self, tmp_path):
         result = subprocess.run(
-            [CODEGUARD, "hook", "stop"], input=payload, capture_output=True, text=True
+            [CODEGUARD, "review"], cwd=tmp_path, capture_output=True, text=True
         )
 
-        assert result.stderr == (
-            f"a.py:1: error no-print: Use logging, not print. [{finding.id}]\n"
-            "  print bypasses log levels.\n"
-            "  Call logger.info instead.\n"
-        )
         assert result.returncode == 2
 
 
