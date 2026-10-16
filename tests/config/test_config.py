@@ -1,4 +1,5 @@
 import pytest
+from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from pydantic import ValidationError
 
@@ -10,6 +11,7 @@ from codeguard.config import (
     PathPackageConfig,
     RuleOverride,
     RulesetConfig,
+    VersionedPackageConfig,
 )
 
 
@@ -96,7 +98,47 @@ class TestPackagesConfig:
             Config.model_validate(
                 {
                     "packages": [
-                        {"git": "https://example.com/rules.git", "ref": "v1.0.0", "rulesets": {}}
+                        {
+                            "git": "https://example.com/rules.git",
+                            "ref": "v1.0.0",
+                            "rulesets": {},
+                        }
+                    ]
+                }
+            )
+
+    def test_git_package_with_a_version_range_is_versioned(self):
+        config = Config.model_validate(
+            {
+                "packages": [
+                    {
+                        "git": "https://example.com/rules.git",
+                        "version": ">=0.2,<1",
+                        "rulesets": {"python": {}},
+                    }
+                ]
+            }
+        )
+
+        assert config.packages == (
+            VersionedPackageConfig(
+                git="https://example.com/rules.git",
+                version=SpecifierSet(">=0.2,<1"),
+                rulesets={"python": RulesetConfig()},
+            ),
+        )
+
+    def test_git_package_with_both_ref_and_version_is_an_error(self):
+        with pytest.raises(ValidationError):
+            Config.model_validate(
+                {
+                    "packages": [
+                        {
+                            "git": "https://example.com/rules.git",
+                            "ref": "v0.2.0",
+                            "version": ">=0.2,<1",
+                            "rulesets": {"python": {}},
+                        }
                     ]
                 }
             )
@@ -104,7 +146,14 @@ class TestPackagesConfig:
     def test_git_package_without_ref_is_an_error(self):
         with pytest.raises(ValidationError):
             Config.model_validate(
-                {"packages": [{"git": "https://example.com/rules.git", "rulesets": {"python": {}}}]}
+                {
+                    "packages": [
+                        {
+                            "git": "https://example.com/rules.git",
+                            "rulesets": {"python": {}},
+                        }
+                    ]
+                }
             )
 
 

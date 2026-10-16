@@ -31,6 +31,11 @@ def main() -> int:
         action="store_true",
         help="Check every tracked and untracked file.",
     )
+    review_command.add_argument(
+        "--latest",
+        action="store_true",
+        help="Use the newest tag in each package's version range instead of the lock file.",
+    )
     review_command.set_defaults(run=_review)
 
     test_command = commands.add_parser("test", help="Run the project's rule tests.")
@@ -48,7 +53,7 @@ def main() -> int:
     eval_command.set_defaults(run=_eval)
 
     update_command = commands.add_parser(
-        "update", help="Move each git package's ref to its newest version tag."
+        "update", help="Lock each package's version range to its newest matching tag."
     )
     update_command.set_defaults(run=_update)
 
@@ -68,7 +73,7 @@ def main() -> int:
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
     scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
-    result = Rules(working_tree).review(scope)
+    result = Rules(working_tree, latest=args.latest).review(scope)
     result.write(sys.stdout)
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 

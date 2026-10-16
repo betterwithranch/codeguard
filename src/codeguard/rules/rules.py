@@ -6,9 +6,16 @@ from diskcache import Cache
 
 from codeguard.ast_grep import AstGrep, AstGrepCheck, AstGrepTestRunner, Layout
 from codeguard.claude import ClaudeJudge
-from codeguard.config import Config, ConfigError, ConfigLoader, Ruleset, RulesetLoader
+from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
 from codeguard.judge_evals import EvalResult, JudgeEvalRunner
-from codeguard.packages import MANIFEST_FILE, GitFetch, Manifest, Packages
+from codeguard.packages import (
+    MANIFEST_FILE,
+    GitFetch,
+    LatestRefs,
+    LockedRefs,
+    Manifest,
+    Packages,
+)
 from codeguard.review import Bindings, CachedJudge, CheckStep, Judge, JudgeCheck, Review, Reviewer
 from codeguard.rule_tests import RuleTests
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
@@ -21,6 +28,7 @@ _PACKAGE_CACHE_DIR = _CACHE_DIR / "packages"
 @dataclass(frozen=True)
 class Rules:
     working_tree: WorkingTree
+    latest: bool = False
 
     @cached_property
     def config(self) -> Config:
@@ -61,7 +69,8 @@ class Rules:
     @cached_property
     def _rulesets(self) -> tuple[Ruleset, ...]:
         root = self.working_tree.root
-        packages = Packages(root, GitFetch(_PACKAGE_CACHE_DIR), self._ast_grep.version)
+        refs = LatestRefs() if self.latest else LockedRefs(Lock.load(root))
+        packages = Packages(root, GitFetch(_PACKAGE_CACHE_DIR), self._ast_grep.version, refs)
         return (RulesetLoader.local(root).load(), *packages.rulesets(self.config.packages))
 
     @cached_property

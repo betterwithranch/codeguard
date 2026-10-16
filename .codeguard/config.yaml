@@ -1,5 +1,5 @@
 packages:
   - git: https://github.com/betterwithranch/codeguard-rules.git
-    ref: v0.1.0
+    version: ">=0.2,<1"
     rulesets:
       python: {}

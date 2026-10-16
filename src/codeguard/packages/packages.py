@@ -11,9 +11,11 @@ from codeguard.config import (
     PackageConfig,
     Ruleset,
     RulesetLoader,
+    VersionedPackageConfig,
 )
 from codeguard.packages.git_fetch import GitFetch
 from codeguard.packages.manifest import Manifest
+from codeguard.packages.package_refs import PackageRefs
 from codeguard.packages.selection_check import SelectionCheck
 
 
@@ -22,6 +24,7 @@ class Packages:
     working_tree: Path
     fetch: GitFetch
     ast_grep: Version
+    refs: PackageRefs
 
     def rulesets(self, packages: Sequence[PackageConfig]) -> tuple[Ruleset, ...]:
         return tuple(
@@ -50,6 +53,8 @@ class Packages:
     def _root(self, package: PackageConfig) -> Path:
         if isinstance(package, GitPackageConfig):
             return self.fetch.fetch(package.git, package.ref)
+        if isinstance(package, VersionedPackageConfig):
+            return self.fetch.fetch(package.git, self.refs.ref(package))
         return package.path
 
     def _fail(self, *problems: str) -> None:

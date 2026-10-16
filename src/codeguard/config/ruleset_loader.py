@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from codeguard.config.bindings_config import BindingsConfig
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE
+from codeguard.config.lock import LOCK_FILE
 from codeguard.config.ruleset import BINDINGS_DIR, Ruleset
 from codeguard.config.ruleset_config import RulesetConfig
 from codeguard.config.ruleset_structure import RulesetStructure
@@ -26,7 +27,7 @@ class RulesetLoader:
         return cls(
             repo=working_tree,
             root=working_tree / CONFIG_DIR,
-            files=frozenset({PurePath(CONFIG_FILE).name}),
+            files=frozenset({PurePath(CONFIG_FILE).name, PurePath(LOCK_FILE).name}),
         )
 
     def check(self) -> None:

@@ -3,7 +3,13 @@ from codeguard.config.bindings_config import BindingsConfig
 from codeguard.config.config import Config
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
-from codeguard.config.package_config import GitPackageConfig, PackageConfig, PathPackageConfig
+from codeguard.config.lock import LOCK_FILE, Lock, LockedPackage
+from codeguard.config.package_config import (
+    GitPackageConfig,
+    PackageConfig,
+    PathPackageConfig,
+    VersionedPackageConfig,
+)
 from codeguard.config.ruleset import JUDGE_EVAL_DIR, PATTERN_RULE_DIR, PATTERN_TEST_DIR, Ruleset
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
 from codeguard.config.ruleset_loader import RulesetLoader
@@ -14,6 +20,7 @@ __all__ = [
     "CONFIG_DIR",
     "CONFIG_FILE",
     "JUDGE_EVAL_DIR",
+    "LOCK_FILE",
     "PATTERN_RULE_DIR",
     "PATTERN_TEST_DIR",
     "SKILL_FILE",
@@ -24,6 +31,8 @@ __all__ = [
     "ConfigLoader",
     "ExactVersion",
     "GitPackageConfig",
+    "Lock",
+    "LockedPackage",
     "PackageConfig",
     "PathPackageConfig",
     "RuleOverride",
@@ -32,4 +41,5 @@ __all__ = [
     "RulesetLoader",
     "RulesetStructure",
     "VersionRange",
+    "VersionedPackageConfig",
 ]

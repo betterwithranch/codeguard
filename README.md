@@ -86,7 +86,7 @@ A project can also opt into rulesets from rule packages:
 # .codeguard/config.yaml
 packages:
   - git: https://github.com/betterwithranch/codeguard-rules.git
-    ref: v0.1.0
+    version: ">=0.2,<1"
     rulesets:
       python:
         exclude: [no-del-param]
@@ -100,14 +100,21 @@ packages:
 - `exclude` turns rules off.
 - `rules.<id>` overrides a rule's `paths` or `severity`, and a judge rule's `model`.
 - An unknown ruleset or rule id is an error.
-- `path: ../my-rules` in place of `git` and `ref` uses a local package, for working on one.
+- `path: ../my-rules` in place of `git` uses a local package, for working on one.
 
 Diagnostics name a packaged rule by package, ruleset and id:
 `betterwithranch/python/no-del-param`.
 
-codeguard fetches each `git` and `ref` once into `~/.cache/codeguard/packages` and reuses
-it, so pin a tag or commit, not a branch. `codeguard update` moves each `ref` to the
-package's newest version tag.
+A git package takes a `version` range or a `ref`:
+
+- `version` follows the newest tag in the range. `codeguard update` writes that tag to
+  `.codeguard/lock.yaml`; commit it. Local reviews use the locked tag until the next
+  update. CI reviews (`codeguard review --latest`, which the action runs) use the newest
+  tag in the range and ignore the lock.
+- `ref` pins a tag or commit everywhere. `codeguard update` leaves it alone.
+
+codeguard fetches each tag once into `~/.cache/codeguard/packages` and reuses it, so a
+`ref` must not be a branch.
 
 A project runs one ast-grep version for all its rules: codeguard's own, or the version
 `.codeguard/config.yaml` sets, which runs through `uv tool run`:
@@ -150,7 +157,7 @@ python/
 ```
 
 codeguard rejects anything else in a ruleset directory, and in `.codeguard/` anything
-else but `config.yaml`, so a rule moves between a project and a package unchanged.
+else but `config.yaml` and `lock.yaml`, so a rule moves between a project and a package unchanged.
 
 A binding's `skill` path starts at the package root (`skill: python/skills/<id>`). A
 judge rule's id is its skill's directory name. Rule ids are unique within a ruleset.
@@ -221,10 +228,11 @@ From the project:
 codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
+codeguard review --latest     # newest tag in each package range, not the lock
 codeguard test                # pattern rule tests
 codeguard test --update-all   # the same, regenerating snapshots
 codeguard eval                # judge rule evals; calls Claude
-codeguard update              # move package refs to their newest tags
+codeguard update              # lock each package range to its newest tag
 ```
 
 ## Working on codeguard

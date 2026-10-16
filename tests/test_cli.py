@@ -5,6 +5,7 @@ import sysconfig
 from importlib import metadata
 from pathlib import Path
 
+import pytest
 from git_repo import GitRepo
 from rules_package import write_package
 
@@ -248,23 +249,83 @@ class TestReviewWithPackages:
         assert result.returncode == 2
 
 
+@pytest.fixture
+def released_package(tmp_path_factory) -> GitRepo:
+    package = GitRepo.init(tmp_path_factory.mktemp("released").resolve())
+    write_package(package)
+    package.commit("Add rules")
+    package.git("tag", "v1.0.0")
+    return package
+
+
+def versioned_config(package: GitRepo) -> str:
+    return (
+        f"packages:\n  - git: {package.file_url}\n    version: '>=1,<2'\n"
+        "    rulesets:\n      python:\n        exclude: [responsibility-placement]\n"
+    )
+
+
 class TestUpdateCommand:
-    def test_prints_each_moved_ref(self, repo, tmp_path_factory):
-        remote = GitRepo.init(tmp_path_factory.mktemp("remote").resolve())
-        remote.git("tag", "v2.0.0")
-        url = f"file://{remote.root}"
-        repo.write(
-            ".codeguard/config.yaml",
-            f"packages:\n  - git: {url}\n    ref: v1.0.0\n    rulesets:\n      python: {{}}\n",
-        )
+    def test_prints_each_locked_ref(self, repo, released_package):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
 
         result = subprocess.run(
             [CODEGUARD, "update"], cwd=repo.root, capture_output=True, text=True
         )
 
-        assert result.stdout == f"{url}: v1.0.0 -> v2.0.0\n"
+        assert result.stdout == f"{released_package.file_url}: unlocked -> v1.0.0\n"
         assert result.stderr == ""
         assert result.returncode == 0
+
+
+class TestReviewWithVersionedPackages:
+    def test_unlocked_range_exits_2(self, repo, released_package):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        repo.write("a.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-1] == (
+            "codeguard.config.config_error.ConfigError: .codeguard/lock.yaml has no ref for "
+            f"{released_package.file_url} <2,>=1. Run codeguard update."
+        )
+        assert result.returncode == 2
+
+    def test_locked_range_reviews_with_the_locked_rules(
+        self, repo, released_package, make_diagnostic
+    ):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        subprocess.run([CODEGUARD, "update"], cwd=repo.root, check=True)
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
+    def test_latest_reviews_without_a_lock(self, repo, released_package, make_diagnostic):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--latest"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
 
 
 class TestEvalCommand:
