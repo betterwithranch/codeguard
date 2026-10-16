@@ -9,6 +9,8 @@ from claude_output import fake_claude_script
 from git_repo import GitRepo
 from rules_package import write_package
 
+from codeguard.file_lock import exclusive_lock
+
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
 BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
 NO_PRINT_TEST = ".codeguard/rule-tests/pattern/no-print-test.yml"
@@ -40,6 +42,23 @@ class TestReviewCommand:
         )
         assert result.stderr == ""
         assert result.returncode == 1
+
+    def test_review_waits_for_a_running_review(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+        diagnostic = make_diagnostic()
+
+        with exclusive_lock(repo.root / ".git" / "codeguard-review.lock"):
+            process = subprocess.Popen(
+                [CODEGUARD, "review"], cwd=repo.root, stdout=subprocess.PIPE, text=True
+            )
+            with pytest.raises(subprocess.TimeoutExpired):
+                process.wait(timeout=1)
+        stdout, _ = process.communicate(timeout=30)
+
+        assert stdout.startswith(
+            f"a.py:1: error no-print: Use logging, not print. [{diagnostic.id}]\n"
+        )
+        assert process.returncode == 1
 
     def test_warning_diagnostic_prints_and_exits_0(self, repo, make_diagnostic):
         repo.write("a.py", "breakpoint()\n")

@@ -7,6 +7,7 @@ from pathlib import Path
 
 import logfire
 
+from codeguard.file_lock import exclusive_lock
 from codeguard.packages import PackageUpdate
 from codeguard.rules import Rules
 from codeguard.working_tree import WorkingTree
@@ -14,6 +15,7 @@ from codeguard.working_tree import WorkingTree
 _EXIT_PASSED = 0
 _EXIT_FAILED = 1
 _EXIT_ERROR = 2
+_REVIEW_LOCK = "codeguard-review.lock"
 
 
 def main() -> int:
@@ -89,20 +91,21 @@ def _configure_telemetry() -> None:
 
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
-    scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
-    with logfire.span(
-        "review {repository}",
-        repository=working_tree.root.name,
-        files=len(scope.files),
-        latest=args.latest,
-    ) as span:
-        result = Rules(working_tree, latest=args.latest).review(scope)
-        span.set_attributes(
-            {
-                "diagnostics": len(result.diagnostics),
-                "errors": sum(diagnostic.blocks for diagnostic in result.diagnostics),
-            }
-        )
+    with exclusive_lock(working_tree.git_path(_REVIEW_LOCK)):
+        scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
+        with logfire.span(
+            "review {repository}",
+            repository=working_tree.root.name,
+            files=len(scope.files),
+            latest=args.latest,
+        ) as span:
+            result = Rules(working_tree, latest=args.latest).review(scope)
+            span.set_attributes(
+                {
+                    "diagnostics": len(result.diagnostics),
+                    "errors": sum(diagnostic.blocks for diagnostic in result.diagnostics),
+                }
+            )
     result.write(sys.stdout)
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 

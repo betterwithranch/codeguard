@@ -59,6 +59,9 @@ class WorkingTree:
         listed = self._git_paths("ls-files", "--cached", "--others", "--exclude-standard")
         return AllLines(tuple(sorted(path for path in listed if (self.root / path).is_file())))
 
+    def git_path(self, name: str) -> Path:
+        return self.root / self._git("rev-parse", "--git-path", name).strip()
+
     def _every_line(self, file: str) -> frozenset[int]:
         count = len((self.root / file).read_bytes().splitlines())
         return frozenset(range(1, count + 1))
