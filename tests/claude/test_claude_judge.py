@@ -4,6 +4,8 @@ from pathlib import Path
 from threading import Semaphore
 
 import pytest
+from claude_output import MODEL_USAGE, fake_claude_script
+from spans import finished_span_attributes
 
 from codeguard.claude import ClaudeJudge
 from codeguard.review import JudgeError, JudgeRequest, Verdict
@@ -18,23 +20,20 @@ def arguments(tmp_path) -> Path:
 
 @pytest.fixture
 def fake_claude_executable(tmp_path, arguments) -> str:
-    output = {
-        "structured_output": {
-            "violations": [
-                {
-                    "file": "a.py",
-                    "line": 1,
-                    "message": "Move it.",
-                    "note": "Call logger.info instead.",
-                    "confidence": 0.4,
-                }
-            ]
-        }
-    }
-    executable = tmp_path / "claude"
-    executable.write_text(
-        f"#!/bin/sh\necho \"$@\" > {arguments}\ncat > /dev/null\necho '{json.dumps(output)}'\n"
+    script = fake_claude_script(
+        [
+            {
+                "file": "a.py",
+                "line": 1,
+                "message": "Move it.",
+                "note": "Call logger.info instead.",
+                "confidence": 0.4,
+            }
+        ],
+        before=f'echo "$@" > {arguments}\n',
     )
+    executable = tmp_path / "claude"
+    executable.write_text(script)
     executable.chmod(0o755)
     return str(executable)
 
@@ -66,6 +65,48 @@ class RecordingProcesses:
 
 
 class TestClaudeJudge:
+    def test_call_records_its_usage(
+        self, tmp_path, processes, fake_claude_executable, make_skill, capfire
+    ):
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
+
+        judge.judge(JudgeRequest(make_skill(), "a.py"))
+
+        assert finished_span_attributes(capfire, "claude judges {rule} on {file}") == [
+            {
+                "rule": make_skill().name,
+                "file": "a.py",
+                "model": MODEL,
+                "returncode": 0,
+                "is_error": False,
+                "subtype": "success",
+                "num_turns": 3,
+                "duration_ms": 2036,
+                "duration_api_ms": 1901,
+                "cost_usd": 0.0022,
+                "input_tokens": MODEL_USAGE["inputTokens"],
+                "output_tokens": MODEL_USAGE["outputTokens"],
+                "cache_read_input_tokens": MODEL_USAGE["cacheReadInputTokens"],
+                "cache_creation_input_tokens": MODEL_USAGE["cacheCreationInputTokens"],
+                "thinking_tokens": MODEL_USAGE["thinkingTokens"],
+                "model_usage": json.dumps(
+                    {
+                        MODEL: {
+                            "input_tokens": MODEL_USAGE["inputTokens"],
+                            "output_tokens": MODEL_USAGE["outputTokens"],
+                            "cache_read_input_tokens": MODEL_USAGE["cacheReadInputTokens"],
+                            "cache_creation_input_tokens": MODEL_USAGE["cacheCreationInputTokens"],
+                            "thinking_tokens": MODEL_USAGE["thinkingTokens"],
+                            "cost_usd": MODEL_USAGE["costUSD"],
+                        }
+                    },
+                    separators=(",", ":"),
+                ),
+                "five_hour_utilization": 0.16,
+                "seven_day_utilization": 0.11,
+            }
+        ]
+
     def test_failed_call_is_a_judge_error_with_claude_output(
         self, tmp_path, processes, failing_claude_executable, make_skill
     ):

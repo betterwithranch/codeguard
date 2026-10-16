@@ -223,6 +223,20 @@ paths: ["app/**/*.py"]
 model: claude-haiku-5-5
 ```
 
+## Telemetry
+
+Set `LOGFIRE_TOKEN` to a Logfire write token and codeguard sends a trace of each run.
+Without it, codeguard sends nothing. Set it where the agent runs: your shell profile, or
+`env` in `~/.claude/settings.json`.
+
+- `claude judges {rule} on {file}`: one span per Claude call, with `model`, `num_turns`,
+  `duration_ms`, `cost_usd`, `input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+  `cache_creation_input_tokens` and `thinking_tokens`.
+- `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
+- `review {repository}`: `files`, `diagnostics` and `errors`.
+
+In CI, pass the token as the action's `logfire-token` input.
+
 ## CLI
 
 From the project:

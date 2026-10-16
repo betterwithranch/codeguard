@@ -1,8 +1,11 @@
 import argparse
+import os
 import subprocess
 import sys
 import traceback
 from pathlib import Path
+
+import logfire
 
 from codeguard.packages import PackageUpdate
 from codeguard.rules import Rules
@@ -58,8 +61,10 @@ def main() -> int:
     update_command.set_defaults(run=_update)
 
     args = parser.parse_args()
+    _configure_telemetry()
     try:
-        return args.run(args)
+        with logfire.span("codeguard {command}", command=args.run.__name__.lstrip("_")):
+            return args.run(args)
     except subprocess.CalledProcessError as error:
         if error.stdout:
             sys.stderr.write(error.stdout)
@@ -72,10 +77,32 @@ def main() -> int:
         return _EXIT_ERROR
 
 
+def _configure_telemetry() -> None:
+    logfire.configure(
+        send_to_logfire="if-token-present",
+        service_name="codeguard",
+        environment="ci" if os.environ.get("GITHUB_ACTIONS") == "true" else "local",
+        console=False,
+        inspect_arguments=False,
+    )
+
+
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
     scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
-    result = Rules(working_tree, latest=args.latest).review(scope)
+    with logfire.span(
+        "review {repository}",
+        repository=working_tree.root.name,
+        files=len(scope.files),
+        latest=args.latest,
+    ) as span:
+        result = Rules(working_tree, latest=args.latest).review(scope)
+        span.set_attributes(
+            {
+                "diagnostics": len(result.diagnostics),
+                "errors": sum(diagnostic.blocks for diagnostic in result.diagnostics),
+            }
+        )
     result.write(sys.stdout)
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 

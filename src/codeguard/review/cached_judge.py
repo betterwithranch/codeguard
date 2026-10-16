@@ -3,6 +3,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
+import logfire
 from diskcache import Cache
 
 from codeguard.review.judge import INSTRUCTIONS, Judge, JudgeRequest, Verdict
@@ -22,10 +23,17 @@ class CachedJudge:
         return self.wrapped.identity
 
     def judge(self, request: JudgeRequest) -> Verdict:
-        key = self._key(request)
-        if key not in self.store:
-            self.store[key] = self.wrapped.judge(request)
-        return self.store[key]
+        with logfire.span(
+            "judge {rule} on {file}", rule=request.skill.name, file=request.file
+        ) as span:
+            key = self._key(request)
+            cache_hit = key in self.store
+            span.set_attribute("cache_hit", cache_hit)
+            if not cache_hit:
+                self.store[key] = self.wrapped.judge(request)
+            verdict: Verdict = self.store[key]
+            span.set_attribute("violations", len(verdict.violations))
+            return verdict
 
     def _key(self, request: JudgeRequest) -> str:
         text = (self.root / request.file).read_text()

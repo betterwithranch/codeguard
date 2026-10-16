@@ -1,4 +1,3 @@
-import json
 import os
 import subprocess
 import sysconfig
@@ -6,6 +5,7 @@ from importlib import metadata
 from pathlib import Path
 
 import pytest
+from claude_output import fake_claude_script
 from git_repo import GitRepo
 from rules_package import write_package
 
@@ -341,11 +341,10 @@ class TestEvalCommand:
         )
         package.write("python/rule-evals/responsibility-placement/invoice.py", "x = 1\n")
         violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "note": "Move it."}
-        verdict = {"structured_output": {"violations": [{**violation, "confidence": 0.4}]}}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         claude = bin_dir / "claude"
-        claude.write_text(f"#!/bin/sh\ncat > /dev/null\necho '{json.dumps(verdict)}'\n")
+        claude.write_text(fake_claude_script([{**violation, "confidence": 0.4}]))
         claude.chmod(0o755)
 
         result = subprocess.run(

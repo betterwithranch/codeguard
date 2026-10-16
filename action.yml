@@ -10,6 +10,9 @@ inputs:
   packages-token:
     description: GitHub token that can read the project's private rule packages.
     required: false
+  logfire-token:
+    description: Logfire write token. When set, codeguard sends a trace of each run, with each judge call's tokens, cost and duration.
+    required: false
   eval:
     description: Also run `codeguard eval`, which calls Claude for each judge rule case. Needs claude-code-oauth-token.
     default: 'false'
@@ -32,6 +35,7 @@ runs:
       run: uv run --frozen --project "${{ github.action_path }}" codeguard review --latest --base "${{ inputs.base }}"
       env:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        LOGFIRE_TOKEN: ${{ inputs.logfire-token }}
     - name: Point to the plugin
       if: failure() && steps.review.outcome == 'failure'
       shell: bash
@@ -45,3 +49,4 @@ runs:
       run: uv run --frozen --project "${{ github.action_path }}" codeguard eval
       env:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
+        LOGFIRE_TOKEN: ${{ inputs.logfire-token }}

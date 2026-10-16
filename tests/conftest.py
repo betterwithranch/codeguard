@@ -14,6 +14,12 @@ register(MakeSkill)
 register(MakeBinding)
 
 
+@pytest.fixture(autouse=True)
+def no_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LOGFIRE_TOKEN", raising=False)
+    monkeypatch.setenv("LOGFIRE_IGNORE_NO_CONFIG", "1")
+
+
 @pytest.fixture
 def repo(tmp_path: Path) -> GitRepo:
     git_repo = GitRepo.init(tmp_path.resolve())

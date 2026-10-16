@@ -9,6 +9,7 @@ requires-python = ">=3.13"
 dependencies = [
     "ast-grep-cli>=0.45.3",
     "diskcache>=5.6.3",
+    "logfire>=5.2.0",
     "packaging>=26.3",
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",

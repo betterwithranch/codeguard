@@ -1,4 +1,5 @@
 from recording_judge import RecordingJudge
+from spans import finished_span_attributes
 
 from codeguard.review import CachedJudge, JudgeRequest, Verdict
 
@@ -62,6 +63,22 @@ class TestCachedJudge:
         cached(repo, store, second).judge(request)
 
         assert second.received == [request]
+
+    def test_each_lookup_records_whether_the_cache_had_the_verdict(
+        self, repo, store, make_skill, make_violation, capfire
+    ):
+        repo.write("a.py", "print(1)\n")
+        judge = cached(repo, store, RecordingJudge(Verdict(violations=(make_violation(),))))
+        request = JudgeRequest(make_skill(), "a.py")
+
+        judge.judge(request)
+        judge.judge(request)
+
+        lookup = {"rule": make_skill().name, "file": "a.py", "violations": 1}
+        assert finished_span_attributes(capfire, "judge {rule} on {file}") == [
+            {**lookup, "cache_hit": False},
+            {**lookup, "cache_hit": True},
+        ]
 
     def test_changed_version_is_judged_again(self, repo, store, make_skill):
         repo.write("a.py", "print(1)\n")
