@@ -39,8 +39,14 @@ class WorkingTree:
     def changed_lines(self, base: str) -> ChangedLines:
         merge_base = self._git("merge-base", base, "HEAD").strip()
         diff = self._git(
-            "-c", "core.quotePath=false",
-            "diff", "-U0", "--no-color", "--no-ext-diff", "--no-prefix", "--diff-filter=d",
+            "-c",
+            "core.quotePath=false",
+            "diff",
+            "-U0",
+            "--no-color",
+            "--no-ext-diff",
+            "--no-prefix",
+            "--diff-filter=d",
             merge_base,
         )
         untracked = self._git_paths("ls-files", "--others", "--exclude-standard")

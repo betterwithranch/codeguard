@@ -1,7 +1,16 @@
 import pytest
+from packaging.version import Version
 from pydantic import ValidationError
 
-from codeguard.config import Config
+from codeguard.config import (
+    BindingConfig,
+    BindingsConfig,
+    Config,
+    GitPackageConfig,
+    PathPackageConfig,
+    RuleOverride,
+    RulesetConfig,
+)
 
 
 def messages(error: pytest.ExceptionInfo[ValidationError]) -> list[str]:
@@ -14,23 +23,23 @@ def write_skill(tmp_path, name: str = "placement"):
     return tmp_path / name
 
 
-class TestConfig:
+class TestBindingsConfig:
     def test_relative_skill_is_under_the_working_tree(self, tmp_path):
         skill = write_skill(tmp_path)
 
-        config = Config.model_validate(
-            {"bindings": {"placement.yaml": {"skill": "placement", "paths": ["**"]}}},
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": "placement", "paths": ["**"]}},
             context={"working_tree": tmp_path},
         )
 
-        assert config.bindings.root["placement.yaml"].skill == skill
+        assert bindings.root["placement.yaml"].skill == skill
 
     def test_skill_without_skill_file_is_an_error(self, tmp_path):
         (tmp_path / "placement").mkdir()
 
         with pytest.raises(ValidationError) as error:
-            Config.model_validate(
-                {"bindings": {"placement.yaml": {"skill": "placement", "paths": ["**"]}}},
+            BindingsConfig.model_validate(
+                {"placement.yaml": {"skill": "placement", "paths": ["**"]}},
                 context={"working_tree": tmp_path},
             )
 
@@ -41,8 +50,95 @@ class TestConfig:
         binding = {"skill": skill, "paths": ["**"]}
 
         with pytest.raises(ValidationError) as error:
-            Config.model_validate({"bindings": {"a.yaml": binding, "b.yaml": binding}})
+            BindingsConfig.model_validate({"a.yaml": binding, "b.yaml": binding})
 
         assert messages(error) == [
             f"Value error, skill {skill} is bound more than once: a.yaml, b.yaml"
         ]
+
+
+class TestPackagesConfig:
+    def test_git_package_has_its_url_and_ref(self):
+        config = Config.model_validate(
+            {
+                "packages": [
+                    {
+                        "git": "https://example.com/rules.git",
+                        "ref": "v1.0.0",
+                        "rulesets": {"python": {}},
+                    }
+                ]
+            }
+        )
+
+        assert config.packages == (
+            GitPackageConfig(
+                git="https://example.com/rules.git",
+                ref="v1.0.0",
+                rulesets={"python": RulesetConfig()},
+            ),
+        )
+
+    def test_path_package_is_under_the_working_tree(self, tmp_path):
+        (tmp_path / "rules").mkdir()
+
+        config = Config.model_validate(
+            {"packages": [{"path": "rules", "rulesets": {"python": {}}}]},
+            context={"working_tree": tmp_path},
+        )
+
+        assert config.packages == (
+            PathPackageConfig(path=tmp_path / "rules", rulesets={"python": RulesetConfig()}),
+        )
+
+    def test_package_without_rulesets_is_an_error(self):
+        with pytest.raises(ValidationError):
+            Config.model_validate(
+                {
+                    "packages": [
+                        {"git": "https://example.com/rules.git", "ref": "v1.0.0", "rulesets": {}}
+                    ]
+                }
+            )
+
+    def test_git_package_without_ref_is_an_error(self):
+        with pytest.raises(ValidationError):
+            Config.model_validate(
+                {"packages": [{"git": "https://example.com/rules.git", "rulesets": {"python": {}}}]}
+            )
+
+
+class TestAstGrepConfig:
+    def test_ast_grep_is_the_project_version(self):
+        config = Config.model_validate({"ast-grep": "0.45.3"})
+
+        assert config == Config(ast_grep=Version("0.45.3"))
+
+    def test_ast_grep_range_is_an_error(self):
+        with pytest.raises(ValidationError) as error:
+            Config.model_validate({"ast-grep": ">=0.45"})
+
+        assert messages(error) == ["Value error, Invalid version: '>=0.45'"]
+
+
+class TestRulesetConfig:
+    def test_rule_both_excluded_and_overridden_is_an_error(self):
+        with pytest.raises(ValidationError) as error:
+            RulesetConfig.model_validate(
+                {"exclude": ["no-print"], "rules": {"no-print": {"severity": "warning"}}}
+            )
+
+        assert messages(error) == ["Value error, excluded rules are also overridden: no-print"]
+
+    def test_override_replaces_only_the_fields_it_sets(self, tmp_path):
+        skill = write_skill(tmp_path)
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": skill, "paths": ["**"], "model": "claude-haiku-5-5"}}
+        )
+        selection = RulesetConfig(rules={"placement": RuleOverride(severity="warning")})
+
+        binding = selection.apply("placement", bindings.root["placement.yaml"])
+
+        assert binding == BindingConfig(
+            skill=skill, paths=("**",), severity="warning", model="claude-haiku-5-5"
+        )

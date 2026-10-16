@@ -1,6 +1,0 @@
-id: no-print
-language: python
-severity: error
-message: Use logging, not print.
-rule:
-  pattern: print($$$)

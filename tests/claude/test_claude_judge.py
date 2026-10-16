@@ -31,10 +31,7 @@ def fake_claude_executable(tmp_path, arguments) -> str:
     }
     executable = tmp_path / "claude"
     executable.write_text(
-        "#!/bin/sh\n"
-        f'echo "$@" > {arguments}\n'
-        "cat > /dev/null\n"
-        f"echo '{json.dumps(output)}'\n"
+        f"#!/bin/sh\necho \"$@\" > {arguments}\ncat > /dev/null\necho '{json.dumps(output)}'\n"
     )
     executable.chmod(0o755)
     return str(executable)
@@ -48,9 +45,7 @@ class TestClaudeJudge:
 
         verdict = judge.judge(JudgeRequest(make_skill(), "a.py"))
 
-        assert verdict == Verdict(
-            violations=(make_violation(message="Move it.", confidence=0.4),)
-        )
+        assert verdict == Verdict(violations=(make_violation(message="Move it.", confidence=0.4),))
 
     def test_claude_runs_the_given_model(
         self, tmp_path, fake_claude_executable, arguments, make_skill

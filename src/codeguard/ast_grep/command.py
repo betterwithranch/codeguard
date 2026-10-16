@@ -1,5 +1,4 @@
 import subprocess
-import sysconfig
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -7,7 +6,6 @@ from pathlib import Path
 
 from codeguard.ast_grep.layout import Layout
 
-_AST_GREP = Path(sysconfig.get_path("scripts")) / "ast-grep"
 _EXIT_NO_ERRORS = 0
 _EXIT_ERRORS_FOUND = 1
 
@@ -16,11 +14,9 @@ _EXIT_ERRORS_FOUND = 1
 class AstGrepCommand:
     layout: Layout
 
-    def scan(self, files: Sequence[str]) -> str:
-        with self._command("scan", "--json=stream", *files) as command:
-            result = subprocess.run(
-                command, cwd=self.layout.root, capture_output=True, text=True
-            )
+    def scan(self, files: Sequence[str], options: Sequence[str] = ()) -> str:
+        with self._command("scan", "--json=stream", *options, *files) as command:
+            result = subprocess.run(command, cwd=self.layout.root, capture_output=True, text=True)
         if result.returncode not in (_EXIT_NO_ERRORS, _EXIT_ERRORS_FOUND):
             raise subprocess.CalledProcessError(
                 result.returncode, result.args, result.stdout, result.stderr
@@ -40,4 +36,4 @@ class AstGrepCommand:
     @contextmanager
     def _command(self, subcommand: str, *args: str) -> Iterator[list[str | Path]]:
         with self.layout.config() as config:
-            yield [_AST_GREP, subcommand, "--config", config, *args]
+            yield [*self.layout.ast_grep.executable, subcommand, "--config", config, *args]

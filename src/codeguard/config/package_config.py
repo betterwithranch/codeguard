@@ -1,0 +1,38 @@
+from pathlib import Path
+
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    DirectoryPath,
+    Field,
+    ValidationInfo,
+    field_validator,
+)
+
+from codeguard.config.ruleset_config import RulesetConfig
+
+
+class GitPackageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    git: str
+    ref: str
+    rulesets: dict[str, RulesetConfig] = Field(min_length=1)
+
+
+class PathPackageConfig(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    path: DirectoryPath
+    rulesets: dict[str, RulesetConfig] = Field(min_length=1)
+
+    @field_validator("path", mode="before")
+    @classmethod
+    def resolve_path_in_working_tree(cls, path: object, info: ValidationInfo) -> object:
+        if not isinstance(path, str | Path):
+            return path
+        working_tree = (info.context or {}).get("working_tree", Path())
+        return (working_tree / path).resolve()
+
+
+type PackageConfig = GitPackageConfig | PathPackageConfig

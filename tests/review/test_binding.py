@@ -1,4 +1,10 @@
-from codeguard.config import BindingConfig, BindingsConfig
+from codeguard.config import (
+    BindingConfig,
+    BindingsConfig,
+    RuleOverride,
+    Ruleset,
+    RulesetConfig,
+)
 from codeguard.review import Binding, Bindings, Severity, Skill
 
 SKILL_NAME = "responsibility-placement"
@@ -8,6 +14,11 @@ def write_skill(tmp_path, text: str):
     (tmp_path / SKILL_NAME).mkdir()
     (tmp_path / SKILL_NAME / "SKILL.md").write_text(text)
     return tmp_path / SKILL_NAME
+
+
+def ruleset(tmp_path, skill, name=None, selection=RulesetConfig()) -> Ruleset:
+    bindings = BindingsConfig({"placement.yaml": BindingConfig(skill=skill, paths=("**",))})
+    return Ruleset(name=name, root=tmp_path, bindings=bindings, selection=selection)
 
 
 class TestBinding:
@@ -29,7 +40,7 @@ class TestBinding:
         skill = write_skill(tmp_path, make_skill().text)
         config = BindingConfig(skill=skill, paths=("**",), severity="warning")
 
-        binding = Binding.from_config(config)
+        binding = Binding.from_config(SKILL_NAME, config)
 
         assert binding == make_binding(severity=Severity.WARNING)
 
@@ -37,19 +48,49 @@ class TestBinding:
         skill = write_skill(tmp_path, make_skill().text)
         config = BindingConfig(skill=skill, paths=("**",), model="claude-haiku-5-5")
 
-        binding = Binding.from_config(config)
+        binding = Binding.from_config(SKILL_NAME, config)
 
         assert binding == make_binding(model="claude-haiku-5-5")
 
 
 class TestBindings:
-    def test_from_config_builds_each_binding(self, tmp_path, make_binding, make_skill):
+    def test_from_rulesets_builds_each_binding(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        config = BindingsConfig({"placement.yaml": BindingConfig(skill=skill, paths=("**",))})
 
-        bindings = Bindings.from_config(config)
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill)])
 
         assert bindings == (make_binding(),)
+
+    def test_packaged_binding_is_named_by_its_ruleset(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, name="example/python")])
+
+        assert bindings == (make_binding(rule=f"example/python/{SKILL_NAME}"),)
+
+    def test_excluded_binding_is_dropped(self, tmp_path, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        selection = RulesetConfig(exclude=(SKILL_NAME,))
+
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])
+
+        assert bindings == ()
+
+    def test_override_replaces_the_binding_fields(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        override = RuleOverride(paths=("app/**",), severity="warning", model="claude-haiku-5-5")
+        selection = RulesetConfig(rules={SKILL_NAME: override})
+
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])
+
+        assert bindings == (
+            make_binding(
+                rule=f"example/python/{SKILL_NAME}",
+                paths=("app/**",),
+                severity=Severity.WARNING,
+                model="claude-haiku-5-5",
+            ),
+        )
 
 
 class TestSkill:

@@ -8,6 +8,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv run --frozen ruff check
+      - run: uv run --frozen ruff format --check
       - run: uv run --frozen pytest
       - run: uv run --frozen lint-imports
   codeguard:

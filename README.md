@@ -77,8 +77,101 @@ project edits. A release that breaks the rule format starts `v1`.
 
 ### Rules
 
-Rules live in the project, under `.codeguard/`. The plugin's `writing-rules` skill
+A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
 guides an agent through writing a rule and its tests.
+
+A project can also opt into rulesets from rule packages:
+
+```yaml
+# .codeguard/config.yaml
+packages:
+  - git: https://github.com/betterwithranch/codeguard-rules.git
+    ref: v0.1.0
+    rulesets:
+      python:
+        exclude: [no-del-param]
+        rules:
+          no-dead-code:
+            paths: ["src/**/*.py"]
+            severity: warning
+```
+
+- Only the listed rulesets run.
+- `exclude` turns rules off.
+- `rules.<id>` overrides a rule's `paths` or `severity`, and a judge rule's `model`.
+- An unknown ruleset or rule id is an error.
+- `path: ../my-rules` in place of `git` and `ref` uses a local package, for working on one.
+
+Diagnostics name a packaged rule by package, ruleset and id:
+`betterwithranch/python/no-del-param`.
+
+codeguard fetches each `git` and `ref` once into `~/.cache/codeguard/packages` and reuses
+it, so pin a tag or commit, not a branch. `codeguard update` moves each `ref` to the
+package's newest version tag.
+
+A project runs one ast-grep version for all its rules: codeguard's own, or the version
+`.codeguard/config.yaml` sets, which runs through `uv tool run`:
+
+```yaml
+ast-grep: 0.45.3
+```
+
+codeguard fails when that version is outside a package's `ast-grep` range.
+
+For a private package in CI, pass a token that can read it:
+
+```yaml
+      - uses: betterwithranch/codeguard@v0
+        with:
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
+```
+
+## Write a rule package
+
+A package is a git repo with a `codeguard-package.yaml` at its root:
+
+```yaml
+name: betterwithranch
+rulesets: [python]
+ast-grep: ">=0.45,<0.46"   # the ast-grep versions its pattern rules work with
+```
+
+Each ruleset is a directory with the same layout as a project's `.codeguard/`:
+
+```
+python/
+  rules/pattern/<id>.yml               # ast-grep rules
+  rule-tests/pattern/<id>-test.yml     # their tests and __snapshots__/
+  skills/<id>/SKILL.md                 # judge rules
+  bindings/<id>.yaml                   # skill and default paths
+  rule-evals/<id>-eval.yml             # judge rule evals
+  rule-evals/<id>/                     # their case files
+```
+
+codeguard rejects anything else in a ruleset directory, and in `.codeguard/` anything
+else but `config.yaml`, so a rule moves between a project and a package unchanged.
+
+A binding's `skill` path starts at the package root (`skill: python/skills/<id>`). A
+judge rule's id is its skill's directory name. Rule ids are unique within a ruleset.
+
+A judge rule eval lists case files in `rule-evals/<id>/`:
+
+```yaml
+id: enum-usage
+valid: [literal_severity.py]     # the judge must report no violation
+invalid: [shipment_status.py]    # the judge must report one at the confidence threshold
+```
+
+The judge reads each case from that directory with the binding's model, so name case
+files for their code, not their expected result. Verdicts are cached like reviews, so
+only changed cases and skills call Claude again.
+
+Run `codeguard test` at the package root for every ruleset's pattern tests, and
+`codeguard eval` for its judge evals. Tag
+releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
+[betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules) is
+an example.
 
 ## Setup
 
@@ -128,8 +221,10 @@ From the project:
 codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
-codeguard test                # rule tests
-codeguard test --update-all   # rule tests, regenerating snapshots
+codeguard test                # pattern rule tests
+codeguard test --update-all   # the same, regenerating snapshots
+codeguard eval                # judge rule evals; calls Claude
+codeguard update              # move package refs to their newest tags
 ```
 
 ## Working on codeguard

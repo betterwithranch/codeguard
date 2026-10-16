@@ -15,14 +15,30 @@ def commands(config: str, event: str) -> list[str]:
     return [hook["command"] for group in hooks[event] for hook in group["hooks"]]
 
 
-def run_stop_hook(repo, hook_input: dict) -> subprocess.CompletedProcess[str]:
+REVIEW_FAILED = "codeguard review failed, so these changes were not reviewed. Tell the user."
+TRACEBACK_HEADING = "Traceback (most recent call last):\n"
+BROKEN_RULE_ERROR = (
+    "Error: Cannot parse rule {root}/.codeguard/rules/pattern/broken.yml\n"
+    "Help: The file is not a valid ast-grep rule. Please refer to doc and fix the error.\n"
+    "See also: https://ast-grep.github.io/guide/rule-config.html\n"
+    "\n"
+    "✖ Caused by\n"
+    "╰▻ Fail to parse yaml as RuleConfig\n"
+    "╰▻ id: invalid type: sequence, expected a string at line 1 column 5\n"
+    "\n"
+)
+
+
+def run_stop_hook(
+    repo, hook_input: dict, path: str = f"{SCRIPTS}{os.pathsep}{os.environ['PATH']}"
+) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [STOP_HOOK],
         cwd=repo.root,
         input=json.dumps(hook_input),
         capture_output=True,
         text=True,
-        env={**os.environ, "PATH": f"{SCRIPTS}{os.pathsep}{os.environ['PATH']}"},
+        env={**os.environ, "PATH": path},
     )
 
 
@@ -68,11 +84,30 @@ class TestStopHook:
         assert result.stderr == ""
         assert result.returncode == 0
 
-    def test_review_error_is_reported_without_blocking(self, repo):
+    def test_review_error_blocks_the_stop(self, repo):
         repo.write(".codeguard/rules/pattern/broken.yml", "id: [\n")
         repo.write("a.py", "print(1)\n")
 
         result = run_stop_hook(repo, {"stop_hook_active": False})
 
-        assert "Cannot parse rule" in result.stderr
+        ast_grep_error, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert ast_grep_error == BROKEN_RULE_ERROR.format(root=repo.root)
+        assert traceback.splitlines()[-1] == REVIEW_FAILED
+        assert result.returncode == 2
+
+    def test_review_error_lets_an_already_blocked_agent_stop(self, repo):
+        repo.write(".codeguard/rules/pattern/broken.yml", "id: [\n")
+        repo.write("a.py", "print(1)\n")
+
+        result = run_stop_hook(repo, {"stop_hook_active": True})
+
+        ast_grep_error, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert ast_grep_error == BROKEN_RULE_ERROR.format(root=repo.root)
+        assert traceback.splitlines()[-1] == REVIEW_FAILED
         assert result.returncode == 1
+
+    def test_missing_codeguard_blocks_the_stop(self, repo):
+        result = run_stop_hook(repo, {"stop_hook_active": False}, path="/usr/bin:/bin")
+
+        assert result.stderr == f"codeguard is not on PATH.\n{REVIEW_FAILED}\n"
+        assert result.returncode == 2

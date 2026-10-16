@@ -25,6 +25,17 @@ blocks the agent's Stop and fails CI.
 - Save the rule as `.codeguard/rules/pattern/<id>.yml` and its tests as
   `.codeguard/rule-tests/pattern/<id>-test.yml`, never under the rules directory
   (every YAML file there loads as a rule).
+- In a rule package (a repo with `codeguard-package.yaml`), save under the ruleset's
+  directory instead of `.codeguard/`: `<ruleset>/rules/pattern/<id>.yml` and
+  `<ruleset>/rule-tests/pattern/<id>-test.yml`.
+- Evaluate a judge rule with `rule-evals/<id>-eval.yml`, listing `valid` and `invalid`
+  case files in `rule-evals/<id>/`. Add an `invalid` case for each kind of code the rule
+  forbids and a `valid` case for each near miss it allows. Name case files for their
+  code, not their expected result, because the judge reads that directory. Run them with
+  `codeguard eval`.
+- Before writing a rule, check the rulesets the project opts into in
+  `.codeguard/config.yaml`. To change a packaged rule for this project, override or
+  exclude it there; don't copy it into `.codeguard/`.
 - Leave the codebase clean for a new rule: fix each existing violation, or put an
   `ast-grep-ignore: <id>` comment on the line above it.
 

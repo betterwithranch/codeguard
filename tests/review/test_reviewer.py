@@ -1,14 +1,16 @@
 from recording_judge import RecordingJudge
 
-from codeguard.ast_grep import AstGrepCheck, Layout
+from codeguard.ast_grep import AstGrepCheck
+from codeguard.config import Ruleset
 from codeguard.review import CheckStep, JudgeCheck, JudgeRequest, Review, Reviewer, Verdict
 from codeguard.working_tree import AllLines, ChangedLines
 
 
 def reviewer(repo, judge, binding) -> Reviewer:
+    local = Ruleset(name=None, root=repo.root / ".codeguard")
     return Reviewer(
         steps=(
-            CheckStep(checks=(AstGrepCheck(Layout(repo.root)),)),
+            CheckStep(checks=(AstGrepCheck(repo.root, local),)),
             CheckStep(checks=(JudgeCheck(binding, judge, 0.9),)),
         )
     )

@@ -1,8 +1,8 @@
 import factory
-from factories.skill import MakeSkill
 
 from codeguard.review import Diagnostic, Severity
 from codeguard.review.judge import Violation
+from factories.skill import MakeSkill
 
 
 class MakeDiagnostic(factory.Factory):

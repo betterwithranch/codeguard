@@ -50,7 +50,7 @@ class Verdict(BaseModel):
     ) -> tuple[Diagnostic, ...]:
         return tuple(
             Diagnostic(
-                rule=binding.skill.name,
+                rule=binding.rule,
                 file=violation.file,
                 line=violation.line,
                 message=violation.message,

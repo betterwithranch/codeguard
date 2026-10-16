@@ -1,0 +1,5 @@
+packages:
+  - git: https://github.com/betterwithranch/codeguard-rules.git
+    ref: v0.1.0
+    rulesets:
+      python: {}

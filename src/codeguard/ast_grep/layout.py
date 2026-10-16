@@ -6,21 +6,23 @@ from pathlib import Path
 
 import yaml
 
-_RULE_DIR = ".codeguard/rules/pattern"
-_TEST_DIR = ".codeguard/rule-tests/pattern"
+from codeguard.ast_grep.ast_grep import AstGrep
+from codeguard.config import PATTERN_RULE_DIR, PATTERN_TEST_DIR
 
 
 @dataclass(frozen=True)
 class Layout:
     root: Path
+    ruleset: Path
+    ast_grep: AstGrep = AstGrep()
 
     @property
     def rule_dir(self) -> Path:
-        return self.root / _RULE_DIR
+        return self.ruleset / PATTERN_RULE_DIR
 
     @property
     def test_dir(self) -> Path:
-        return self.root / _TEST_DIR
+        return self.ruleset / PATTERN_TEST_DIR
 
     def has_rules(self) -> bool:
         return self.rule_dir.is_dir()
