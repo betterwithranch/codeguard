@@ -4,14 +4,22 @@ inputs:
   base:
     description: Ref the changes are compared against. The checkout needs its history (fetch-depth 0).
     default: origin/${{ github.base_ref }}
+  claude-code-oauth-token:
+    description: Claude subscription token the judge runs with, from `claude setup-token`. Needed when a binding uses a skill.
+    required: false
 runs:
   using: composite
   steps:
     - uses: astral-sh/setup-uv@v10.2.0
+    - name: Install Claude Code
+      shell: bash
+      run: npm install --global @anthropic-ai/claude-code
     - name: Check changed files
       id: review
       shell: bash
       run: uv run --frozen --project "${{ github.action_path }}" codeguard review --base "${{ inputs.base }}"
+      env:
+        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
     - name: Point to the plugin
       if: failure() && steps.review.outcome == 'failure'
       shell: bash

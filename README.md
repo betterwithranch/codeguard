@@ -64,10 +64,13 @@ jobs:
         with:
           fetch-depth: 0
       - uses: betterwithranch/codeguard@v0
+        with:
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
 
 The action reviews the files changed since the merge base with the PR's base branch,
-then runs the rule tests.
+then runs the rule tests. The judge needs the token; create it with `claude setup-token`
+and store it as a repository secret.
 
 `v0` moves to each 0.x release, so the plugin and the action update together with no
 project edits. A release that breaks the rule format starts `v1`.
