@@ -203,7 +203,8 @@ In Codex, trust codeguard's hooks in `/hooks`.
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
 directory: the uncommitted and untracked files, whoever changed them and however. An
-error blocks the stop, and the agent sees the diagnostics. It runs the `codeguard` the
+error blocks the stop, and the agent sees the diagnostics. If the agent stops again with
+the same errors, the stop goes through, so the agent can ask you about them. It runs the `codeguard` the
 installer put on your PATH, the same one you run from the command line.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
