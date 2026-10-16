@@ -1,17 +1,23 @@
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Protocol
 
-from codeguard.review.finding import Finding
+from codeguard.review.diagnostic import Diagnostic
 from codeguard.review.review import Review
-from codeguard.review.stage import Stage
+
+
+class Step(Protocol):
+    def run(
+        self, files: Sequence[str], diagnostics: tuple[Diagnostic, ...]
+    ) -> tuple[Diagnostic, ...]: ...
 
 
 @dataclass(frozen=True)
 class Reviewer:
-    stages: tuple[Stage, ...]
+    steps: tuple[Step, ...]
 
     def run(self, files: Sequence[str]) -> Review:
-        findings: tuple[Finding, ...] = ()
-        for stage in self.stages:
-            findings = stage.run(files, findings)
-        return Review(findings=findings)
+        diagnostics: tuple[Diagnostic, ...] = ()
+        for step in self.steps:
+            diagnostics = step.run(files, diagnostics)
+        return Review(diagnostics=diagnostics)

@@ -1,13 +1,9 @@
-from collections.abc import Sequence
-from dataclasses import dataclass
+from pydantic import BaseModel, ConfigDict
 
-from codeguard.config.binding import Binding
-from codeguard.review import Concern
+from codeguard.config.bindings_config import BindingsConfig
 
 
-@dataclass(frozen=True)
-class Config:
-    bindings: tuple[Binding, ...]
+class Config(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
-    def concerns(self, files: Sequence[str]) -> list[Concern]:
-        return [concern for binding in self.bindings if (concern := binding.concern(files))]
+    bindings: BindingsConfig = BindingsConfig({})

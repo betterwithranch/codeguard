@@ -98,7 +98,7 @@ In Codex, trust codeguard's hooks in `/hooks`.
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
 directory: the uncommitted and untracked files, whoever changed them and however. A
-high-confidence error blocks the stop, and the agent sees the findings. It runs the
+high-confidence error blocks the stop, and the agent sees the diagnostics. It runs the
 `codeguard` the installer put on your PATH, the same one you run from the command line.
 
 ## CLI
@@ -121,14 +121,14 @@ Tests:
 uv run pytest
 ```
 
-Run the CLI from this checkout. `--editable` links the tool to the source, so edits
+Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
 
 ```sh
 uv tool install --editable .
 ```
 
-Point a project's hooks at this checkout.
+Point a project's hooks at this clone.
 
 - Claude Code: in the project's `.claude/settings.local.json`, declare the marketplace
   as a directory. It replaces the GitHub entry by name, for you only.

@@ -7,9 +7,9 @@ from pathlib import Path
 
 from codeguard.ast_grep.layout import Layout
 
-AST_GREP = Path(sysconfig.get_path("scripts")) / "ast-grep"
-NO_ERROR_FINDINGS = 0
-ERROR_FINDINGS = 1
+_AST_GREP = Path(sysconfig.get_path("scripts")) / "ast-grep"
+_EXIT_NO_ERRORS = 0
+_EXIT_ERRORS_FOUND = 1
 
 
 @dataclass(frozen=True)
@@ -21,7 +21,7 @@ class AstGrepCommand:
             result = subprocess.run(
                 command, cwd=self.layout.root, capture_output=True, text=True
             )
-        if result.returncode not in (NO_ERROR_FINDINGS, ERROR_FINDINGS):
+        if result.returncode not in (_EXIT_NO_ERRORS, _EXIT_ERRORS_FOUND):
             raise subprocess.CalledProcessError(
                 result.returncode, result.args, result.stdout, result.stderr
             )
@@ -40,4 +40,4 @@ class AstGrepCommand:
     @contextmanager
     def _command(self, subcommand: str, *args: str) -> Iterator[list[str | Path]]:
         with self.layout.config() as config:
-            yield [AST_GREP, subcommand, "--config", config, *args]
+            yield [_AST_GREP, subcommand, "--config", config, *args]

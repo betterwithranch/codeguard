@@ -6,8 +6,8 @@ from pathlib import Path
 
 import yaml
 
-RULE_DIR = ".codeguard/rules/pattern"
-TEST_DIR = ".codeguard/rule-tests/pattern"
+_RULE_DIR = ".codeguard/rules/pattern"
+_TEST_DIR = ".codeguard/rule-tests/pattern"
 
 
 @dataclass(frozen=True)
@@ -16,11 +16,11 @@ class Layout:
 
     @property
     def rule_dir(self) -> Path:
-        return self.root / RULE_DIR
+        return self.root / _RULE_DIR
 
     @property
     def test_dir(self) -> Path:
-        return self.root / TEST_DIR
+        return self.root / _TEST_DIR
 
     def has_rules(self) -> bool:
         return self.rule_dir.is_dir()

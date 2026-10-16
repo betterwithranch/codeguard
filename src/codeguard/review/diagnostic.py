@@ -1,7 +1,8 @@
 import hashlib
 import textwrap
-from dataclasses import dataclass
 from enum import StrEnum
+
+from pydantic import BaseModel, ConfigDict
 
 
 class Severity(StrEnum):
@@ -16,8 +17,9 @@ class Confidence(StrEnum):
     LOW = "low"
 
 
-@dataclass(frozen=True)
-class Finding:
+class Diagnostic(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
     rule: str
     file: str
     line: int
@@ -36,7 +38,8 @@ class Finding:
         return self.severity is Severity.ERROR and self.confidence is Confidence.HIGH
 
     def __str__(self) -> str:
-        summary = f"{self.file}:{self.line}: {self.severity} {self.rule}: {self.message} [{self.id}]"
+        location = f"{self.file}:{self.line}"
+        summary = f"{location}: {self.severity} {self.rule}: {self.message} [{self.id}]"
         if self.note is None:
             return summary
         return f"{summary}\n{textwrap.indent(self.note.rstrip(), '  ')}"

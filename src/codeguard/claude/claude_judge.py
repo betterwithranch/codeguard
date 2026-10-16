@@ -1,49 +1,44 @@
 import json
 import subprocess
-import tempfile
-from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
 
-from codeguard.review import Concern, Finding, JudgeRequest, Verdict
+from codeguard.review import JudgeRequest, Verdict
 
-CLAUDE = "claude"
-JUDGE_DIR = Path(tempfile.gettempdir()) / "codeguard-judge"
-VERDICT_SCHEMA = json.dumps(Verdict.model_json_schema())
+_EXECUTABLE = "claude"
+_MODEL = "claude-sonnet-5-5"
+_READ_ONLY_TOOLS = "Read,Grep,Glob"
+_VERDICT_SCHEMA = json.dumps(Verdict.model_json_schema())
 
 
 @dataclass(frozen=True)
 class ClaudeJudge:
     root: Path
-    executable: str = CLAUDE
+    model: str = _MODEL
+    executable: str = _EXECUTABLE
 
-    def judge(self, concerns: Sequence[Concern]) -> list[Finding]:
-        if not concerns:
-            return []
-        JUDGE_DIR.mkdir(exist_ok=True)
-        with ThreadPoolExecutor(max_workers=len(concerns)) as executor:
-            verdicts = list(executor.map(self._judge_concern, concerns))
-        return [finding for findings in verdicts for finding in findings]
+    @property
+    def identity(self) -> str:
+        return "\0".join((_EXECUTABLE, self.model))
 
-    def _judge_concern(self, concern: Concern) -> list[Finding]:
-        request = JudgeRequest.from_concern(concern, self.root)
+    def judge(self, request: JudgeRequest) -> Verdict:
         result = subprocess.run(
             [
                 self.executable,
                 "--safe-mode",
                 "-p",
+                "--model", self.model,
                 "--output-format", "json",
-                "--json-schema", VERDICT_SCHEMA,
-                "--tools", "",
+                "--json-schema", _VERDICT_SCHEMA,
+                "--tools", _READ_ONLY_TOOLS,
+                "--permission-prompts", "none",
                 "--system-prompt", request.instructions,
                 "--no-session-persistence",
             ],
             input=request.prompt,
-            cwd=JUDGE_DIR,
+            cwd=self.root,
             capture_output=True,
             text=True,
             check=True,
         )
-        verdict = Verdict.model_validate(json.loads(result.stdout)["structured_output"])
-        return verdict.findings_for(concern)
+        return Verdict.model_validate(json.loads(result.stdout)["structured_output"])

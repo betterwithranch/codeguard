@@ -8,6 +8,7 @@ authors = [
 requires-python = ">=3.13"
 dependencies = [
     "ast-grep-cli>=0.45.3",
+    "diskcache>=5.6.3",
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
 ]
@@ -35,9 +36,9 @@ exhaustive = true
 layers = [
     "cli",
     "rules",
-    "ast_grep | claude | config",
+    "ast_grep | claude",
     "review | rule_tests",
-    "checkout",
+    "config | working_tree",
 ]
 
 [dependency-groups]

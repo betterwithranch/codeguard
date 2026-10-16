@@ -4,12 +4,12 @@ import sys
 import traceback
 from pathlib import Path
 
-from codeguard.checkout import Checkout
 from codeguard.rules import Rules
+from codeguard.working_tree import WorkingTree
 
-PASSED = 0
-FAILED = 1
-ERROR = 2
+_EXIT_PASSED = 0
+_EXIT_FAILED = 1
+_EXIT_ERROR = 2
 
 
 def main() -> int:
@@ -48,22 +48,22 @@ def main() -> int:
         if error.stderr:
             sys.stderr.write(error.stderr)
         traceback.print_exc()
-        return ERROR
+        return _EXIT_ERROR
     except Exception:
         traceback.print_exc()
-        return ERROR
+        return _EXIT_ERROR
 
 
 def _review(args: argparse.Namespace) -> int:
-    checkout = Checkout.containing(Path.cwd())
-    files = checkout.all_files() if args.all else checkout.changed_files(args.base)
-    result = Rules(checkout).review(files)
+    working_tree = WorkingTree.containing(Path.cwd())
+    files = working_tree.all_files() if args.all else working_tree.changed_files(args.base)
+    result = Rules(working_tree).review(files)
     result.write(sys.stdout)
-    return FAILED if result.blocks else PASSED
+    return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 
 
 def _test(args: argparse.Namespace) -> int:
-    tests = Rules(Checkout.containing(Path.cwd())).tests
+    tests = Rules(WorkingTree.containing(Path.cwd())).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
     result.write(sys.stderr)
-    return PASSED if result.passed else FAILED
+    return _EXIT_PASSED if result.passed else _EXIT_FAILED

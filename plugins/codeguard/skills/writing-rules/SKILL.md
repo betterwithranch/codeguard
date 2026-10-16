@@ -5,7 +5,7 @@ description: Use when adding or changing a codeguard rule, its tests, or its sna
 
 # Writing codeguard rules
 
-codeguard runs the project's ast-grep rules on each changed file. An `error` finding
+codeguard runs the project's ast-grep rules on each changed file. An `error` diagnostic
 blocks the agent's Stop and fails CI.
 
 - Write one `valid` or `invalid` test case per branch of the rule, so deleting a branch
@@ -13,7 +13,7 @@ blocks the agent's Stop and fails CI.
 - Use made-up names in test cases (`ExampleModel`), so the case shows the pattern rather
   than one class in the codebase.
 - Put the reason and the fix in the rule's `note`. codeguard prints it under the
-  finding, so it is what the blocked agent reads (no comments in rule files).
+  diagnostic, so it is what the blocked agent reads (no comments in rule files).
 - Match a code pattern, never a named class, function, or file.
 - Set `severity: error` on a rule that must block; `warning` only reports.
 - Scope a rule to some files through its binding's `paths`, never ast-grep's `files`, so

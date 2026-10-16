@@ -1,25 +1,48 @@
-from codeguard.config import Binding, Config
-from codeguard.review import Concern
+import pytest
+from pydantic import ValidationError
+
+from codeguard.config import Config
 
 
-class TestConcerns:
-    def test_binding_selects_files_matching_its_paths(self, make_skill):
-        config = Config(bindings=(Binding(skill=make_skill(), paths=("app/**/*.py",)),))
+def messages(error: pytest.ExceptionInfo[ValidationError]) -> list[str]:
+    return [problem["msg"] for problem in error.value.errors()]
 
-        concerns = config.concerns(["app/a.py", "app/models/b.py", "scripts/c.py"])
 
-        assert concerns == [Concern(skill=make_skill(), files=("app/a.py", "app/models/b.py"))]
+def write_skill(tmp_path, name: str = "placement"):
+    (tmp_path / name).mkdir()
+    (tmp_path / name / "SKILL.md").write_text("# Placement\n")
+    return tmp_path / name
 
-    def test_preset_binding_selects_every_file(self, make_skill):
-        config = Config(bindings=(Binding(skill=make_skill(), paths=("**",)),))
 
-        concerns = config.concerns(["a.py", "app/b.rb"])
+class TestConfig:
+    def test_relative_skill_is_under_the_working_tree(self, tmp_path):
+        skill = write_skill(tmp_path)
 
-        assert concerns == [Concern(skill=make_skill(), files=("a.py", "app/b.rb"))]
+        config = Config.model_validate(
+            {"bindings": {"placement.yaml": {"skill": "placement", "paths": ["**"]}}},
+            context={"working_tree": tmp_path},
+        )
 
-    def test_binding_matching_no_file_gives_no_concern(self, make_skill):
-        config = Config(bindings=(Binding(skill=make_skill(), paths=("app/**/*.py",)),))
+        assert config.bindings.root["placement.yaml"].skill == skill
 
-        concerns = config.concerns(["scripts/c.py"])
+    def test_skill_without_skill_file_is_an_error(self, tmp_path):
+        (tmp_path / "placement").mkdir()
 
-        assert concerns == []
+        with pytest.raises(ValidationError) as error:
+            Config.model_validate(
+                {"bindings": {"placement.yaml": {"skill": "placement", "paths": ["**"]}}},
+                context={"working_tree": tmp_path},
+            )
+
+        assert messages(error) == [f"Value error, {tmp_path}/placement has no SKILL.md"]
+
+    def test_skill_bound_twice_is_an_error(self, tmp_path):
+        skill = write_skill(tmp_path)
+        binding = {"skill": skill, "paths": ["**"]}
+
+        with pytest.raises(ValidationError) as error:
+            Config.model_validate({"bindings": {"a.yaml": binding, "b.yaml": binding}})
+
+        assert messages(error) == [
+            f"Value error, skill {skill} is bound more than once: a.yaml, b.yaml"
+        ]

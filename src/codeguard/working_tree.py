@@ -5,7 +5,7 @@ from typing import Self
 
 
 @dataclass(frozen=True)
-class Checkout:
+class WorkingTree:
     root: Path
 
     @classmethod

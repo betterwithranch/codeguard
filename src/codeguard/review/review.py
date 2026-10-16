@@ -1,26 +1,28 @@
 from dataclasses import dataclass
 from typing import TextIO
 
-from codeguard.review.finding import Confidence, Finding
+from codeguard.review.diagnostic import Confidence, Diagnostic
 
-LOW_CONFIDENCE_HEADING = "Low confidence:"
+_LOW_CONFIDENCE_HEADING = "Low confidence:"
 
 
 @dataclass(frozen=True)
 class Review:
-    findings: tuple[Finding, ...]
+    diagnostics: tuple[Diagnostic, ...]
 
     @property
     def blocks(self) -> bool:
-        return any(finding.blocks for finding in self.findings)
+        return any(diagnostic.blocks for diagnostic in self.diagnostics)
 
     def write(self, out: TextIO) -> None:
-        for finding in self._with_confidence(Confidence.HIGH):
-            print(finding, file=out)
+        for diagnostic in self._with_confidence(Confidence.HIGH):
+            print(diagnostic, file=out)
         if low := self._with_confidence(Confidence.LOW):
-            print(LOW_CONFIDENCE_HEADING, file=out)
-            for finding in low:
-                print(finding, file=out)
+            print(_LOW_CONFIDENCE_HEADING, file=out)
+            for diagnostic in low:
+                print(diagnostic, file=out)
 
-    def _with_confidence(self, confidence: Confidence) -> list[Finding]:
-        return [finding for finding in self.findings if finding.confidence is confidence]
+    def _with_confidence(self, confidence: Confidence) -> list[Diagnostic]:
+        return [
+            diagnostic for diagnostic in self.diagnostics if diagnostic.confidence is confidence
+        ]

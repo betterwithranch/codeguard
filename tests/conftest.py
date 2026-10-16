@@ -1,14 +1,17 @@
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
-from factories.concern import MakeConcern, MakeSkill
-from factories.finding import MakeFinding
+from diskcache import Cache
+from factories.skill import MakeBinding, MakeSkill
+from factories.diagnostic import MakeDiagnostic, MakeViolation
 from git_repo import GitRepo
 from pytest_factoryboy import register
 
-register(MakeFinding)
+register(MakeDiagnostic)
+register(MakeViolation)
 register(MakeSkill)
-register(MakeConcern)
+register(MakeBinding)
 
 
 @pytest.fixture
@@ -37,3 +40,9 @@ def repo(tmp_path: Path) -> GitRepo:
     )
     git_repo.commit("Add rules")
     return git_repo
+
+
+@pytest.fixture
+def store(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Cache]:
+    with Cache(tmp_path_factory.mktemp("judgements")) as cache:
+        yield cache

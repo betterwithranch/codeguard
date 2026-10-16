@@ -4,7 +4,7 @@ from typing import Any, Self
 
 import yaml
 
-SNAPSHOT_DIR = "__snapshots__"
+_SNAPSHOT_DIR = "__snapshots__"
 
 
 @dataclass(frozen=True)
@@ -32,7 +32,7 @@ class Snapshots:
 
     @classmethod
     def load(cls, test_dir: Path) -> Self:
-        snapshot_dir = test_dir / SNAPSHOT_DIR
+        snapshot_dir = test_dir / _SNAPSHOT_DIR
         paths = sorted(test_dir.rglob("*.y*ml"))
         snapshot_paths = [path for path in paths if snapshot_dir in path.parents]
         test_paths = [path for path in paths if path not in snapshot_paths]
