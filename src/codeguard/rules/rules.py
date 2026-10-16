@@ -1,6 +1,8 @@
+import os
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from threading import Semaphore
 
 from diskcache import Cache
 
@@ -100,8 +102,12 @@ class Rules:
     def _store(self) -> Cache:
         return Cache(_JUDGEMENT_CACHE_DIR)
 
+    @cached_property
+    def _judge_processes(self) -> Semaphore:
+        return Semaphore(os.process_cpu_count() or 1)
+
     def _judge(self, root: Path, model: str) -> Judge:
-        return CachedJudge(ClaudeJudge(root, model), self._store, root)
+        return CachedJudge(ClaudeJudge(root, model, self._judge_processes), self._store, root)
 
     def _judge_checks(self) -> tuple[JudgeCheck, ...]:
         root = self.working_tree.root

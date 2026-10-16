@@ -17,7 +17,7 @@ class Diagnostic(BaseModel):
 
     rule: str
     file: str
-    line: int
+    line: int | None
     message: str
     severity: Severity
     note: str | None
@@ -32,7 +32,7 @@ class Diagnostic(BaseModel):
         return self.severity is Severity.ERROR
 
     def __str__(self) -> str:
-        location = f"{self.file}:{self.line}"
+        location = self.file if self.line is None else f"{self.file}:{self.line}"
         summary = f"{location}: {self.severity} {self.rule}: {self.message} [{self.id}]"
         if self.note is None:
             return summary

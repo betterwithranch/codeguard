@@ -3,6 +3,7 @@ import sys
 from dataclasses import dataclass
 from functools import partial
 from pathlib import Path
+from threading import Semaphore
 
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import EqualsExpected
@@ -13,6 +14,7 @@ from codeguard.review import JudgeRequest, Skill
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _MAX_CONCURRENCY = 4
+_PROCESSES = Semaphore(_MAX_CONCURRENCY)
 _MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")
 
 
@@ -52,7 +54,7 @@ _DATASET = Dataset[JudgeCase, bool, None](
 
 def violates(model: str, case: JudgeCase) -> bool:
     skill = Skill.from_file(case.skill, _FIXTURES / "skills" / case.skill / SKILL_FILE)
-    verdict = ClaudeJudge(_FIXTURES, model).judge(JudgeRequest(skill, case.file))
+    verdict = ClaudeJudge(_FIXTURES, model, _PROCESSES).judge(JudgeRequest(skill, case.file))
     return any(violation.file == case.file for violation in verdict.violations)
 
 

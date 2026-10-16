@@ -93,3 +93,9 @@ class TestChangedLines:
 
     def test_does_not_cover_an_unchanged_file(self):
         assert not ChangedLines({"a.py": frozenset({2})}).covers("b.py", 2)
+
+    def test_covers_the_whole_of_a_changed_file(self):
+        assert ChangedLines({"a.py": frozenset({2})}).covers("a.py", None)
+
+    def test_does_not_cover_the_whole_of_an_unchanged_file(self):
+        assert not ChangedLines({"a.py": frozenset({2})}).covers("b.py", None)

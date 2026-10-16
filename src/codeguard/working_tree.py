@@ -16,7 +16,9 @@ class ChangedLines:
     def files(self) -> tuple[str, ...]:
         return tuple(sorted(self.lines))
 
-    def covers(self, file: str, line: int) -> bool:
+    def covers(self, file: str, line: int | None) -> bool:
+        if line is None:
+            return file in self.lines
         return line in self.lines.get(file, frozenset())
 
 
@@ -24,7 +26,7 @@ class ChangedLines:
 class AllLines:
     files: tuple[str, ...]
 
-    def covers(self, file: str, line: int) -> bool:
+    def covers(self, file: str, line: int | None) -> bool:
         return True
 
 

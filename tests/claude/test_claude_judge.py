@@ -1,10 +1,12 @@
 import json
+from dataclasses import dataclass, field
 from pathlib import Path
+from threading import Semaphore
 
 import pytest
 
 from codeguard.claude import ClaudeJudge
-from codeguard.review import JudgeRequest, Verdict
+from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 MODEL = "claude-sonnet-5-5"
 
@@ -37,36 +39,88 @@ def fake_claude_executable(tmp_path, arguments) -> str:
     return str(executable)
 
 
+@pytest.fixture
+def processes() -> Semaphore:
+    return Semaphore(1)
+
+
+@pytest.fixture
+def failing_claude_executable(tmp_path) -> str:
+    executable = tmp_path / "claude"
+    executable.write_text(
+        "#!/bin/sh\ncat > /dev/null\necho 'rate limited'\necho 'try later' >&2\nexit 1\n"
+    )
+    executable.chmod(0o755)
+    return str(executable)
+
+
+@dataclass
+class RecordingProcesses:
+    events: list[str] = field(default_factory=list)
+
+    def __enter__(self) -> None:
+        self.events.append("acquired")
+
+    def __exit__(self, *exc_info: object) -> None:
+        self.events.append("released")
+
+
 class TestClaudeJudge:
-    def test_verdict_comes_from_claude_structured_output(
-        self, tmp_path, fake_claude_executable, make_skill, make_violation
+    def test_failed_call_is_a_judge_error_with_claude_output(
+        self, tmp_path, processes, failing_claude_executable, make_skill
     ):
-        judge = ClaudeJudge(tmp_path, MODEL, fake_claude_executable)
+        judge = ClaudeJudge(tmp_path, MODEL, processes, failing_claude_executable)
+
+        with pytest.raises(JudgeError) as error:
+            judge.judge(JudgeRequest(make_skill(), "a.py"))
+
+        assert str(error.value) == (
+            f"{failing_claude_executable} exited with 1.\n"
+            "stdout:\nrate limited\n\nstderr:\ntry later\n"
+        )
+
+    def test_each_call_holds_a_process_slot(self, tmp_path, fake_claude_executable, make_skill):
+        processes = RecordingProcesses()
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
+
+        judge.judge(JudgeRequest(make_skill(), "a.py"))
+
+        assert processes.events == ["acquired", "released"]
+
+    def test_verdict_comes_from_claude_structured_output(
+        self, tmp_path, processes, fake_claude_executable, make_skill, make_violation
+    ):
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
 
         verdict = judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert verdict == Verdict(violations=(make_violation(message="Move it.", confidence=0.4),))
 
     def test_claude_runs_the_given_model(
-        self, tmp_path, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
     ):
-        judge = ClaudeJudge(tmp_path, model="claude-opus-5-5", executable=fake_claude_executable)
+        judge = ClaudeJudge(
+            tmp_path,
+            model="claude-opus-5-5",
+            processes=processes,
+            executable=fake_claude_executable,
+        )
 
         judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert "--model claude-opus-5-5" in arguments.read_text()
 
     def test_claude_has_only_read_only_tools(
-        self, tmp_path, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
     ):
-        judge = ClaudeJudge(tmp_path, MODEL, fake_claude_executable)
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
 
         judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert "--tools Read,Grep,Glob" in arguments.read_text()
 
-    def test_identity_changes_with_the_model(self, tmp_path):
-        sonnet = ClaudeJudge(tmp_path, model="claude-sonnet-5-5")
-        opus = ClaudeJudge(tmp_path, model="claude-opus-5-5")
+    def test_identity_changes_with_the_model(self, tmp_path, processes):
+        sonnet = ClaudeJudge(tmp_path, model="claude-sonnet-5-5", processes=processes)
+        opus = ClaudeJudge(tmp_path, model="claude-opus-5-5", processes=processes)
 
         assert sonnet.identity != opus.identity

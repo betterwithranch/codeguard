@@ -62,6 +62,10 @@ class Verdict(BaseModel):
         )
 
 
+class JudgeError(Exception):
+    pass
+
+
 class Judge(Protocol):
     @property
     def identity(self) -> str: ...

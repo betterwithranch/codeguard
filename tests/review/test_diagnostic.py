@@ -25,6 +25,13 @@ class TestDiagnostic:
             "  Call logger.info instead."
         )
 
+    def test_str_without_a_line_names_only_the_file(self, make_diagnostic):
+        diagnostic = make_diagnostic(warning=True, line=None)
+
+        assert str(diagnostic) == (
+            f"a.py: warning no-breakpoint: Remove breakpoint(). [{diagnostic.id}]"
+        )
+
     def test_str_without_note_is_summary_only(self, make_diagnostic):
         diagnostic = make_diagnostic(warning=True)
 

@@ -61,6 +61,8 @@ def main() -> int:
     try:
         return args.run(args)
     except subprocess.CalledProcessError as error:
+        if error.stdout:
+            sys.stderr.write(error.stdout)
         if error.stderr:
             sys.stderr.write(error.stderr)
         traceback.print_exc()

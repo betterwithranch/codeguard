@@ -9,7 +9,6 @@ from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_eval import JudgeEval
 from codeguard.review import Binding, Bindings, Judge, JudgeRequest
 
-_MAX_CONCURRENCY = 8
 _EVAL_FILE_GLOB = "*-eval.yml"
 
 
@@ -62,9 +61,10 @@ class JudgeEvalRunner:
                 continue
             directory = self.eval_dir / judge_eval.id
             cases.extend(_BoundCase(binding, directory, case) for case in judge_eval.cases())
-        with ThreadPoolExecutor(max_workers=_MAX_CONCURRENCY) as executor:
-            found = executor.map(self._problem, cases)
-            problems.extend(problem for problem in found if problem)
+        if cases:
+            with ThreadPoolExecutor(max_workers=len(cases)) as executor:
+                found = executor.map(self._problem, cases)
+                problems.extend(problem for problem in found if problem)
         return EvalResult(problems=tuple(problems))
 
     def _problem(self, bound: _BoundCase) -> str | None:

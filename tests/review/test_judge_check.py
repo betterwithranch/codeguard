@@ -3,7 +3,14 @@ from threading import Barrier
 
 from recording_judge import RecordingJudge
 
-from codeguard.review import JudgeCheck, JudgeRequest, Severity, Verdict
+from codeguard.review import (
+    Diagnostic,
+    JudgeCheck,
+    JudgeError,
+    JudgeRequest,
+    Severity,
+    Verdict,
+)
 
 THRESHOLD = 0.9
 
@@ -18,7 +25,29 @@ class WaitingJudge:
         return Verdict(violations=())
 
 
+@dataclass(frozen=True)
+class FailingJudge:
+    identity: str = "failing"
+
+    def judge(self, request):
+        raise JudgeError("claude exited with 1.")
+
+
 class TestJudgeCheck:
+    def test_failed_judge_call_is_an_error_on_the_file(self, make_binding, make_skill):
+        check = JudgeCheck(make_binding(), FailingJudge(), THRESHOLD)
+
+        assert check.check(["a.py"]) == [
+            Diagnostic(
+                rule=make_skill().name,
+                file="a.py",
+                line=None,
+                message="The judge call failed, so this rule was not checked.",
+                severity=Severity.ERROR,
+                note="claude exited with 1.",
+            )
+        ]
+
     def test_every_file_is_judged_at_the_same_time(self, make_binding):
         files = [f"{index}.py" for index in range(40)]
         barrier = Barrier(len(files), timeout=5)
