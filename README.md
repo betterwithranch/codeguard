@@ -97,9 +97,25 @@ In Codex, trust codeguard's hooks in `/hooks`.
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
-directory: the uncommitted and untracked files, whoever changed them and however. A
-high-confidence error blocks the stop, and the agent sees the diagnostics. It runs the
-`codeguard` the installer put on your PATH, the same one you run from the command line.
+directory: the uncommitted and untracked files, whoever changed them and however. An
+error blocks the stop, and the agent sees the diagnostics. It runs the `codeguard` the
+installer put on your PATH, the same one you run from the command line.
+
+The judge rates its confidence in each violation from 0 to 1. An error below the
+threshold is reported as a warning and doesn't block. The threshold defaults to 0.9; set
+it in `.codeguard/config.yaml`:
+
+```yaml
+confidence_threshold: 0.8
+```
+
+Each binding judges with `claude-sonnet-5-5` unless it sets `model`:
+
+```yaml
+skill: .claude/skills/responsibility-placement
+paths: ["app/**/*.py"]
+model: claude-haiku-5-5
+```
 
 ## CLI
 
@@ -119,6 +135,14 @@ Tests:
 
 ```sh
 uv run pytest
+```
+
+Judge evals run the real `claude` CLI against fixture skills and cost tokens. Run them
+after changing the judge's instructions, request, model or tools:
+
+```sh
+uv run evals/judge_eval.py              # each case once
+uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
 ```
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits

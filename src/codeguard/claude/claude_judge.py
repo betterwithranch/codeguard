@@ -6,7 +6,6 @@ from pathlib import Path
 from codeguard.review import JudgeRequest, Verdict
 
 _EXECUTABLE = "claude"
-_MODEL = "claude-sonnet-5-5"
 _READ_ONLY_TOOLS = "Read,Grep,Glob"
 _VERDICT_SCHEMA = json.dumps(Verdict.model_json_schema())
 
@@ -14,7 +13,7 @@ _VERDICT_SCHEMA = json.dumps(Verdict.model_json_schema())
 @dataclass(frozen=True)
 class ClaudeJudge:
     root: Path
-    model: str = _MODEL
+    model: str
     executable: str = _EXECUTABLE
 
     @property

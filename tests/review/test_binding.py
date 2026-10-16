@@ -33,6 +33,14 @@ class TestBinding:
 
         assert binding == make_binding(severity=Severity.WARNING)
 
+    def test_from_config_has_its_model(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        config = BindingConfig(skill=skill, paths=("**",), model="claude-haiku-5-5")
+
+        binding = Binding.from_config(config)
+
+        assert binding == make_binding(model="claude-haiku-5-5")
+
 
 class TestBindings:
     def test_from_config_builds_each_binding(self, tmp_path, make_binding, make_skill):

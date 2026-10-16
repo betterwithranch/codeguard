@@ -12,11 +12,6 @@ class Severity(StrEnum):
     HINT = "hint"
 
 
-class Confidence(StrEnum):
-    HIGH = "high"
-    LOW = "low"
-
-
 class Diagnostic(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -26,7 +21,6 @@ class Diagnostic(BaseModel):
     message: str
     severity: Severity
     note: str | None
-    confidence: Confidence
 
     @property
     def id(self) -> str:
@@ -35,7 +29,7 @@ class Diagnostic(BaseModel):
 
     @property
     def blocks(self) -> bool:
-        return self.severity is Severity.ERROR and self.confidence is Confidence.HIGH
+        return self.severity is Severity.ERROR
 
     def __str__(self) -> str:
         location = f"{self.file}:{self.line}"

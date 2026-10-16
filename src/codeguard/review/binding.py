@@ -13,6 +13,7 @@ class Binding:
     skill: Skill
     paths: tuple[str, ...]
     severity: Severity
+    model: str
 
     @classmethod
     def from_config(cls, binding: BindingConfig) -> Self:
@@ -20,6 +21,7 @@ class Binding:
             skill=Skill.from_file(binding.skill.name, binding.skill / SKILL_FILE),
             paths=binding.paths,
             severity=Severity(binding.severity),
+            model=binding.model,
         )
 
     def files(self, changed: Sequence[str]) -> list[str]:

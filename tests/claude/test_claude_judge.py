@@ -4,7 +4,9 @@ from pathlib import Path
 import pytest
 
 from codeguard.claude import ClaudeJudge
-from codeguard.review import Confidence, JudgeRequest, Verdict
+from codeguard.review import JudgeRequest, Verdict
+
+MODEL = "claude-sonnet-5-5"
 
 
 @pytest.fixture
@@ -22,7 +24,7 @@ def fake_claude_executable(tmp_path, arguments) -> str:
                     "line": 1,
                     "message": "Move it.",
                     "note": "Call logger.info instead.",
-                    "confidence": "low",
+                    "confidence": 0.4,
                 }
             ]
         }
@@ -42,12 +44,12 @@ class TestClaudeJudge:
     def test_verdict_comes_from_claude_structured_output(
         self, tmp_path, fake_claude_executable, make_skill, make_violation
     ):
-        judge = ClaudeJudge(tmp_path, executable=fake_claude_executable)
+        judge = ClaudeJudge(tmp_path, MODEL, fake_claude_executable)
 
         verdict = judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert verdict == Verdict(
-            violations=(make_violation(message="Move it.", confidence=Confidence.LOW),)
+            violations=(make_violation(message="Move it.", confidence=0.4),)
         )
 
     def test_claude_runs_the_given_model(
@@ -62,7 +64,7 @@ class TestClaudeJudge:
     def test_claude_has_only_read_only_tools(
         self, tmp_path, fake_claude_executable, arguments, make_skill
     ):
-        judge = ClaudeJudge(tmp_path, executable=fake_claude_executable)
+        judge = ClaudeJudge(tmp_path, MODEL, fake_claude_executable)
 
         judge.judge(JudgeRequest(make_skill(), "a.py"))
 

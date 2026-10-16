@@ -1,4 +1,5 @@
 from dataclasses import dataclass, field
+from threading import Barrier
 
 from codeguard.review import CheckStep, Diagnostic
 
@@ -13,7 +14,26 @@ class RecordingCheck:
         return self.found
 
 
+@dataclass(frozen=True)
+class WaitingCheck:
+    barrier: Barrier
+
+    def check(self, files):
+        self.barrier.wait()
+        return []
+
+
 class TestCheckStep:
+    def test_checks_run_at_the_same_time(self):
+        barrier = Barrier(2, timeout=5)
+
+        CheckStep(checks=(WaitingCheck(barrier), WaitingCheck(barrier))).run(["a.py"], ())
+
+        assert not barrier.broken
+
+    def test_step_without_checks_keeps_earlier_diagnostics(self, make_diagnostic):
+        assert CheckStep(checks=()).run(["a.py"], (make_diagnostic(),)) == (make_diagnostic(),)
+
     def test_file_with_blocking_diagnostic_is_not_checked(self, make_diagnostic):
         check = RecordingCheck()
 

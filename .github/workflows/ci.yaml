@@ -10,3 +10,12 @@ jobs:
       - uses: astral-sh/setup-uv@v10.2.0
       - run: uv run --frozen pytest
       - run: uv run --frozen lint-imports
+  judge-evals:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: npm install --global @anthropic-ai/claude-code
+      - run: uv run --frozen evals/judge_eval.py
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}

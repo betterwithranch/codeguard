@@ -21,3 +21,4 @@ class MakeBinding(factory.Factory):
     skill = factory.SubFactory(MakeSkill)
     paths = ("**",)
     severity = Severity.ERROR
+    model = "claude-sonnet-5-5"

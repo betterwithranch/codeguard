@@ -56,8 +56,8 @@ def main() -> int:
 
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
-    files = working_tree.all_files() if args.all else working_tree.changed_files(args.base)
-    result = Rules(working_tree).review(files)
+    scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
+    result = Rules(working_tree).review(scope)
     result.write(sys.stdout)
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 

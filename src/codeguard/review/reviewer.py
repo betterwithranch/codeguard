@@ -4,6 +4,7 @@ from typing import Protocol
 
 from codeguard.review.diagnostic import Diagnostic
 from codeguard.review.review import Review
+from codeguard.working_tree import AllLines, ChangedLines
 
 
 class Step(Protocol):
@@ -16,8 +17,11 @@ class Step(Protocol):
 class Reviewer:
     steps: tuple[Step, ...]
 
-    def run(self, files: Sequence[str]) -> Review:
+    def run(self, scope: ChangedLines | AllLines) -> Review:
         diagnostics: tuple[Diagnostic, ...] = ()
         for step in self.steps:
-            diagnostics = step.run(files, diagnostics)
+            found = step.run(scope.files, diagnostics)
+            diagnostics = tuple(
+                diagnostic for diagnostic in found if scope.covers(diagnostic.file, diagnostic.line)
+            )
         return Review(diagnostics=diagnostics)

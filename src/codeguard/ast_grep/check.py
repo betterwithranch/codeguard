@@ -5,7 +5,7 @@ from typing import Any
 
 from codeguard.ast_grep.command import AstGrepCommand
 from codeguard.ast_grep.layout import Layout
-from codeguard.review import Confidence, Diagnostic, Severity
+from codeguard.review import Diagnostic, Severity
 
 
 @dataclass(frozen=True)
@@ -31,5 +31,4 @@ def _diagnostic(match: dict[str, Any]) -> Diagnostic:
         message=match["message"],
         severity=Severity(match["severity"]),
         note=match["note"],
-        confidence=Confidence.HIGH,
     )

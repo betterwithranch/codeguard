@@ -80,6 +80,30 @@ class TestReviewCommand:
         )
         assert result.returncode == 1
 
+    def test_violation_on_an_unchanged_line_is_not_reported(self, repo):
+        repo.write("a.py", "print(1)\n")
+        repo.commit("Add a")
+        repo.write("a.py", "print(1)\nx = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == ""
+        assert result.returncode == 0
+
+    def test_violation_in_an_unchanged_file_is_not_reported(self, repo):
+        repo.write("a.py", "print(1)\n")
+        repo.commit("Add a")
+        repo.write("b.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == ""
+        assert result.returncode == 0
+
     def test_invalid_rule_prints_ast_grep_error(self, repo):
         repo.write(".codeguard/rules/pattern/broken.yml", "id: [\n")
         repo.write("a.py", "print(1)\n")

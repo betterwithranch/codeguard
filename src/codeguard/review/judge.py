@@ -2,10 +2,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 from codeguard.review.binding import Binding
-from codeguard.review.diagnostic import Confidence, Diagnostic
+from codeguard.review.diagnostic import Diagnostic, Severity
 from codeguard.review.skill import Skill
 
 INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
@@ -32,7 +32,12 @@ class Violation(BaseModel):
     line: int
     message: str
     note: str
-    confidence: Confidence
+    confidence: float = Field(ge=0, le=1)
+
+    def severity(self, severity: Severity, threshold: float) -> Severity:
+        if severity is Severity.ERROR and self.confidence < threshold:
+            return Severity.WARNING
+        return severity
 
 
 class Verdict(BaseModel):
@@ -40,16 +45,17 @@ class Verdict(BaseModel):
 
     violations: tuple[Violation, ...]
 
-    def diagnostics_for(self, binding: Binding, file: str) -> tuple[Diagnostic, ...]:
+    def diagnostics_for(
+        self, binding: Binding, file: str, threshold: float
+    ) -> tuple[Diagnostic, ...]:
         return tuple(
             Diagnostic(
                 rule=binding.skill.name,
                 file=violation.file,
                 line=violation.line,
                 message=violation.message,
-                severity=binding.severity,
+                severity=violation.severity(binding.severity, threshold),
                 note=violation.note,
-                confidence=violation.confidence,
             )
             for violation in self.violations
             if violation.file == file

@@ -14,6 +14,7 @@ class BindingConfig(BaseModel):
     skill: DirectoryPath
     paths: tuple[str, ...] = Field(min_length=1)
     severity: Severity = "error"
+    model: str = "claude-sonnet-5-5"
 
     @field_validator("skill", mode="before")
     @classmethod

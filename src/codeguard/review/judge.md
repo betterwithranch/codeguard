@@ -10,4 +10,4 @@ For each violation give:
 - `line`: the line number where the violation is.
 - `message`: what breaks the convention, in one plain sentence.
 - `note`: how to fix it, in one or two plain sentences.
-- `confidence`: `high` when the convention plainly forbids the code; `low` when the verdict depends on intent or context the working directory doesn't show.
+- `confidence`: a number from 0 to 1 for how certain you are that the code breaks the convention. Use 1 when the convention plainly forbids the code, and lower values as the verdict depends more on intent or context the working directory doesn't show.

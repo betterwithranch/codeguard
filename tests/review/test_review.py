@@ -14,16 +14,11 @@ class TestReview:
 
         assert result.blocks is False
 
-    def test_low_confidence_error_does_not_block(self, make_diagnostic):
-        result = Review(diagnostics=(make_diagnostic(low_confidence=True),))
-
-        assert result.blocks is False
-
-    def test_write_lists_low_confidence_diagnostics_last(self, make_diagnostic):
-        low = make_diagnostic(low_confidence=True, line=1)
-        high = make_diagnostic(line=2)
+    def test_write_lists_each_diagnostic(self, make_diagnostic):
+        warning = make_diagnostic(warning=True)
+        error = make_diagnostic(line=2)
         out = StringIO()
 
-        Review(diagnostics=(low, high)).write(out)
+        Review(diagnostics=(warning, error)).write(out)
 
-        assert out.getvalue() == f"{high}\nLow confidence:\n{low}\n"
+        assert out.getvalue() == f"{warning}\n{error}\n"

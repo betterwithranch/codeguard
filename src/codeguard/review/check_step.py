@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -16,9 +17,12 @@ class CheckStep:
     def run(
         self, files: Sequence[str], diagnostics: tuple[Diagnostic, ...]
     ) -> tuple[Diagnostic, ...]:
+        if not self.checks:
+            return diagnostics
         unblocked = _unblocked(files, diagnostics)
-        found = (diagnostic for check in self.checks for diagnostic in check.check(unblocked))
-        return (*diagnostics, *found)
+        with ThreadPoolExecutor(max_workers=len(self.checks)) as executor:
+            found = executor.map(lambda check: check.check(unblocked), self.checks)
+            return (*diagnostics, *(diagnostic for found_by in found for diagnostic in found_by))
 
 
 def _unblocked(files: Sequence[str], diagnostics: Sequence[Diagnostic]) -> list[str]:
