@@ -1,4 +1,5 @@
 from pathlib import Path
+from typing import Annotated, Literal
 
 from pydantic import (
     BaseModel,
@@ -16,6 +17,7 @@ from codeguard.config.versions import VersionRange
 class GitPackageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    kind: Literal["git"] = "git"
     git: str
     ref: str
     rulesets: dict[str, RulesetConfig] = Field(min_length=1)
@@ -24,6 +26,7 @@ class GitPackageConfig(BaseModel):
 class VersionedPackageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
 
+    kind: Literal["versioned"] = "versioned"
     git: str
     version: VersionRange
     rulesets: dict[str, RulesetConfig] = Field(min_length=1)
@@ -32,6 +35,7 @@ class VersionedPackageConfig(BaseModel):
 class PathPackageConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    kind: Literal["path"] = "path"
     path: DirectoryPath
     rulesets: dict[str, RulesetConfig] = Field(min_length=1)
 
@@ -44,4 +48,6 @@ class PathPackageConfig(BaseModel):
         return (working_tree / path).resolve()
 
 
-type PackageConfig = GitPackageConfig | VersionedPackageConfig | PathPackageConfig
+type PackageConfig = Annotated[
+    GitPackageConfig | VersionedPackageConfig | PathPackageConfig, Field(discriminator="kind")
+]

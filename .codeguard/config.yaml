@@ -1,5 +1,6 @@
 packages:
-  - git: https://github.com/betterwithranch/codeguard-rules.git
+  - kind: versioned
+    git: https://github.com/betterwithranch/codeguard-rules.git
     version: ">=0.2,<1"
     rulesets:
       python: {}

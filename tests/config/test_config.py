@@ -65,6 +65,7 @@ class TestPackagesConfig:
             {
                 "packages": [
                     {
+                        "kind": "git",
                         "git": "https://example.com/rules.git",
                         "ref": "v1.0.0",
                         "rulesets": {"python": {}},
@@ -85,7 +86,7 @@ class TestPackagesConfig:
         (tmp_path / "rules").mkdir()
 
         config = Config.model_validate(
-            {"packages": [{"path": "rules", "rulesets": {"python": {}}}]},
+            {"packages": [{"kind": "path", "path": "rules", "rulesets": {"python": {}}}]},
             context={"working_tree": tmp_path},
         )
 
@@ -99,6 +100,7 @@ class TestPackagesConfig:
                 {
                     "packages": [
                         {
+                            "kind": "git",
                             "git": "https://example.com/rules.git",
                             "ref": "v1.0.0",
                             "rulesets": {},
@@ -112,6 +114,7 @@ class TestPackagesConfig:
             {
                 "packages": [
                     {
+                        "kind": "versioned",
                         "git": "https://example.com/rules.git",
                         "version": ">=0.2,<1",
                         "rulesets": {"python": {}},
@@ -134,6 +137,7 @@ class TestPackagesConfig:
                 {
                     "packages": [
                         {
+                            "kind": "versioned",
                             "git": "https://example.com/rules.git",
                             "ref": "v0.2.0",
                             "version": ">=0.2,<1",
@@ -149,12 +153,29 @@ class TestPackagesConfig:
                 {
                     "packages": [
                         {
+                            "kind": "git",
                             "git": "https://example.com/rules.git",
                             "rulesets": {"python": {}},
                         }
                     ]
                 }
             )
+
+    def test_package_without_a_kind_is_an_error(self):
+        with pytest.raises(ValidationError) as error:
+            Config.model_validate(
+                {
+                    "packages": [
+                        {
+                            "git": "https://example.com/rules.git",
+                            "ref": "v1.0.0",
+                            "rulesets": {"python": {}},
+                        }
+                    ]
+                }
+            )
+
+        assert messages(error) == ["Unable to extract tag using discriminator 'kind'"]
 
 
 class TestAstGrepConfig:

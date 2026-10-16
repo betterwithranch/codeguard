@@ -50,6 +50,7 @@ def fetch(tmp_path) -> GitFetch:
 def versioned(package: GitRepo) -> VersionedPackageConfig:
     return VersionedPackageConfig.model_validate(
         {
+            "kind": "versioned",
             "git": package.file_url,
             "version": ">=1,<2",
             "rulesets": {"python": {}},

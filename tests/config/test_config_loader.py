@@ -47,7 +47,8 @@ class TestConfigLoader:
         repo.write(
             CONFIG,
             "packages:\n"
-            "  - path: rules\n"
+            "  - kind: path\n"
+            "    path: rules\n"
             "    rulesets:\n"
             "      python:\n"
             "        exclude: [no-print]\n",

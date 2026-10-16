@@ -165,7 +165,7 @@ class TestReviewWithAstGrepVersion:
         )
         repo.write(
             ".codeguard/config.yaml",
-            "packages:\n  - path: rules\n    rulesets:\n      python: {}\n",
+            "packages:\n  - kind: path\n    path: rules\n    rulesets:\n      python: {}\n",
         )
         repo.write("a.py", "print(1)\n")
 
@@ -187,7 +187,8 @@ class TestReviewWithPackages:
         repo.write(
             ".codeguard/config.yaml",
             "packages:\n"
-            "  - path: rules\n"
+            "  - kind: path\n"
+            "    path: rules\n"
             "    rulesets:\n"
             "      python:\n"
             "        exclude: [responsibility-placement]\n",
@@ -210,7 +211,8 @@ class TestReviewWithPackages:
         repo.write(
             ".codeguard/config.yaml",
             "packages:\n"
-            "  - path: rules\n"
+            "  - kind: path\n"
+            "    path: rules\n"
             "    rulesets:\n"
             "      python:\n"
             "        exclude: [no-print, responsibility-placement]\n",
@@ -230,7 +232,8 @@ class TestReviewWithPackages:
         repo.write(
             ".codeguard/config.yaml",
             "packages:\n"
-            "  - path: rules\n"
+            "  - kind: path\n"
+            "    path: rules\n"
             "    rulesets:\n"
             "      python:\n"
             "        exclude: [no-prnt]\n",
@@ -260,7 +263,7 @@ def released_package(tmp_path_factory) -> GitRepo:
 
 def versioned_config(package: GitRepo) -> str:
     return (
-        f"packages:\n  - git: {package.file_url}\n    version: '>=1,<2'\n"
+        f"packages:\n  - kind: versioned\n    git: {package.file_url}\n    version: '>=1,<2'\n"
         "    rulesets:\n      python:\n        exclude: [responsibility-placement]\n"
     )
 

@@ -85,7 +85,8 @@ A project can also opt into rulesets from rule packages:
 ```yaml
 # .codeguard/config.yaml
 packages:
-  - git: https://github.com/betterwithranch/codeguard-rules.git
+  - kind: versioned
+    git: https://github.com/betterwithranch/codeguard-rules.git
     version: ">=0.2,<1"
     rulesets:
       python:
@@ -100,12 +101,13 @@ packages:
 - `exclude` turns rules off.
 - `rules.<id>` overrides a rule's `paths` or `severity`, and a judge rule's `model`.
 - An unknown ruleset or rule id is an error.
-- `path: ../my-rules` in place of `git` uses a local package, for working on one.
+- `kind: path` with `path: ../my-rules` in place of `git` uses a local package, for
+  working on one.
 
 Diagnostics name a packaged rule by package, ruleset and id:
 `betterwithranch/python/no-del-param`.
 
-A git package takes a `version` range or a `ref`:
+A git package takes a `version` range (`kind: versioned`) or a `ref` (`kind: git`):
 
 - `version` follows the newest tag in the range. `codeguard update` writes that tag to
   `.codeguard/lock.yaml`; commit it. Local reviews use the locked tag until the next

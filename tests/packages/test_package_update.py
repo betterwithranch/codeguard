@@ -17,7 +17,7 @@ def remote(tmp_path_factory: pytest.TempPathFactory) -> GitRepo:
 
 def versioned_config(remote: GitRepo) -> str:
     return (
-        f"packages:\n  - git: {remote.file_url}\n    version: '>=1,<2'\n"
+        f"packages:\n  - kind: versioned\n    git: {remote.file_url}\n    version: '>=1,<2'\n"
         "    rulesets:\n      python: {}\n"
     )
 
@@ -52,7 +52,7 @@ class TestPackageUpdate:
 
     def test_pinned_ref_is_left_alone(self, repo, remote):
         text = (
-            f"packages:\n  - git: {remote.file_url}\n    ref: v1.2.0\n"
+            f"packages:\n  - kind: git\n    git: {remote.file_url}\n    ref: v1.2.0\n"
             "    rulesets:\n      python: {}\n"
         )
         repo.write(CONFIG, text)
