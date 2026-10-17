@@ -1,4 +1,6 @@
 import json
+from collections.abc import Hashable, Iterator
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Semaphore
@@ -7,7 +9,7 @@ import pytest
 from claude_output import MODEL_USAGE, fake_claude_script
 from spans import finished_span_attributes
 
-from codeguard.claude import ClaudeJudge
+from codeguard.claude import ClaudeJudge, PromptCacheWarmup
 from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 MODEL = "claude-sonnet-5-5"
@@ -38,6 +40,24 @@ def fake_claude_executable(tmp_path, arguments) -> str:
     return str(executable)
 
 
+@pytest.fixture(autouse=True)
+def reviewed_file(tmp_path) -> None:
+    (tmp_path / "a.py").write_text("print(1)\n")
+
+
+@pytest.fixture
+def prompt(tmp_path) -> Path:
+    return tmp_path / "prompt"
+
+
+@pytest.fixture
+def prompt_recording_claude_executable(tmp_path, prompt) -> str:
+    executable = tmp_path / "claude"
+    executable.write_text(fake_claude_script([], before=f"cat > {prompt}\n"))
+    executable.chmod(0o755)
+    return str(executable)
+
+
 @pytest.fixture
 def processes() -> Semaphore:
     return Semaphore(1)
@@ -62,6 +82,17 @@ class RecordingProcesses:
 
     def __exit__(self, *exc_info: object) -> None:
         self.events.append("released")
+
+
+@dataclass
+class RecordingWarmup(PromptCacheWarmup):
+    prefixes: list[Hashable] = field(default_factory=list)
+
+    @contextmanager
+    def after_first_call(self, prefix: Hashable) -> Iterator[None]:
+        self.prefixes.append(prefix)
+        with super().after_first_call(prefix):
+            yield
 
 
 class TestClaudeJudge:
@@ -159,6 +190,37 @@ class TestClaudeJudge:
         judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert "--tools Read,Grep,Glob" in arguments.read_text()
+
+    def test_claude_gets_the_skill_as_the_prompt(
+        self, tmp_path, processes, prompt_recording_claude_executable, prompt, make_skill
+    ):
+        judge = ClaudeJudge(tmp_path, MODEL, processes, prompt_recording_claude_executable)
+        request = JudgeRequest(make_skill(), "a.py")
+
+        judge.judge(request)
+
+        assert prompt.read_text() == request.prompt
+
+    def test_claude_gets_the_file_in_the_system_prompt(
+        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+    ):
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
+        request = JudgeRequest(make_skill(), "a.py")
+
+        judge.judge(request)
+
+        assert f"--system-prompt {request.instructions('print(1)\n')}" in arguments.read_text()
+
+    def test_calls_wait_for_the_first_call_with_their_prefix(
+        self, tmp_path, processes, fake_claude_executable, make_skill
+    ):
+        warmup = RecordingWarmup()
+        judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable, warmup)
+        request = JudgeRequest(make_skill(), "a.py")
+
+        judge.judge(request)
+
+        assert warmup.prefixes == [(MODEL, request.instructions("print(1)\n"))]
 
     def test_identity_changes_with_the_model(self, tmp_path, processes):
         sonnet = ClaudeJudge(tmp_path, model="claude-sonnet-5-5", processes=processes)

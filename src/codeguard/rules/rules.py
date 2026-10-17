@@ -7,7 +7,7 @@ from threading import Semaphore
 from diskcache import Cache
 
 from codeguard.ast_grep import AstGrep, AstGrepCheck, AstGrepTestRunner, Layout
-from codeguard.claude import ClaudeJudge
+from codeguard.claude import ClaudeJudge, PromptCacheWarmup
 from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
 from codeguard.judge_evals import EvalResult, JudgeEvalRunner
 from codeguard.packages import (
@@ -110,8 +110,12 @@ class Rules:
     def _judge(self, root: Path, model: str) -> Judge:
         return CachedJudge(self._uncached_judge(root, model), self._store, root)
 
+    @cached_property
+    def _warmup(self) -> PromptCacheWarmup:
+        return PromptCacheWarmup()
+
     def _uncached_judge(self, root: Path, model: str) -> Judge:
-        return ClaudeJudge(root, model, self._judge_processes)
+        return ClaudeJudge(root, model, self._judge_processes, warmup=self._warmup)
 
     def _judge_checks(self) -> tuple[JudgeCheck, ...]:
         root = self.working_tree.root

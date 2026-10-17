@@ -1,12 +1,13 @@
 import json
 import subprocess
 from contextlib import AbstractContextManager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import logfire
 
 from codeguard.claude.claude_result import ClaudeResult
+from codeguard.claude.prompt_cache_warmup import PromptCacheWarmup
 from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 _EXECUTABLE = "claude"
@@ -20,6 +21,7 @@ class ClaudeJudge:
     model: str
     processes: AbstractContextManager[object]
     executable: str = _EXECUTABLE
+    warmup: PromptCacheWarmup = field(default_factory=PromptCacheWarmup)
 
     @property
     def identity(self) -> str:
@@ -32,8 +34,9 @@ class ClaudeJudge:
             file=request.file,
             model=self.model,
         ) as span:
-            with self.processes:
-                process = self._run(request)
+            instructions = request.instructions((self.root / request.file).read_text())
+            with self.warmup.after_first_call((self.model, instructions)), self.processes:
+                process = self._run(instructions, request.prompt)
             span.set_attribute("returncode", process.returncode)
             if process.returncode != 0:
                 raise JudgeError(
@@ -46,7 +49,7 @@ class ClaudeJudge:
                 raise JudgeError(f"{self.executable} returned no verdict:\n{process.stdout}")
             return result.structured_output
 
-    def _run(self, request: JudgeRequest) -> subprocess.CompletedProcess[str]:
+    def _run(self, instructions: str, prompt: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [
                 self.executable,
@@ -64,10 +67,10 @@ class ClaudeJudge:
                 "--permission-prompts",
                 "none",
                 "--system-prompt",
-                request.instructions,
+                instructions,
                 "--no-session-persistence",
             ],
-            input=request.prompt,
+            input=prompt,
             cwd=self.root,
             capture_output=True,
             text=True,
