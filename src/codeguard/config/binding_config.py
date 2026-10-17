@@ -1,3 +1,4 @@
+from enum import StrEnum
 from pathlib import Path
 from typing import Literal
 
@@ -8,6 +9,12 @@ SKILL_FILE = "SKILL.md"
 type Severity = Literal["error", "warning", "info", "hint"]
 
 
+class Skip(StrEnum):
+    RENAMES = "renames"
+    COMMENTS = "comments"
+    IMPORTS = "imports"
+
+
 class BindingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -15,6 +22,7 @@ class BindingConfig(BaseModel):
     paths: tuple[str, ...] = Field(min_length=1)
     severity: Severity = "error"
     model: str = "claude-sonnet-5-5"
+    disable_skips: frozenset[Skip] = frozenset()
 
     @field_validator("skill", mode="before")
     @classmethod

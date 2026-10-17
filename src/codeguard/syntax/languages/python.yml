@@ -1,0 +1,37 @@
+language: python
+extensions: [py, pyi]
+comments:
+  kind: comment
+imports:
+  any:
+    - kind: import_statement
+    - kind: import_from_statement
+  inside: {kind: module}
+names:
+  kind: identifier
+  not:
+    inside:
+      kind: dotted_name
+      any:
+        - inside: {kind: import_from_statement, field: module_name}
+        - inside: {kind: relative_import}
+        - inside: {kind: import_statement}
+        - inside: {kind: aliased_import, inside: {kind: import_statement}}
+definitions:
+  kind: identifier
+  any:
+    - inside: {kind: function_definition, field: name}
+    - inside: {kind: class_definition, field: name}
+    - inside: {kind: parameters}
+    - inside: {kind: typed_parameter}
+    - inside: {kind: default_parameter, field: name}
+    - inside: {kind: typed_default_parameter, field: name}
+    - inside: {kind: list_splat_pattern}
+    - inside: {kind: dictionary_splat_pattern}
+    - inside: {kind: assignment, field: left}
+    - inside: {kind: pattern_list}
+    - inside: {kind: for_in_clause, field: left}
+    - inside: {kind: for_statement, field: left}
+    - inside: {kind: as_pattern_target}
+    - inside: {kind: aliased_import, field: alias}
+    - inside: {kind: attribute, field: attribute, inside: {kind: assignment, field: left}}

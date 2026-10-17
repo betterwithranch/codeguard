@@ -55,6 +55,12 @@ def main() -> int:
     eval_command = commands.add_parser(
         "eval", help="Check that each judge rule flags its invalid cases and passes its valid ones."
     )
+    eval_command.add_argument(
+        "--repeat",
+        type=_positive_int,
+        default=1,
+        help="Judge each case this many times. Runs after the first skip the cache. Default: 1.",
+    )
     eval_command.set_defaults(run=_eval)
 
     update_command = commands.add_parser(
@@ -77,6 +83,13 @@ def main() -> int:
     except Exception:
         traceback.print_exc()
         return _EXIT_ERROR
+
+
+def _positive_int(value: str) -> int:
+    number = int(value)
+    if number < 1:
+        raise argparse.ArgumentTypeError(f"{value} is not a positive number")
+    return number
 
 
 def _configure_telemetry() -> None:
@@ -118,7 +131,7 @@ def _test(args: argparse.Namespace) -> int:
 
 
 def _eval(args: argparse.Namespace) -> int:
-    result = Rules(WorkingTree.containing(Path.cwd())).evaluate()
+    result = Rules(WorkingTree.containing(Path.cwd())).evaluate(args.repeat)
     result.write(sys.stderr)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
 

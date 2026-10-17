@@ -60,11 +60,12 @@ class Rules:
             ]
         )
 
-    def evaluate(self) -> EvalResult:
+    def evaluate(self, repeat: int = 1) -> EvalResult:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
+        runs = (self._judge, *(self._uncached_judge for _ in range(repeat - 1)))
         return EvalResult.merge(
-            JudgeEvalRunner(root, loader, self._judge, threshold).run()
+            JudgeEvalRunner(root, loader, runs, threshold, self._ast_grep).run()
             for loader in self._own_rulesets
         )
 
@@ -107,7 +108,10 @@ class Rules:
         return Semaphore(os.process_cpu_count() or 1)
 
     def _judge(self, root: Path, model: str) -> Judge:
-        return CachedJudge(ClaudeJudge(root, model, self._judge_processes), self._store, root)
+        return CachedJudge(self._uncached_judge(root, model), self._store, root)
+
+    def _uncached_judge(self, root: Path, model: str) -> Judge:
+        return ClaudeJudge(root, model, self._judge_processes)
 
     def _judge_checks(self) -> tuple[JudgeCheck, ...]:
         root = self.working_tree.root

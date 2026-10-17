@@ -1,8 +1,12 @@
+from dataclasses import dataclass
+from pathlib import Path
+
 import pytest
+from factories.diagnostic import MakeViolation
 from recording_judge import JudgeCreation, RecordingJudge, RecordingJudges
 
 from codeguard.config import RulesetLoader
-from codeguard.judge_evals import EvalResult, JudgeEvalRunner
+from codeguard.judge_evals import EvalResult, JudgeEvalRunner, JudgeFactory
 from codeguard.review import JudgeRequest, Skill, Verdict
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
@@ -23,7 +27,7 @@ def enum_rule(repo):
 def run(repo, judge_eval: str, verdict: Verdict) -> EvalResult:
     repo.write(EVAL_FILE, judge_eval)
     judges = RecordingJudges(RecordingJudge(verdict))
-    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
 
 @pytest.mark.usefixtures("enum_rule")
@@ -32,7 +36,7 @@ class TestJudgeEvalRunner:
         repo.write(EVAL_FILE, "id: enum-usage\nvalid: [status.py]\n")
         judges = RecordingJudges(RecordingJudge())
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert judges.created == [JudgeCreation(repo.root / CASE_DIR, "claude-haiku-5-5")]
         assert judges.judge.received == [
@@ -109,10 +113,112 @@ class TestJudgeEvalRunner:
         )
         judges = RecordingJudges(RecordingJudge())
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert result == EvalResult(
             problems=(".codeguard/rule-evals/enum-usge-eval.yml: no judge rule enum-usge",),
+        )
+
+
+@dataclass(frozen=True)
+class FlagsText:
+    text: str
+    root: Path
+
+    identity = "flags-text"
+
+    def judge(self, request: JudgeRequest) -> Verdict:
+        if self.text not in (self.root / request.file).read_text():
+            return Verdict(violations=())
+        violation = MakeViolation(file=request.file, line=1, message="Rename it.", confidence=1.0)
+        return Verdict(violations=(violation,))
+
+
+def flagging(text: str) -> JudgeFactory:
+    return lambda root, model: FlagsText(text, root)
+
+
+def run_variants(repo, runs, disable_skips="[]") -> EvalResult:
+    repo.write(
+        ".codeguard/bindings/enum-usage.yaml",
+        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\n'
+        f"disable_skips: {disable_skips}\n",
+    )
+    repo.write(f"{CASE_DIR}/status.py", "# shipped\nstatus = 'shipped'\nship(status)\n")
+    repo.write(EVAL_FILE, "id: enum-usage\nvalid: [status.py]\n")
+    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), runs, 0.9).run()
+
+
+@pytest.mark.usefixtures("enum_rule")
+class TestVariants:
+    def test_judges_each_variant_of_a_case(self, repo):
+        judged: list[str] = []
+
+        def reading(root: Path, model: str) -> FlagsText:
+            judged.append((root / "status.py").read_text())
+            return FlagsText("never", root)
+
+        run_variants(repo, (reading,))
+
+        assert sorted(judged) == [
+            "\nstatus = 'shipped'\nship(status)\n",
+            "# shipped\nname_1 = 'shipped'\nship(name_1)\n",
+            "# shipped\nstatus = 'shipped'\nship(status)\n",
+        ]
+
+    def test_variant_with_another_verdict_fails_and_names_the_skip(self, repo):
+        result = run_variants(repo, (flagging("name_1"),))
+
+        assert result == EvalResult(
+            problems=(
+                f"{CASE_DIR}/status.py with its names renamed: "
+                "enum-usage expected no violation, got:\n"
+                "  line 1 (1.00): Rename it.\n"
+                "  If enum-usage judges names, add renames to disable_skips in its binding.",
+            ),
+        )
+
+    def test_failing_case_reports_only_its_own_failure(self, repo):
+        result = run_variants(repo, (flagging("ship"),))
+
+        assert result == EvalResult(
+            problems=(
+                f"{CASE_DIR}/status.py: enum-usage expected no violation, got:\n"
+                "  line 1 (1.00): Rename it.",
+            ),
+        )
+
+    def test_disabled_skip_has_no_variant(self, repo):
+        result = run_variants(repo, (flagging("name_1"),), disable_skips="[renames]")
+
+        assert result == EvalResult()
+
+
+@pytest.mark.usefixtures("enum_rule")
+class TestRepeats:
+    def test_each_run_uses_its_own_judges(self, repo):
+        first, second = RecordingJudges(RecordingJudge()), RecordingJudges(RecordingJudge())
+        repo.write(EVAL_FILE, "id: enum-usage\nvalid: [status.py]\n")
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (first, second), 0.9).run()
+
+        assert (
+            first.created
+            == second.created
+            == [JudgeCreation(repo.root / CASE_DIR, "claude-haiku-5-5")]
+        )
+
+    def test_failing_run_is_numbered(self, repo):
+        repo.write(EVAL_FILE, "id: enum-usage\nvalid: [status.py]\n")
+        runs = (RecordingJudges(RecordingJudge()), flagging("ship"))
+
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), runs, 0.9).run()
+
+        assert result == EvalResult(
+            problems=(
+                f"{CASE_DIR}/status.py (run 2 of 2): enum-usage expected no violation, got:\n"
+                "  line 1 (1.00): Rename it.",
+            ),
         )
 
 
@@ -121,6 +227,6 @@ class TestWithoutJudgeEvals:
         repo.write(".codeguard/bindings/broken.yaml", "path: [a.py]\n")
         judges = RecordingJudges(RecordingJudge())
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert result == EvalResult()

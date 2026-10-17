@@ -3,7 +3,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Self
 
-from codeguard.config import SKILL_FILE, BindingConfig, Ruleset
+from codeguard.config import SKILL_FILE, BindingConfig, Ruleset, Skip
 from codeguard.review.diagnostic import Severity
 from codeguard.review.skill import Skill
 
@@ -15,6 +15,7 @@ class Binding:
     paths: tuple[str, ...]
     severity: Severity
     model: str
+    disable_skips: frozenset[Skip] = frozenset()
 
     @classmethod
     def from_config(cls, rule: str, binding: BindingConfig) -> Self:
@@ -24,7 +25,12 @@ class Binding:
             paths=binding.paths,
             severity=Severity(binding.severity),
             model=binding.model,
+            disable_skips=binding.disable_skips,
         )
+
+    @property
+    def skips(self) -> tuple[Skip, ...]:
+        return tuple(skip for skip in Skip if skip not in self.disable_skips)
 
     def files(self, changed: Sequence[str]) -> list[str]:
         return [file for file in changed if self._matches(file)]

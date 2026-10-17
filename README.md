@@ -176,6 +176,21 @@ The judge reads each case from that directory with the binding's model, so name 
 files for their code, not their expected result. Verdicts are cached like reviews, so
 only changed cases and skills call Claude again.
 
+The eval also judges each case with its names renamed, without comments, and with its
+imports reordered, and each must keep its expected result. A rule whose verdict depends
+on one of these lists it in its binding:
+
+```yaml
+skill: python/skills/naming
+paths: ["**/*.py"]
+disable_skips: [renames]   # also: comments, imports
+```
+
+Variants exist for Python files. Other languages get the original case only.
+
+`codeguard eval --repeat 3` judges each case three times. Runs after the first skip the
+cache, so an unstable verdict shows up as a failing run.
+
 Run `codeguard test` at the package root for every ruleset's pattern tests, and
 `codeguard eval` for its judge evals. Tag
 releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
