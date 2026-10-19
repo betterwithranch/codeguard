@@ -1,10 +1,21 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
 
 import yaml
+from pydantic import BaseModel
 
 _SNAPSHOT_DIR = "__snapshots__"
+
+
+class _RuleTestFile(BaseModel):
+    id: str
+    invalid: tuple[str, ...] = ()
+
+
+class _SnapshotFileContent(BaseModel):
+    id: str
+    snapshots: dict[str, object]
 
 
 @dataclass(frozen=True)
@@ -15,8 +26,8 @@ class SnapshotFile:
 
     @classmethod
     def load(cls, path: Path) -> Self:
-        snapshot = _read(path)
-        return cls(rule=snapshot["id"], path=path, cases=frozenset(snapshot["snapshots"]))
+        content = _SnapshotFileContent.model_validate(yaml.safe_load(path.read_text()))
+        return cls(rule=content.id, path=path, cases=frozenset(content.snapshots))
 
     def stale_problem(self, root: Path) -> str:
         return (
@@ -36,9 +47,11 @@ class Snapshots:
         paths = sorted(test_dir.rglob("*.y*ml"))
         snapshot_paths = [path for path in paths if snapshot_dir in path.parents]
         test_paths = [path for path in paths if path not in snapshot_paths]
-        tests = [_read(path) for path in test_paths]
+        tests = [
+            _RuleTestFile.model_validate(yaml.safe_load(path.read_text())) for path in test_paths
+        ]
         return cls(
-            invalid_cases={test["id"]: frozenset(test.get("invalid", [])) for test in tests},
+            invalid_cases={test.id: frozenset(test.invalid) for test in tests},
             snapshots=tuple(SnapshotFile.load(path) for path in snapshot_paths),
         )
 
@@ -48,7 +61,3 @@ class Snapshots:
             for snapshot in self.snapshots
             if not snapshot.cases <= self.invalid_cases.get(snapshot.rule, frozenset())
         ]
-
-
-def _read(path: Path) -> Any:
-    return yaml.safe_load(path.read_text())

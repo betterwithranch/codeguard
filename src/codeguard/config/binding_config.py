@@ -19,6 +19,7 @@ class BindingConfig(BaseModel):
 
     skill: DirectoryPath
     paths: tuple[str, ...] = Field(min_length=1)
+    exclude_paths: tuple[str, ...] = ()
     severity: Severity = Severity.ERROR
     model: str = "claude-sonnet-5-5"
     disable_skips: frozenset[Skip] = frozenset()

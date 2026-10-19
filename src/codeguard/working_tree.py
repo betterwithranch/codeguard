@@ -1,7 +1,7 @@
 import re
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Self
 
@@ -11,22 +11,34 @@ _HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
 @dataclass(frozen=True)
 class ChangedLines:
     lines: Mapping[str, frozenset[int]]
+    deletions: Mapping[str, frozenset[int]] = field(default_factory=dict)
+    node_starts: Mapping[str, frozenset[int]] = field(default_factory=dict)
 
     @property
     def files(self) -> tuple[str, ...]:
-        return tuple(sorted(self.lines))
+        return tuple(sorted({*self.lines, *self.deletions}))
 
-    def covers(self, file: str, line: int | None) -> bool:
+    def points(self, file: str) -> frozenset[int]:
+        return self.lines.get(file, frozenset()) | self.deletions.get(file, frozenset())
+
+    def with_node_starts(self, node_starts: Mapping[str, frozenset[int]]) -> Self:
+        return replace(self, node_starts=node_starts)
+
+    def covers(self, file: str, line: int | None, end_line: int | None = None) -> bool:
+        if file not in self.files:
+            return False
         if line is None:
-            return file in self.lines
-        return line in self.lines.get(file, frozenset())
+            return True
+        if end_line is not None:
+            return any(line <= point <= end_line for point in self.points(file))
+        return line in self.points(file) or line in self.node_starts.get(file, frozenset())
 
 
 @dataclass(frozen=True)
 class AllLines:
     files: tuple[str, ...]
 
-    def covers(self, file: str, line: int | None) -> bool:
+    def covers(self, file: str, line: int | None, end_line: int | None = None) -> bool:
         return True
 
 
@@ -52,8 +64,12 @@ class WorkingTree:
             merge_base,
         )
         untracked = self._git_paths("ls-files", "--others", "--exclude-standard")
-        lines = {**_added_lines(diff), **{file: self._every_line(file) for file in untracked}}
-        return ChangedLines({file: numbers for file, numbers in lines.items() if numbers})
+        added, deletions = _changed_points(diff)
+        lines = {**added, **{file: self._every_line(file) for file in untracked}}
+        return ChangedLines(
+            lines={file: numbers for file, numbers in lines.items() if numbers},
+            deletions={file: numbers for file, numbers in deletions.items() if numbers},
+        )
 
     def all_lines(self) -> AllLines:
         listed = self._git_paths("ls-files", "--cached", "--others", "--exclude-standard")
@@ -73,8 +89,9 @@ class WorkingTree:
         return _run_git(self.root, *args)
 
 
-def _added_lines(diff: str) -> dict[str, frozenset[int]]:
-    lines: dict[str, set[int]] = {}
+def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
+    added: dict[str, set[int]] = {}
+    deletions: dict[str, set[int]] = {}
     file = ""
     in_header = False
     for row in diff.splitlines():
@@ -82,12 +99,20 @@ def _added_lines(diff: str) -> dict[str, frozenset[int]]:
             in_header = True
         elif in_header and row.startswith("+++ "):
             file = row.removeprefix("+++ ")
-            lines[file] = set()
+            added[file] = set()
+            deletions[file] = set()
         elif match := _HUNK.match(row):
             in_header = False
             start, count = int(match[1]), int(match[2] or 1)
-            lines[file].update(range(start, start + count))
-    return {file: frozenset(numbers) for file, numbers in lines.items()}
+            if count:
+                added[file].update(range(start, start + count))
+            else:
+                deletions[file].add(max(start, 1))
+    return _frozen(added), _frozen(deletions)
+
+
+def _frozen(points: dict[str, set[int]]) -> dict[str, frozenset[int]]:
+    return {file: frozenset(numbers) for file, numbers in points.items()}
 
 
 def _run_git(cwd: Path, *args: str) -> str:

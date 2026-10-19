@@ -33,6 +33,21 @@ class TestBinding:
 
         assert files == ["app/a.py", "app/models/b.py"]
 
+    def test_files_matching_its_exclude_paths_are_left_out(self, make_binding):
+        binding = make_binding(paths=("**/*.py",), exclude_paths=("**/test_*.py",))
+
+        files = binding.files(["app/a.py", "app/test_a.py", "app/b.rb"])
+
+        assert files == ["app/a.py"]
+
+    def test_from_config_has_its_exclude_paths(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        config = BindingConfig(skill=skill, paths=("**",), exclude_paths=("tests/**",))
+
+        binding = Binding.from_config(SKILL_NAME, config)
+
+        assert binding == make_binding(exclude_paths=("tests/**",))
+
     def test_preset_binding_matches_every_file(self, make_binding):
         binding = make_binding()
 
@@ -118,6 +133,15 @@ class TestBindings:
                 model="claude-haiku-5-5",
             ),
         )
+
+    def test_override_replaces_the_excluded_paths(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        binding = BindingConfig(skill=skill, paths=("**",), exclude_paths=("tests/**",))
+        bindings = BindingsConfig({"placement.yaml": binding})
+        selection = RulesetConfig(rules={SKILL_NAME: RuleOverride(exclude_paths=())})
+        ruleset = Ruleset(name=None, root=tmp_path, bindings=bindings, selection=selection)
+
+        assert Bindings.from_rulesets([ruleset]) == (make_binding(),)
 
 
 class TestSkill:

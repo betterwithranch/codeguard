@@ -7,10 +7,11 @@ from pathlib import Path
 
 import logfire
 
+from codeguard.config import ConfigLoader
 from codeguard.file_lock import exclusive_lock
 from codeguard.packages import PackageUpdate
 from codeguard.rules import Rules
-from codeguard.working_tree import WorkingTree
+from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _EXIT_PASSED = 0
 _EXIT_FAILED = 1
@@ -41,6 +42,11 @@ def main() -> int:
         action="store_true",
         help="Use the newest tag in each package's version range instead of the lock file.",
     )
+    review_command.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="List the judge calls the review would make, without calling Claude.",
+    )
     review_command.set_defaults(run=_review)
 
     test_command = commands.add_parser("test", help="Run the project's rule tests.")
@@ -67,6 +73,12 @@ def main() -> int:
         "update", help="Lock each package's version range to its newest matching tag."
     )
     update_command.set_defaults(run=_update)
+
+    config_command = commands.add_parser(
+        "config", help="Print a setting from .codeguard/config.yaml, or its default."
+    )
+    config_command.add_argument("setting", choices=("review_time_limit_minutes",))
+    config_command.set_defaults(run=_config)
 
     args = parser.parse_args()
     _configure_telemetry()
@@ -104,8 +116,11 @@ def _configure_telemetry() -> None:
 
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
+    if args.dry_run:
+        Rules(working_tree, latest=args.latest).plan(_scope(working_tree, args)).write(sys.stdout)
+        return _EXIT_PASSED
     with exclusive_lock(working_tree.git_path(_REVIEW_LOCK)):
-        scope = working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
+        scope = _scope(working_tree, args)
         with logfire.span(
             "review {repository}",
             repository=working_tree.root.name,
@@ -123,6 +138,10 @@ def _review(args: argparse.Namespace) -> int:
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 
 
+def _scope(working_tree: WorkingTree, args: argparse.Namespace) -> ChangedLines | AllLines:
+    return working_tree.all_lines() if args.all else working_tree.changed_lines(args.base)
+
+
 def _test(args: argparse.Namespace) -> int:
     tests = Rules(WorkingTree.containing(Path.cwd())).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
@@ -134,6 +153,12 @@ def _eval(args: argparse.Namespace) -> int:
     result = Rules(WorkingTree.containing(Path.cwd())).evaluate(args.repeat)
     result.write(sys.stderr)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
+
+
+def _config(args: argparse.Namespace) -> int:
+    config = ConfigLoader(WorkingTree.containing(Path.cwd()).root).load()
+    sys.stdout.write(f"{getattr(config, args.setting)}\n")
+    return _EXIT_PASSED
 
 
 def _update(args: argparse.Namespace) -> int:

@@ -1,4 +1,5 @@
 import subprocess
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -17,10 +18,18 @@ class _ByteOffset(BaseModel):
     end: int
 
 
+class _Position(BaseModel):
+    model_config = ConfigDict(extra="ignore", frozen=True)
+
+    line: int
+
+
 class _Range(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     byte_offset: _ByteOffset = Field(alias="byteOffset")
+    start: _Position
+    end: _Position
 
 
 class _Match(BaseModel):
@@ -34,7 +43,14 @@ class _Match(BaseModel):
     @property
     def node(self) -> SyntaxNode:
         offset = self.range.byte_offset
-        return SyntaxNode(kind=self.rule_id, start=offset.start, end=offset.end, text=self.text)
+        return SyntaxNode(
+            kind=self.rule_id,
+            start=offset.start,
+            end=offset.end,
+            text=self.text,
+            start_line=self.range.start.line + 1,
+            end_line=self.range.end.line + 1,
+        )
 
 
 @dataclass(frozen=True)
@@ -47,11 +63,14 @@ class SyntaxScanner:
             for path in directory.rglob("*")
             if path.is_file()
         )
+        return self.scan_files(directory, paths)
+
+    def scan_files(self, root: Path, paths: Sequence[str]) -> dict[str, ParsedFile]:
         files: dict[str, ParsedFile] = {}
         for table in SyntaxTable.supported():
             in_language = [path for path in paths if SyntaxTable.for_file(path) == table]
             if in_language:
-                files.update(self._scan(directory, table, in_language))
+                files.update(self._scan(root, table, in_language))
         return files
 
     def _scan(self, directory: Path, table: SyntaxTable, files: list[str]) -> dict[str, ParsedFile]:

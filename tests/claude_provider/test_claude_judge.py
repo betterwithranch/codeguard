@@ -1,4 +1,5 @@
 import json
+import time
 from collections.abc import Hashable, Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
@@ -9,7 +10,7 @@ import pytest
 from claude_output import MODEL_USAGE, fake_claude_script
 from spans import finished_span_attributes
 
-from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
+from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
 from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 MODEL = "claude-sonnet-5-5"
@@ -71,6 +72,18 @@ def failing_claude_executable(tmp_path) -> str:
     )
     executable.chmod(0o755)
     return str(executable)
+
+
+@pytest.fixture
+def hanging_claude_executable(tmp_path) -> str:
+    executable = tmp_path / "claude"
+    executable.write_text("#!/bin/sh\nsleep 10\n")
+    executable.chmod(0o755)
+    return str(executable)
+
+
+def deadline_in(seconds: float) -> Deadline:
+    return Deadline(minutes=1, started=time.monotonic() - 60 + seconds)
 
 
 @dataclass
@@ -150,6 +163,27 @@ class TestClaudeJudge:
             f"{failing_claude_executable} exited with 1.\n"
             "stdout:\nrate limited\n\nstderr:\ntry later\n"
         )
+
+    def test_call_after_the_deadline_is_a_judge_error_without_running_claude(
+        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+    ):
+        judge = ClaudeJudge(
+            tmp_path, MODEL, processes, fake_claude_executable, deadline=deadline_in(0)
+        )
+
+        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+            judge.judge(JudgeRequest(make_skill(), "a.py"))
+        assert not arguments.exists()
+
+    def test_call_running_past_the_deadline_is_a_judge_error(
+        self, tmp_path, processes, hanging_claude_executable, make_skill
+    ):
+        judge = ClaudeJudge(
+            tmp_path, MODEL, processes, hanging_claude_executable, deadline=deadline_in(0.5)
+        )
+
+        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+            judge.judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_each_call_holds_a_process_slot(self, tmp_path, fake_claude_executable, make_skill):
         processes = RecordingProcesses()

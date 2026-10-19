@@ -57,6 +57,11 @@ extend-immutable-calls = ["codeguard.config.RulesetConfig"]
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."
 
+[tool.basedpyright]
+include = ["src"]
+typeCheckingMode = "standard"
+reportExplicitAny = "error"
+
 [tool.importlinter]
 root_packages = ["codeguard"]
 
@@ -78,6 +83,7 @@ layers = [
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.40.2",
     "factory-boy>=3.3.3",
     "import-linter>=2.15",
     "pydantic-evals>=2.57.0",

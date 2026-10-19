@@ -16,6 +16,7 @@ class NodeKind(StrEnum):
     IMPORT = "imports"
     NAME = "names"
     DEFINITION = "definitions"
+    SCOPE = "scopes"
 
 
 class SyntaxTable(BaseModel):
@@ -27,6 +28,7 @@ class SyntaxTable(BaseModel):
     imports: AstGrepRule
     names: AstGrepRule
     definitions: AstGrepRule
+    scopes: AstGrepRule
 
     @classmethod
     def for_file(cls, file: str) -> Self | None:

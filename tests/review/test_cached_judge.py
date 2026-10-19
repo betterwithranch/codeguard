@@ -43,6 +43,16 @@ class TestCachedJudge:
         with pytest.raises(TypeError, match=f"cache entry {key} is not a Verdict"):
             judge.judge(request)
 
+    def test_has_a_request_only_after_judging_it(self, repo, store, make_skill):
+        repo.write("a.py", "print(1)\n")
+        judge = cached(repo, store, RecordingJudge())
+        request = JudgeRequest(make_skill(), "a.py")
+        before = judge.has(request)
+
+        judge.judge(request)
+
+        assert (before, judge.has(request)) == (False, True)
+
     def test_changed_file_is_judged_again(self, repo, store, make_skill):
         repo.write("a.py", "print(1)\n")
         wrapped = RecordingJudge()

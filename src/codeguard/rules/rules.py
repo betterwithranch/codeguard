@@ -7,7 +7,7 @@ from threading import Semaphore
 from diskcache import Cache
 
 from codeguard.ast_grep import AstGrep
-from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
+from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
 from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
 from codeguard.judge_evals import EvalResult, JudgeEvalRunner
 from codeguard.packages import (
@@ -19,8 +19,20 @@ from codeguard.packages import (
     Packages,
 )
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
-from codeguard.review import Bindings, CachedJudge, CheckStep, Judge, JudgeCheck, Review, Reviewer
+from codeguard.review import (
+    Bindings,
+    CachedJudge,
+    CheckStep,
+    Judge,
+    JudgeCheck,
+    JudgePlan,
+    JudgeRequest,
+    PlannedCall,
+    Review,
+    Reviewer,
+)
 from codeguard.rule_tests import RuleTests
+from codeguard.syntax import SyntaxScanner
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _CACHE_DIR = Path.home() / ".cache" / "codeguard"
@@ -39,6 +51,7 @@ class Rules:
 
     def review(self, scope: ChangedLines | AllLines) -> Review:
         root = self.working_tree.root
+        deadline = Deadline(self.config.review_time_limit_minutes)
         reviewer = Reviewer(
             steps=(
                 CheckStep(
@@ -47,10 +60,32 @@ class Rules:
                         for ruleset in self._rulesets
                     )
                 ),
-                CheckStep(checks=self._judge_checks()),
+                CheckStep(checks=self._judge_checks(deadline)),
             )
         )
-        return reviewer.run(scope)
+        return reviewer.run(self._with_enclosing_nodes(scope))
+
+    def _with_enclosing_nodes(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:
+        if isinstance(scope, AllLines):
+            return scope
+        parsed = SyntaxScanner(self._ast_grep).scan_files(self.working_tree.root, scope.files)
+        return scope.with_node_starts(
+            {file: content.enclosing_starts(scope.points(file)) for file, content in parsed.items()}
+        )
+
+    def plan(self, scope: ChangedLines | AllLines) -> JudgePlan:
+        root = self.working_tree.root
+        return JudgePlan(
+            calls=tuple(
+                PlannedCall(
+                    rule=binding.rule,
+                    file=file,
+                    cached=self._judge(root, binding.model).has(JudgeRequest(binding.skill, file)),
+                )
+                for binding in Bindings.from_rulesets(self._rulesets)
+                for file in binding.files(scope.files)
+            )
+        )
 
     @property
     def tests(self) -> RuleTests:
@@ -109,20 +144,22 @@ class Rules:
     def _judge_processes(self) -> Semaphore:
         return Semaphore(os.process_cpu_count() or 1)
 
-    def _judge(self, root: Path, model: str) -> Judge:
-        return CachedJudge(self._uncached_judge(root, model), self._store, root)
+    def _judge(self, root: Path, model: str, deadline: Deadline | None = None) -> CachedJudge:
+        return CachedJudge(self._uncached_judge(root, model, deadline), self._store, root)
 
     @cached_property
     def _warmup(self) -> PromptCacheWarmup:
         return PromptCacheWarmup()
 
-    def _uncached_judge(self, root: Path, model: str) -> Judge:
-        return ClaudeJudge(root, model, self._judge_processes, warmup=self._warmup)
+    def _uncached_judge(self, root: Path, model: str, deadline: Deadline | None = None) -> Judge:
+        return ClaudeJudge(
+            root, model, self._judge_processes, warmup=self._warmup, deadline=deadline
+        )
 
-    def _judge_checks(self) -> tuple[JudgeCheck, ...]:
+    def _judge_checks(self, deadline: Deadline) -> tuple[JudgeCheck, ...]:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         return tuple(
-            JudgeCheck(binding, self._judge(root, binding.model), threshold)
+            JudgeCheck(binding, self._judge(root, binding.model, deadline), threshold)
             for binding in Bindings.from_rulesets(self._rulesets)
         )

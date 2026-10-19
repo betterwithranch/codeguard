@@ -1,6 +1,25 @@
-from codeguard.config import RuleOverride, Ruleset, RulesetConfig
+import pytest
+
+from codeguard.config import (
+    PatternBindingConfig,
+    PatternBindingsConfig,
+    RuleOverride,
+    Ruleset,
+    RulesetConfig,
+)
 from codeguard.pattern_rules import PatternRuleCheck
 from codeguard.review import Severity
+
+
+@pytest.fixture
+def tests_excluded() -> PatternBindingsConfig:
+    return PatternBindingsConfig(
+        {
+            "no-print.yaml": PatternBindingConfig(
+                rule="no-print", paths=("**/*.py",), exclude_paths=("tests/**",)
+            )
+        }
+    )
 
 
 def packaged_ruleset(root, selection: RulesetConfig = RulesetConfig()) -> Ruleset:
@@ -96,3 +115,28 @@ class TestPatternRuleCheck:
         )
 
         assert diagnostics == [make_diagnostic(rule="example/python/no-print", file="app/a.py")]
+
+    def test_binding_excluded_paths_limit_the_rule(self, repo, make_diagnostic, tests_excluded):
+        repo.write("app/a.py", "print(1)\n")
+        repo.write("tests/test_a.py", "print(1)\n")
+        ruleset = Ruleset(name=None, root=repo.root / ".codeguard", pattern_bindings=tests_excluded)
+
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["app/a.py", "tests/test_a.py"])
+
+        assert diagnostics == [make_diagnostic(file="app/a.py")]
+
+    def test_overridden_excluded_paths_replace_the_binding(
+        self, repo, make_diagnostic, tests_excluded
+    ):
+        repo.write("tests/test_a.py", "print(1)\n")
+        selection = RulesetConfig(rules={"no-print": RuleOverride(exclude_paths=())})
+        ruleset = Ruleset(
+            name=None,
+            root=repo.root / ".codeguard",
+            selection=selection,
+            pattern_bindings=tests_excluded,
+        )
+
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["tests/test_a.py"])
+
+        assert diagnostics == [make_diagnostic(file="tests/test_a.py")]

@@ -15,6 +15,7 @@ class Diagnostic(BaseModel):
     message: str
     severity: Severity
     note: str | None
+    end_line: int | None = None
 
     @property
     def id(self) -> str:

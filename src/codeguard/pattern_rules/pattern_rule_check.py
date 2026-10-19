@@ -44,5 +44,4 @@ class PatternRuleCheck:
         return [*ruleset_severity, *excluded, *severities]
 
     def _selected(self, match: AstGrepMatch) -> bool:
-        override = self.ruleset.selection.rules.get(match.rule_id)
-        return override is None or override.paths is None or match.in_paths(override.paths)
+        return self.ruleset.pattern_scope(match.rule_id).matches(match.file)

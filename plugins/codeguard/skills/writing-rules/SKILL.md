@@ -16,9 +16,13 @@ blocks the agent's Stop and fails CI.
   diagnostic, so it is what the blocked agent reads (no comments in rule files).
 - Match a code pattern, never a named class, function, or file.
 - Set `severity: error` on a rule that must block; `warning` only reports.
-- Scope a rule to some files through its binding's `paths`, never ast-grep's `files`, so
-  each glob lives in one place. Bindings aren't built yet: until they are, a rule runs
-  on every file in its language, so ask before writing one that needs scoping.
+- Write a pattern rule whenever ast-grep can check the convention, and a judge rule
+  (a skill) only when it needs judgment. A pattern rule is fast, free, and gives the
+  same answer every time; a judge rule costs a Claude call per changed file.
+- A pattern rule runs on every file in its language. Scope it with a binding,
+  `bindings/<id>.yaml` with `rule`, `paths` and `exclude_paths`, never with ast-grep's
+  `files` or `ignores`, so a project can change the scope. The exception is a file name
+  that is part of the convention itself (`__all__` only in `__init__.py`).
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.

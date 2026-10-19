@@ -1,9 +1,8 @@
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from pathlib import PurePath
 from typing import Self
 
-from codeguard.config import SKILL_FILE, BindingConfig, Ruleset, Severity, Skip
+from codeguard.config import SKILL_FILE, BindingConfig, PathScope, Ruleset, Severity, Skip
 from codeguard.review.skill import Skill
 
 
@@ -15,6 +14,7 @@ class Binding:
     severity: Severity
     model: str
     disable_skips: frozenset[Skip] = frozenset()
+    exclude_paths: tuple[str, ...] = ()
 
     @classmethod
     def from_config(cls, rule: str, binding: BindingConfig) -> Self:
@@ -25,6 +25,7 @@ class Binding:
             severity=binding.severity,
             model=binding.model,
             disable_skips=binding.disable_skips,
+            exclude_paths=binding.exclude_paths,
         )
 
     @property
@@ -35,7 +36,7 @@ class Binding:
         return [file for file in changed if self._matches(file)]
 
     def _matches(self, file: str) -> bool:
-        return any(PurePath(file).full_match(pattern) for pattern in self.paths)
+        return PathScope(self.paths, self.exclude_paths).matches(file)
 
 
 class Bindings(tuple[Binding, ...]):

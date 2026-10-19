@@ -10,6 +10,8 @@ from codeguard.config.package_config import (
     PathPackageConfig,
     VersionedPackageConfig,
 )
+from codeguard.config.path_scope import PathScope
+from codeguard.config.pattern_binding_config import PatternBindingConfig, PatternBindingsConfig
 from codeguard.config.ruleset import JUDGE_EVAL_DIR, PATTERN_RULE_DIR, PATTERN_TEST_DIR, Ruleset
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
 from codeguard.config.ruleset_loader import RulesetLoader
@@ -36,6 +38,9 @@ __all__ = [
     "LockedPackage",
     "PackageConfig",
     "PathPackageConfig",
+    "PathScope",
+    "PatternBindingConfig",
+    "PatternBindingsConfig",
     "RuleOverride",
     "Ruleset",
     "RulesetConfig",

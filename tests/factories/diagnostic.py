@@ -19,6 +19,7 @@ class MakeDiagnostic(factory.Factory):
         judged = factory.Trait(
             rule=factory.LazyFunction(lambda: MakeSkill().name),
             note="Call logger.info instead.",
+            end_line=None,
         )
 
     rule = "no-print"
@@ -27,6 +28,7 @@ class MakeDiagnostic(factory.Factory):
     message = "Use logging, not print."
     severity = Severity.ERROR
     note = "print bypasses log levels.\nCall logger.info instead.\n"
+    end_line = factory.SelfAttribute("line")
 
 
 class MakeViolation(factory.Factory):

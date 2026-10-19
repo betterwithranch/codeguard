@@ -80,6 +80,16 @@ project edits. A release that breaks the rule format starts `v1`.
 A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
 guides an agent through writing a rule and its tests.
 
+A rule is one of two kinds:
+
+- A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
+- A **judge rule** is a skill that Claude reads each changed file against.
+
+Write a pattern rule whenever ast-grep can check the convention: it runs in
+milliseconds, costs nothing, and gives the same answer every time. A judge rule costs a
+Claude call for every changed file it matches. Use one only when the convention needs
+judgment, such as whether a name matches what the code does.
+
 A project can also opt into rulesets from rule packages:
 
 ```yaml
@@ -99,7 +109,8 @@ packages:
 
 - Only the listed rulesets run.
 - `exclude` turns rules off.
-- `rules.<id>` overrides a rule's `paths` or `severity`, and a judge rule's `model`.
+- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`, and a judge
+  rule's `model`. `exclude_paths: []` brings back the files its binding leaves out.
 - `severity` on the ruleset sets every rule in it, including rules the package adds
   later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
   so `severity: warning` trials a package: its findings print without blocking. A
@@ -168,6 +179,27 @@ else but `config.yaml` and `lock.yaml`, so a rule moves between a project and a 
 A binding's `skill` path starts at the package root (`skill: python/skills/<id>`). A
 judge rule's id is its skill's directory name. Rule ids are unique within a ruleset.
 
+A binding applies a rule to the files that match `paths` and none of `exclude_paths`. A
+judge rule's binding names its `skill`:
+
+```yaml
+skill: python/skills/names-match-behavior
+paths: ["**/*.py"]
+exclude_paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+```
+
+A pattern rule's binding names its `rule`. A pattern rule without one runs on every file
+in its language:
+
+```yaml
+rule: no-comments-in-tests
+paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+```
+
+Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a project can
+change it. The exception is a file name that is the convention itself, like
+`all-only-in-init` skipping `__init__.py`.
+
 A judge rule eval lists case files in `rule-evals/<id>/`:
 
 ```yaml
@@ -234,6 +266,15 @@ it in `.codeguard/config.yaml`:
 confidence_threshold: 0.8
 ```
 
+A review stops judging after 5 minutes. Each rule and file it didn't judge gets a "not
+checked" diagnostic at the rule's severity, so an unchecked `error` rule fails the review.
+The GitHub Action stops the review 2 minutes after the limit, in case it hangs. Change the
+limit in `.codeguard/config.yaml`:
+
+```yaml
+review_time_limit_minutes: 10
+```
+
 Each binding judges with `claude-sonnet-5-5` unless it sets `model`:
 
 ```yaml
@@ -265,6 +306,7 @@ codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
 codeguard review --latest     # newest tag in each package range, not the lock
+codeguard review --dry-run    # count the judge calls, by rule and file; calls no model
 codeguard test                # pattern rule tests
 codeguard test --update-all   # the same, regenerating snapshots
 codeguard eval                # judge rule evals; calls Claude

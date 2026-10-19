@@ -7,6 +7,8 @@ from codeguard.config import (
     ConfigError,
     ConfigLoader,
     PathPackageConfig,
+    PatternBindingConfig,
+    PatternBindingsConfig,
     Ruleset,
     RulesetConfig,
     RulesetLoader,
@@ -16,6 +18,7 @@ from codeguard.config import (
 CONFIG = ".codeguard/config.yaml"
 BINDING = ".codeguard/bindings/placement.yaml"
 SKILL = ".claude/skills/responsibility-placement/SKILL.md"
+NO_PRINT_RULE = "id: no-print\nlanguage: python\nrule:\n  pattern: print($$$)\n"
 
 
 class TestConfigLoader:
@@ -42,6 +45,14 @@ class TestConfigLoader:
             f"{repo.root}/.codeguard is invalid:\n"
             "  confidence_threshold: Input should be less than or equal to 1"
         )
+
+    def test_review_time_limit_defaults_to_5_minutes(self, repo):
+        assert ConfigLoader(repo.root).load().review_time_limit_minutes == 5
+
+    def test_loads_the_review_time_limit(self, repo):
+        repo.write(CONFIG, "review_time_limit_minutes: 10\n")
+
+        assert ConfigLoader(repo.root).load().review_time_limit_minutes == 10
 
     def test_loads_a_path_package(self, repo):
         repo.write("rules/codeguard-package.yaml", "name: example\nrulesets: [python]\n")
@@ -164,6 +175,48 @@ class TestRulesetLoader:
             "  bindings.placement.yaml.severity: "
             "Input should be 'error', 'warning', 'info' or 'hint'\n"
             "  bindings.placement.yaml.path: Extra inputs are not permitted"
+        )
+
+    def test_loads_a_pattern_rule_binding(self, repo):
+        repo.write(".codeguard/rules/pattern/no-print.yml", NO_PRINT_RULE)
+        repo.write(
+            ".codeguard/bindings/no-print.yaml",
+            'rule: no-print\npaths: ["**/*.py"]\nexclude_paths: ["tests/**"]\n',
+        )
+
+        ruleset = RulesetLoader.local(repo.root).load()
+
+        assert ruleset.pattern_bindings == PatternBindingsConfig(
+            {
+                "no-print.yaml": PatternBindingConfig(
+                    rule="no-print", paths=("**/*.py",), exclude_paths=("tests/**",)
+                )
+            }
+        )
+
+    def test_binding_for_a_missing_pattern_rule_is_an_error(self, repo):
+        repo.write(".codeguard/rules/pattern/no-print.yml", NO_PRINT_RULE)
+        repo.write(".codeguard/bindings/no-prnt.yaml", 'rule: no-prnt\npaths: ["**"]\n')
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            "  bindings.no-prnt.yaml.rule: no pattern rule no-prnt"
+        )
+
+    def test_pattern_rule_bound_twice_is_an_error(self, repo):
+        repo.write(".codeguard/rules/pattern/no-print.yml", NO_PRINT_RULE)
+        repo.write(".codeguard/bindings/a.yaml", 'rule: no-print\npaths: ["**"]\n')
+        repo.write(".codeguard/bindings/b.yaml", 'rule: no-print\npaths: ["**"]\n')
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            "  bindings: Value error, rule no-print is bound more than once: a.yaml, b.yaml"
         )
 
     def test_missing_skill_is_an_error(self, repo):

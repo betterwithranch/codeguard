@@ -32,7 +32,9 @@ runs:
     - name: Check changed files
       id: review
       shell: bash
-      run: uv run --frozen --project "${{ github.action_path }}" codeguard review --latest --base "${{ inputs.base }}"
+      run: |
+        limit=$(uv run --frozen --project "${{ github.action_path }}" codeguard config review_time_limit_minutes)
+        timeout "$((limit + 2))m" uv run --frozen --project "${{ github.action_path }}" codeguard review --latest --base "${{ inputs.base }}"
       env:
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         LOGFIRE_TOKEN: ${{ inputs.logfire-token }}

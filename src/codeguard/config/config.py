@@ -10,5 +10,6 @@ class Config(BaseModel):
     )
 
     confidence_threshold: float = Field(default=0.9, ge=0, le=1)
+    review_time_limit_minutes: int = Field(default=5, ge=1)
     ast_grep: ExactVersion | None = Field(default=None, alias="ast-grep")
     packages: tuple[PackageConfig, ...] = ()

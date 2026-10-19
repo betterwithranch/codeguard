@@ -300,6 +300,118 @@ class TestUpdateCommand:
         assert result.returncode == 0
 
 
+class TestReviewOfDeletedCode:
+    def test_violation_on_the_class_that_lost_a_method_is_reported(
+        self, repo, tmp_path, make_skill
+    ):
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\n',
+        )
+        repo.write(
+            "service.py",
+            "class ExampleService:\n"
+            "    def execute(self):\n"
+            "        return 1\n"
+            "\n"
+            "    def describe(self):\n"
+            "        return 'service'\n",
+        )
+        repo.commit("Add the service")
+        repo.write(
+            "service.py",
+            "class ExampleService:\n    def describe(self):\n        return 'service'\n",
+        )
+        violation = {"file": "service.py", "note": "Move it.", "confidence": 1.0}
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        claude = bin_dir / "claude"
+        claude.write_text(
+            fake_claude_script(
+                [
+                    {**violation, "line": 1, "message": "The class lost its entry point."},
+                    {**violation, "line": 2, "message": "Untouched method."},
+                ]
+            )
+        )
+        claude.chmod(0o755)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert result.stdout.splitlines()[0].startswith(
+            "service.py:1: error placement: The class lost its entry point."
+        )
+        assert "Untouched method." not in result.stdout
+
+
+class TestReviewDryRun:
+    def test_lists_judge_calls_without_calling_claude(self, repo, tmp_path, make_skill):
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\n',
+        )
+        repo.write("a.py", "x = 1\n")
+        repo.write("b.rb", "x = 1\n")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        claude = bin_dir / "claude"
+        claude.write_text("#!/bin/sh\nexit 1\n")
+        claude.chmod(0o755)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert result.stdout == (
+            "Judge calls: 1 (0 cached, 1 to Claude)\n"
+            "\n"
+            "By rule, calls to Claude:\n"
+            "      1  placement\n"
+            "\n"
+            "By file, calls to Claude:\n"
+            "      1  a.py\n"
+        )
+        assert result.returncode == 0
+
+
+class TestConfigCommand:
+    def test_prints_the_default_without_a_config(self, repo):
+        result = subprocess.run(
+            [CODEGUARD, "config", "review_time_limit_minutes"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == "5\n"
+        assert result.returncode == 0
+
+    def test_prints_the_configured_setting(self, repo):
+        repo.write(".codeguard/config.yaml", "review_time_limit_minutes: 10\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "config", "review_time_limit_minutes"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == "10\n"
+        assert result.returncode == 0
+
+
 class TestReviewWithVersionedPackages:
     def test_unlocked_range_exits_2(self, repo, released_package):
         repo.write(".codeguard/config.yaml", versioned_config(released_package))

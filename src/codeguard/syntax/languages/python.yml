@@ -17,6 +17,10 @@ names:
         - inside: {kind: relative_import}
         - inside: {kind: import_statement}
         - inside: {kind: aliased_import, inside: {kind: import_statement}}
+scopes:
+  any:
+    - kind: function_definition
+    - kind: class_definition
 definitions:
   kind: identifier
   any:

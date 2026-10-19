@@ -37,6 +37,9 @@ class CachedJudge:
             span.set_attribute("violations", len(verdict.violations))
             return verdict
 
+    def has(self, request: JudgeRequest) -> bool:
+        return self._key(request) in self.store
+
     def _key(self, request: JudgeRequest) -> str:
         text = (self.root / request.file).read_text()
         parts = (self.version, self.identity, request.skill.text, request.file, _digest(text))
