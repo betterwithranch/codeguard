@@ -68,9 +68,11 @@ exhaustive = true
 layers = [
     "cli",
     "rules",
-    "ast_grep | claude | judge_evals",
+    "claude | judge_evals",
+    "syntax",
+    "ast_grep",
     "review | rule_tests | packages",
-    "config | working_tree",
+    "config | working_tree | file_lock",
 ]
 
 [dependency-groups]
