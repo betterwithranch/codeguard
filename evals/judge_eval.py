@@ -8,7 +8,7 @@ from threading import Semaphore
 from pydantic_evals import Case, Dataset
 from pydantic_evals.evaluators import EqualsExpected
 
-from codeguard.claude import ClaudeJudge
+from codeguard.claude_provider import ClaudeJudge
 from codeguard.config import SKILL_FILE
 from codeguard.review import JudgeRequest, Skill
 
