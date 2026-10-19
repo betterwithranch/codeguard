@@ -6,7 +6,7 @@ from pathlib import Path
 
 import yaml
 
-from codeguard.ast_grep.ast_grep import AstGrep
+from codeguard.ast_grep import AstGrep
 from codeguard.config import PATTERN_RULE_DIR, PATTERN_TEST_DIR
 
 

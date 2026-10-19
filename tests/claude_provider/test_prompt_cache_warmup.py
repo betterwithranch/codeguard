@@ -2,7 +2,7 @@ from threading import Event, Thread
 
 import pytest
 
-from codeguard.claude import PromptCacheWarmup
+from codeguard.claude_provider import PromptCacheWarmup
 
 WAIT_SECONDS = 5
 

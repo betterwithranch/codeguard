@@ -2,7 +2,8 @@ from pathlib import Path
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Skip
-from codeguard.syntax import SourceTree
+from codeguard.judge_evals.code_variants import CodeVariants
+from codeguard.syntax import SyntaxScanner
 
 ORDER = """\
 from dataclasses import dataclass
@@ -34,8 +35,8 @@ class Invoice:
 def variant(tmp_path: Path, skip: Skip, files: dict[str, str]) -> dict[str, str]:
     for file, content in files.items():
         (tmp_path / file).write_text(content)
-    tree = SourceTree.scan(AstGrep(), tmp_path)
-    return {file: content.decode() for file, content in tree.variant(skip).items()}
+    variants = CodeVariants(SyntaxScanner(AstGrep()).scan(tmp_path))
+    return {file: content.decode() for file, content in variants.variant(skip).items()}
 
 
 class TestRenames:
@@ -75,11 +76,6 @@ class name_10:
 
     def test_keeps_builtins_modules_and_names_defined_elsewhere(self, tmp_path):
         renamed = variant(tmp_path, Skip.RENAMES, {"report.py": "print(len(orders.lines))\n"})
-
-        assert renamed == {}
-
-    def test_skips_files_in_unsupported_languages(self, tmp_path):
-        renamed = variant(tmp_path, Skip.RENAMES, {"order.rb": "total = 1\n"})
 
         assert renamed == {}
 

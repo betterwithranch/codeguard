@@ -1,5 +1,5 @@
-from codeguard.ast_grep import AstGrepCheck
 from codeguard.config import RuleOverride, Ruleset, RulesetConfig
+from codeguard.pattern_rules import PatternRuleCheck
 from codeguard.review import Severity
 
 
@@ -7,13 +7,13 @@ def packaged_ruleset(root, selection: RulesetConfig = RulesetConfig()) -> Rulese
     return Ruleset(name="example/python", root=root / ".codeguard", selection=selection)
 
 
-class TestAstGrepCheck:
+class TestPatternRuleCheck:
     def test_check_reports_violations_for_given_files_only(self, repo, make_diagnostic):
         repo.write("checked.py", "import os\nprint(os.name)\n")
         repo.write("unchecked.py", "print(1)\n")
         ruleset = Ruleset(name=None, root=repo.root / ".codeguard")
 
-        diagnostics = AstGrepCheck(repo.root, ruleset).check(["checked.py"])
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["checked.py"])
 
         assert diagnostics == [make_diagnostic(file="checked.py", line=2)]
 
@@ -21,7 +21,7 @@ class TestAstGrepCheck:
         repo.write("unchecked.py", "print(1)\n")
         ruleset = Ruleset(name=None, root=repo.root / ".codeguard")
 
-        diagnostics = AstGrepCheck(repo.root, ruleset).check([])
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check([])
 
         assert diagnostics == []
 
@@ -29,14 +29,14 @@ class TestAstGrepCheck:
         (tmp_path / "module.py").write_text("print(1)\n")
         ruleset = Ruleset(name=None, root=tmp_path / ".codeguard")
 
-        diagnostics = AstGrepCheck(tmp_path, ruleset).check(["module.py"])
+        diagnostics = PatternRuleCheck(tmp_path, ruleset).check(["module.py"])
 
         assert diagnostics == []
 
     def test_packaged_rule_is_named_by_its_ruleset(self, repo, make_diagnostic):
         repo.write("a.py", "print(1)\n")
 
-        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root)).check(["a.py"])
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root)).check(["a.py"])
 
         assert diagnostics == [make_diagnostic(rule="example/python/no-print")]
 
@@ -44,7 +44,7 @@ class TestAstGrepCheck:
         repo.write("a.py", "print(1)\n")
         ruleset = packaged_ruleset(repo.root, RulesetConfig(exclude=("no-print",)))
 
-        diagnostics = AstGrepCheck(repo.root, ruleset).check(["a.py"])
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["a.py"])
 
         assert diagnostics == []
 
@@ -52,7 +52,7 @@ class TestAstGrepCheck:
         repo.write("a.py", "breakpoint()\n")
         selection = RulesetConfig(rules={"no-breakpoint": RuleOverride(severity="error")})
 
-        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["a.py"]
         )
 
@@ -66,7 +66,7 @@ class TestAstGrepCheck:
         repo.write("a.py", "print(1)\n")
         selection = RulesetConfig(severity="warning")
 
-        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["a.py"]
         )
 
@@ -80,7 +80,7 @@ class TestAstGrepCheck:
             severity="warning", rules={"no-print": RuleOverride(severity="error")}
         )
 
-        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["a.py"]
         )
 
@@ -91,7 +91,7 @@ class TestAstGrepCheck:
         repo.write("scripts/b.py", "print(1)\n")
         selection = RulesetConfig(rules={"no-print": RuleOverride(paths=("app/**",))})
 
-        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["app/a.py", "scripts/b.py"]
         )
 

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import logfire
 
-from codeguard.claude.claude_result import ClaudeResult
-from codeguard.claude.prompt_cache_warmup import PromptCacheWarmup
+from codeguard.claude_provider.claude_result import ClaudeResult
+from codeguard.claude_provider.prompt_cache_warmup import PromptCacheWarmup
 from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 _EXECUTABLE = "claude"

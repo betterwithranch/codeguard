@@ -9,11 +9,12 @@ from typing import Protocol
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import JUDGE_EVAL_DIR, RulesetLoader, Skip
+from codeguard.judge_evals.code_variants import CodeVariants
 from codeguard.judge_evals.eval_result import EvalResult
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_eval import JudgeEval
 from codeguard.review import Binding, Bindings, Judge, JudgeRequest
-from codeguard.syntax import SourceTree
+from codeguard.syntax import SyntaxScanner
 
 _EVAL_FILE_GLOB = "*-eval.yml"
 _VARIANT_DESCRIPTIONS = {
@@ -56,7 +57,7 @@ class _Variant:
 class _Variants:
     ast_grep: AstGrep
     stack: ExitStack
-    trees: dict[Path, SourceTree] = field(default_factory=dict)
+    code: dict[Path, CodeVariants] = field(default_factory=dict)
     written: dict[tuple[Path, Skip], _Variant] = field(default_factory=dict)
 
     def of_case(self, binding: Binding, directory: Path, file: str) -> list[tuple[Skip, Path]]:
@@ -71,9 +72,9 @@ class _Variants:
         return self.written[directory, skip]
 
     def _write(self, directory: Path, skip: Skip) -> _Variant:
-        if directory not in self.trees:
-            self.trees[directory] = SourceTree.scan(self.ast_grep, directory)
-        changed = self.trees[directory].variant(skip)
+        if directory not in self.code:
+            self.code[directory] = CodeVariants(SyntaxScanner(self.ast_grep).scan(directory))
+        changed = self.code[directory].variant(skip)
         if not changed:
             return _Variant(directory, frozenset())
         variant = Path(self.stack.enter_context(tempfile.TemporaryDirectory())) / directory.name

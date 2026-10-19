@@ -1,5 +1,6 @@
-from codeguard.syntax.source_file import SourceFile, SourceNode
-from codeguard.syntax.source_tree import SourceTree
-from codeguard.syntax.syntax import NodeKind, Syntax
+from codeguard.syntax.parsed_file import ParsedFile
+from codeguard.syntax.syntax_node import SyntaxNode
+from codeguard.syntax.syntax_scanner import SyntaxScanner
+from codeguard.syntax.syntax_table import NodeKind, SyntaxTable
 
-__all__ = ["NodeKind", "SourceFile", "SourceNode", "SourceTree", "Syntax"]
+__all__ = ["NodeKind", "ParsedFile", "SyntaxNode", "SyntaxScanner", "SyntaxTable"]

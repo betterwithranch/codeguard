@@ -6,8 +6,8 @@ from threading import Semaphore
 
 from diskcache import Cache
 
-from codeguard.ast_grep import AstGrep, AstGrepCheck, AstGrepTestRunner, Layout
-from codeguard.claude import ClaudeJudge, PromptCacheWarmup
+from codeguard.ast_grep import AstGrep
+from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
 from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
 from codeguard.judge_evals import EvalResult, JudgeEvalRunner
 from codeguard.packages import (
@@ -18,6 +18,7 @@ from codeguard.packages import (
     Manifest,
     Packages,
 )
+from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import Bindings, CachedJudge, CheckStep, Judge, JudgeCheck, Review, Reviewer
 from codeguard.rule_tests import RuleTests
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
@@ -42,7 +43,8 @@ class Rules:
             steps=(
                 CheckStep(
                     checks=tuple(
-                        AstGrepCheck(root, ruleset, self._ast_grep) for ruleset in self._rulesets
+                        PatternRuleCheck(root, ruleset, self._ast_grep)
+                        for ruleset in self._rulesets
                     )
                 ),
                 CheckStep(checks=self._judge_checks()),
@@ -55,7 +57,7 @@ class Rules:
         root = self.working_tree.root
         return RuleTests(
             runners=[
-                AstGrepTestRunner(Layout(root, loader.root, self._ast_grep))
+                PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep))
                 for loader in self._own_rulesets
             ]
         )

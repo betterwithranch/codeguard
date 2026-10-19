@@ -68,10 +68,11 @@ exhaustive = true
 layers = [
     "cli",
     "rules",
-    "claude | judge_evals",
+    "claude_provider | judge_evals",
+    "pattern_rules",
+    "review | rule_tests | packages",
     "syntax",
     "ast_grep",
-    "review | rule_tests | packages",
     "config | working_tree | file_lock",
 ]
 

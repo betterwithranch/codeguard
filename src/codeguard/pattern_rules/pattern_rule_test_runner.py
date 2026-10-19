@@ -1,15 +1,15 @@
 from dataclasses import dataclass
 
-from codeguard.ast_grep.command import AstGrepCommand
-from codeguard.ast_grep.layout import Layout
-from codeguard.ast_grep.snapshots import Snapshots
+from codeguard.pattern_rules.command import AstGrepCommand
+from codeguard.pattern_rules.layout import Layout
+from codeguard.pattern_rules.snapshots import Snapshots
 from codeguard.rule_tests import RuleTestResult
 
 _NO_TESTS = RuleTestResult(failed=False)
 
 
 @dataclass(frozen=True)
-class AstGrepTestRunner:
+class PatternRuleTestRunner:
     layout: Layout
 
     def run(self) -> RuleTestResult:

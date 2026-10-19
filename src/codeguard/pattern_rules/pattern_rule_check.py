@@ -2,16 +2,16 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from codeguard.ast_grep.ast_grep import AstGrep
-from codeguard.ast_grep.command import AstGrepCommand
-from codeguard.ast_grep.layout import Layout
-from codeguard.ast_grep.match import AstGrepMatch
+from codeguard.ast_grep import AstGrep
 from codeguard.config import Ruleset
+from codeguard.pattern_rules.command import AstGrepCommand
+from codeguard.pattern_rules.layout import Layout
+from codeguard.pattern_rules.match import AstGrepMatch
 from codeguard.review import Diagnostic
 
 
 @dataclass(frozen=True)
-class AstGrepCheck:
+class PatternRuleCheck:
     root: Path
     ruleset: Ruleset
     ast_grep: AstGrep = AstGrep()

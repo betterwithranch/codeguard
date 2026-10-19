@@ -18,7 +18,7 @@ class NodeKind(StrEnum):
     DEFINITION = "definitions"
 
 
-class Syntax(BaseModel):
+class SyntaxTable(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     language: str
@@ -31,7 +31,7 @@ class Syntax(BaseModel):
     @classmethod
     def for_file(cls, file: str) -> Self | None:
         extension = PurePath(file).suffix.removeprefix(".")
-        return next((syntax for syntax in cls.supported() if extension in syntax.extensions), None)
+        return next((table for table in cls.supported() if extension in table.extensions), None)
 
     @classmethod
     @cache

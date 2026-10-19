@@ -1,6 +1,6 @@
 import yaml
 
-from codeguard.ast_grep import AstGrepTestRunner, Layout
+from codeguard.pattern_rules import Layout, PatternRuleTestRunner
 from codeguard.rule_tests import RuleTestResult
 
 NO_PRINT_TEST = ".codeguard/rule-tests/pattern/no-print-test.yml"
@@ -11,29 +11,29 @@ STALE_NO_PRINT_SNAPSHOT = (
 )
 
 
-class TestAstGrepTestRunner:
+class TestPatternRuleTestRunner:
     def test_run_without_rules_passes(self, tmp_path):
-        result = AstGrepTestRunner(Layout(tmp_path, tmp_path / ".codeguard")).run()
+        result = PatternRuleTestRunner(Layout(tmp_path, tmp_path / ".codeguard")).run()
 
         assert result == RuleTestResult(failed=False)
 
     def test_run_with_passing_cases_passes(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
 
-        result = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard")).run()
+        result = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard")).run()
 
         assert result == RuleTestResult(failed=False)
 
     def test_run_with_failing_case_fails(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - print(1)\n")
 
-        result = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard")).run()
+        result = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard")).run()
 
         assert result == RuleTestResult(failed=True)
 
     def test_run_reports_snapshot_entry_for_removed_case(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(1)\n  - print(2)\n")
-        runner = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard"))
+        runner = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard"))
         runner.update_snapshots()
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(2)\n")
 
@@ -43,7 +43,7 @@ class TestAstGrepTestRunner:
 
     def test_run_reports_snapshot_of_removed_test(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(1)\n")
-        runner = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard"))
+        runner = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard"))
         runner.update_snapshots()
         (repo.root / NO_PRINT_TEST).unlink()
 
@@ -53,7 +53,7 @@ class TestAstGrepTestRunner:
 
     def test_update_snapshots_removes_entries_for_removed_cases(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(1)\n  - print(2)\n")
-        runner = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard"))
+        runner = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard"))
         runner.update_snapshots()
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(2)\n")
 
@@ -65,7 +65,7 @@ class TestAstGrepTestRunner:
 
     def test_update_snapshots_removes_snapshot_of_removed_test(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(1)\n")
-        runner = AstGrepTestRunner(Layout(repo.root, repo.root / ".codeguard"))
+        runner = PatternRuleTestRunner(Layout(repo.root, repo.root / ".codeguard"))
         runner.update_snapshots()
         (repo.root / NO_PRINT_TEST).unlink()
 

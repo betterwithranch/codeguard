@@ -4,7 +4,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
-from codeguard.ast_grep.layout import Layout
+from codeguard.pattern_rules.layout import Layout
 
 _EXIT_NO_ERRORS = 0
 _EXIT_ERRORS_FOUND = 1
