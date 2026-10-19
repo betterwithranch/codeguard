@@ -31,7 +31,9 @@ class CachedJudge:
             span.set_attribute("cache_hit", cache_hit)
             if not cache_hit:
                 self.store[key] = self.wrapped.judge(request)
-            verdict: Verdict = self.store[key]
+            verdict = self.store[key]
+            if not isinstance(verdict, Verdict):
+                raise TypeError(f"cache entry {key} is not a Verdict")
             span.set_attribute("violations", len(verdict.violations))
             return verdict
 

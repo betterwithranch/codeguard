@@ -1,3 +1,4 @@
+import pytest
 from recording_judge import RecordingJudge
 from spans import finished_span_attributes
 
@@ -30,6 +31,17 @@ class TestCachedJudge:
 
         assert judge.judge(request) == verdict
         assert wrapped.received == [request]
+
+    def test_cache_entry_that_is_not_a_verdict_is_an_error(self, repo, store, make_skill):
+        repo.write("a.py", "print(1)\n")
+        judge = cached(repo, store, RecordingJudge())
+        request = JudgeRequest(make_skill(), "a.py")
+        judge.judge(request)
+        [key] = list(store)
+        store[key] = "written by another version"
+
+        with pytest.raises(TypeError, match=f"cache entry {key} is not a Verdict"):
+            judge.judge(request)
 
     def test_changed_file_is_judged_again(self, repo, store, make_skill):
         repo.write("a.py", "print(1)\n")
