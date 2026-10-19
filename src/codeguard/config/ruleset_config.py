@@ -13,17 +13,19 @@ class RuleOverride(BaseModel):
     model: str | None = None
 
     def apply(self, binding: BindingConfig) -> BindingConfig:
-        return BindingConfig(
-            skill=binding.skill,
-            paths=self.paths or binding.paths,
-            severity=self.severity or binding.severity,
-            model=self.model or binding.model,
+        return binding.model_copy(
+            update={
+                "paths": self.paths or binding.paths,
+                "severity": self.severity or binding.severity,
+                "model": self.model or binding.model,
+            }
         )
 
 
 class RulesetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    severity: Severity | None = None
     exclude: tuple[str, ...] = ()
     rules: dict[str, RuleOverride] = {}
 
@@ -42,5 +44,7 @@ class RulesetConfig(BaseModel):
         return rule in self.exclude
 
     def apply(self, rule: str, binding: BindingConfig) -> BindingConfig:
-        override = self.rules.get(rule)
-        return binding if override is None else override.apply(binding)
+        override = self.rules.get(rule, RuleOverride())
+        if override.severity is None:
+            override = override.model_copy(update={"severity": self.severity})
+        return override.apply(binding)

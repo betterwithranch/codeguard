@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from codeguard.review.binding import Binding
-from codeguard.review.diagnostic import Diagnostic, Severity
+from codeguard.review.diagnostic import Diagnostic
 from codeguard.review.judge import Judge, JudgeError, JudgeRequest
 
 
@@ -31,7 +31,7 @@ class JudgeCheck:
                     file=file,
                     line=None,
                     message="The judge call failed, so this rule was not checked.",
-                    severity=Severity.ERROR,
+                    severity=self.binding.severity,
                     note=str(error),
                 ),
             )

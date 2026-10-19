@@ -48,6 +48,20 @@ class TestJudgeCheck:
             )
         ]
 
+    def test_failed_judge_call_has_the_binding_severity(self, make_binding, make_skill):
+        check = JudgeCheck(make_binding(severity=Severity.WARNING), FailingJudge(), THRESHOLD)
+
+        assert check.check(["a.py"]) == [
+            Diagnostic(
+                rule=make_skill().name,
+                file="a.py",
+                line=None,
+                message="The judge call failed, so this rule was not checked.",
+                severity=Severity.WARNING,
+                note="claude exited with 1.",
+            )
+        ]
+
     def test_every_file_is_judged_at_the_same_time(self, make_binding):
         files = [f"{index}.py" for index in range(40)]
         barrier = Barrier(len(files), timeout=5)

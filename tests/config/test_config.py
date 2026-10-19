@@ -11,6 +11,7 @@ from codeguard.config import (
     PathPackageConfig,
     RuleOverride,
     RulesetConfig,
+    Skip,
     VersionedPackageConfig,
 )
 
@@ -211,4 +212,59 @@ class TestRulesetConfig:
 
         assert binding == BindingConfig(
             skill=skill, paths=("**",), severity="warning", model="claude-haiku-5-5"
+        )
+
+    def test_ruleset_severity_applies_to_a_rule_without_an_override(self, tmp_path):
+        skill = write_skill(tmp_path)
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": skill, "paths": ["**"]}}
+        )
+
+        binding = RulesetConfig(severity="warning").apply(
+            "placement", bindings.root["placement.yaml"]
+        )
+
+        assert binding == BindingConfig(skill=skill, paths=("**",), severity="warning")
+
+    def test_rule_override_severity_wins_over_the_ruleset_severity(self, tmp_path):
+        skill = write_skill(tmp_path)
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": skill, "paths": ["**"], "severity": "info"}}
+        )
+        selection = RulesetConfig(
+            severity="warning", rules={"placement": RuleOverride(severity="error")}
+        )
+
+        binding = selection.apply("placement", bindings.root["placement.yaml"])
+
+        assert binding == BindingConfig(skill=skill, paths=("**",), severity="error")
+
+    def test_rule_override_without_severity_takes_the_ruleset_severity(self, tmp_path):
+        skill = write_skill(tmp_path)
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": skill, "paths": ["**"]}}
+        )
+        selection = RulesetConfig(
+            severity="warning", rules={"placement": RuleOverride(paths=("app/**",))}
+        )
+
+        binding = selection.apply("placement", bindings.root["placement.yaml"])
+
+        assert binding == BindingConfig(skill=skill, paths=("app/**",), severity="warning")
+
+    def test_ruleset_severity_keeps_disable_skips(self, tmp_path):
+        skill = write_skill(tmp_path)
+        bindings = BindingsConfig.model_validate(
+            {"placement.yaml": {"skill": skill, "paths": ["**"], "disable_skips": ["renames"]}}
+        )
+
+        binding = RulesetConfig(severity="warning").apply(
+            "placement", bindings.root["placement.yaml"]
+        )
+
+        assert binding == BindingConfig(
+            skill=skill,
+            paths=("**",),
+            severity="warning",
+            disable_skips=frozenset({Skip.RENAMES}),
         )

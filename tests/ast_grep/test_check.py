@@ -62,6 +62,30 @@ class TestAstGrepCheck:
             )
         ]
 
+    def test_ruleset_severity_sets_a_rule_without_an_override(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+        selection = RulesetConfig(severity="warning")
+
+        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+            ["a.py"]
+        )
+
+        assert diagnostics == [
+            make_diagnostic(rule="example/python/no-print", severity=Severity.WARNING)
+        ]
+
+    def test_rule_severity_wins_over_the_ruleset_severity(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+        selection = RulesetConfig(
+            severity="warning", rules={"no-print": RuleOverride(severity="error")}
+        )
+
+        diagnostics = AstGrepCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+            ["a.py"]
+        )
+
+        assert diagnostics == [make_diagnostic(rule="example/python/no-print")]
+
     def test_overridden_paths_limit_the_rule(self, repo, make_diagnostic):
         repo.write("app/a.py", "print(1)\n")
         repo.write("scripts/b.py", "print(1)\n")

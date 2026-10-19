@@ -34,13 +34,14 @@ class AstGrepCheck:
     @property
     def _options(self) -> list[str]:
         selection = self.ruleset.selection
+        ruleset_severity = [] if selection.severity is None else [f"--{selection.severity}"]
         excluded = [f"--off={rule}" for rule in selection.exclude]
         severities = [
             f"--{override.severity}={rule}"
             for rule, override in selection.rules.items()
             if override.severity is not None
         ]
-        return [*excluded, *severities]
+        return [*ruleset_severity, *excluded, *severities]
 
     def _selected(self, match: AstGrepMatch) -> bool:
         override = self.ruleset.selection.rules.get(match.rule_id)

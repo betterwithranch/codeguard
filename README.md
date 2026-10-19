@@ -100,6 +100,10 @@ packages:
 - Only the listed rulesets run.
 - `exclude` turns rules off.
 - `rules.<id>` overrides a rule's `paths` or `severity`, and a judge rule's `model`.
+- `severity` on the ruleset sets every rule in it, including rules the package adds
+  later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
+  so `severity: warning` trials a package: its findings print without blocking. A
+  failed judge call takes its rule's severity too.
 - An unknown ruleset or rule id is an error.
 - `kind: path` with `path: ../my-rules` in place of `git` uses a local package, for
   working on one.
