@@ -3,8 +3,7 @@ from dataclasses import dataclass
 from pathlib import PurePath
 from typing import Self
 
-from codeguard.config import SKILL_FILE, BindingConfig, Ruleset, Skip
-from codeguard.review.diagnostic import Severity
+from codeguard.config import SKILL_FILE, BindingConfig, Ruleset, Severity, Skip
 from codeguard.review.skill import Skill
 
 
@@ -23,7 +22,7 @@ class Binding:
             rule=rule,
             skill=Skill.from_file(binding.skill.name, binding.skill / SKILL_FILE),
             paths=binding.paths,
-            severity=Severity(binding.severity),
+            severity=binding.severity,
             model=binding.model,
             disable_skips=binding.disable_skips,
         )

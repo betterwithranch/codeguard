@@ -11,6 +11,7 @@ from codeguard.config import (
     PathPackageConfig,
     RuleOverride,
     RulesetConfig,
+    Severity,
     Skip,
     VersionedPackageConfig,
 )
@@ -206,12 +207,12 @@ class TestRulesetConfig:
         bindings = BindingsConfig.model_validate(
             {"placement.yaml": {"skill": skill, "paths": ["**"], "model": "claude-haiku-5-5"}}
         )
-        selection = RulesetConfig(rules={"placement": RuleOverride(severity="warning")})
+        selection = RulesetConfig(rules={"placement": RuleOverride(severity=Severity.WARNING)})
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
         assert binding == BindingConfig(
-            skill=skill, paths=("**",), severity="warning", model="claude-haiku-5-5"
+            skill=skill, paths=("**",), severity=Severity.WARNING, model="claude-haiku-5-5"
         )
 
     def test_ruleset_severity_applies_to_a_rule_without_an_override(self, tmp_path):
@@ -220,11 +221,11 @@ class TestRulesetConfig:
             {"placement.yaml": {"skill": skill, "paths": ["**"]}}
         )
 
-        binding = RulesetConfig(severity="warning").apply(
+        binding = RulesetConfig(severity=Severity.WARNING).apply(
             "placement", bindings.root["placement.yaml"]
         )
 
-        assert binding == BindingConfig(skill=skill, paths=("**",), severity="warning")
+        assert binding == BindingConfig(skill=skill, paths=("**",), severity=Severity.WARNING)
 
     def test_rule_override_severity_wins_over_the_ruleset_severity(self, tmp_path):
         skill = write_skill(tmp_path)
@@ -232,12 +233,12 @@ class TestRulesetConfig:
             {"placement.yaml": {"skill": skill, "paths": ["**"], "severity": "info"}}
         )
         selection = RulesetConfig(
-            severity="warning", rules={"placement": RuleOverride(severity="error")}
+            severity=Severity.WARNING, rules={"placement": RuleOverride(severity=Severity.ERROR)}
         )
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
-        assert binding == BindingConfig(skill=skill, paths=("**",), severity="error")
+        assert binding == BindingConfig(skill=skill, paths=("**",), severity=Severity.ERROR)
 
     def test_rule_override_without_severity_takes_the_ruleset_severity(self, tmp_path):
         skill = write_skill(tmp_path)
@@ -245,12 +246,12 @@ class TestRulesetConfig:
             {"placement.yaml": {"skill": skill, "paths": ["**"]}}
         )
         selection = RulesetConfig(
-            severity="warning", rules={"placement": RuleOverride(paths=("app/**",))}
+            severity=Severity.WARNING, rules={"placement": RuleOverride(paths=("app/**",))}
         )
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
-        assert binding == BindingConfig(skill=skill, paths=("app/**",), severity="warning")
+        assert binding == BindingConfig(skill=skill, paths=("app/**",), severity=Severity.WARNING)
 
     def test_ruleset_severity_keeps_disable_skips(self, tmp_path):
         skill = write_skill(tmp_path)
@@ -258,13 +259,13 @@ class TestRulesetConfig:
             {"placement.yaml": {"skill": skill, "paths": ["**"], "disable_skips": ["renames"]}}
         )
 
-        binding = RulesetConfig(severity="warning").apply(
+        binding = RulesetConfig(severity=Severity.WARNING).apply(
             "placement", bindings.root["placement.yaml"]
         )
 
         assert binding == BindingConfig(
             skill=skill,
             paths=("**",),
-            severity="warning",
+            severity=Severity.WARNING,
             disable_skips=frozenset({Skip.RENAMES}),
         )

@@ -14,6 +14,7 @@ from codeguard.config.ruleset import JUDGE_EVAL_DIR, PATTERN_RULE_DIR, PATTERN_T
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
 from codeguard.config.ruleset_loader import RulesetLoader
 from codeguard.config.ruleset_structure import RulesetStructure
+from codeguard.config.severity import Severity
 from codeguard.config.versions import ExactVersion, VersionRange
 
 __all__ = [
@@ -40,6 +41,7 @@ __all__ = [
     "RulesetConfig",
     "RulesetLoader",
     "RulesetStructure",
+    "Severity",
     "Skip",
     "VersionRange",
     "VersionedPackageConfig",

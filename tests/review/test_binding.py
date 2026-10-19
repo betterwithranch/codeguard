@@ -42,7 +42,7 @@ class TestBinding:
 
     def test_from_config_builds_its_skill(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        config = BindingConfig(skill=skill, paths=("**",), severity="warning")
+        config = BindingConfig(skill=skill, paths=("**",), severity=Severity.WARNING)
 
         binding = Binding.from_config(SKILL_NAME, config)
 
@@ -103,7 +103,9 @@ class TestBindings:
 
     def test_override_replaces_the_binding_fields(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        override = RuleOverride(paths=("app/**",), severity="warning", model="claude-haiku-5-5")
+        override = RuleOverride(
+            paths=("app/**",), severity=Severity.WARNING, model="claude-haiku-5-5"
+        )
         selection = RulesetConfig(rules={SKILL_NAME: override})
 
         bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])

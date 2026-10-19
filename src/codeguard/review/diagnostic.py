@@ -1,15 +1,9 @@
 import hashlib
 import textwrap
-from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-
-class Severity(StrEnum):
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
-    HINT = "hint"
+from codeguard.config import Severity
 
 
 class Diagnostic(BaseModel):

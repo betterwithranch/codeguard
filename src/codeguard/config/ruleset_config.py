@@ -2,7 +2,8 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from codeguard.config.binding_config import BindingConfig, Severity
+from codeguard.config.binding_config import BindingConfig
+from codeguard.config.severity import Severity
 
 
 class RuleOverride(BaseModel):

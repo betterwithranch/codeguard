@@ -50,7 +50,7 @@ class TestPatternRuleCheck:
 
     def test_overridden_severity_applies(self, repo, make_diagnostic):
         repo.write("a.py", "breakpoint()\n")
-        selection = RulesetConfig(rules={"no-breakpoint": RuleOverride(severity="error")})
+        selection = RulesetConfig(rules={"no-breakpoint": RuleOverride(severity=Severity.ERROR)})
 
         diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["a.py"]
@@ -64,7 +64,7 @@ class TestPatternRuleCheck:
 
     def test_ruleset_severity_sets_a_rule_without_an_override(self, repo, make_diagnostic):
         repo.write("a.py", "print(1)\n")
-        selection = RulesetConfig(severity="warning")
+        selection = RulesetConfig(severity=Severity.WARNING)
 
         diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
             ["a.py"]
@@ -77,7 +77,7 @@ class TestPatternRuleCheck:
     def test_rule_severity_wins_over_the_ruleset_severity(self, repo, make_diagnostic):
         repo.write("a.py", "print(1)\n")
         selection = RulesetConfig(
-            severity="warning", rules={"no-print": RuleOverride(severity="error")}
+            severity=Severity.WARNING, rules={"no-print": RuleOverride(severity=Severity.ERROR)}
         )
 
         diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(

@@ -10,6 +10,7 @@ from codeguard.config import (
     Ruleset,
     RulesetConfig,
     RulesetLoader,
+    Severity,
 )
 
 CONFIG = ".codeguard/config.yaml"
@@ -94,7 +95,7 @@ class TestRulesetLoader:
                     "python/placement.yaml": BindingConfig(
                         skill=repo.root / ".claude/skills/responsibility-placement",
                         paths=("app/**/*.py",),
-                        severity="warning",
+                        severity=Severity.WARNING,
                     )
                 }
             ),

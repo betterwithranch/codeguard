@@ -13,6 +13,7 @@ from codeguard.config import (
     RuleOverride,
     Ruleset,
     RulesetConfig,
+    Severity,
     VersionedPackageConfig,
 )
 from codeguard.packages import GitFetch, LatestRefs, LockedRefs, Packages
@@ -150,7 +151,7 @@ class TestPackages:
 
     def test_unknown_rule_is_an_error(self, repo, package, fetch, no_lock):
         selection = RulesetConfig(
-            exclude=("no-prnt",), rules={"no-print": RuleOverride(severity="warning")}
+            exclude=("no-prnt",), rules={"no-print": RuleOverride(severity=Severity.WARNING)}
         )
         config = PathPackageConfig(path=package.root, rulesets={"python": selection})
 

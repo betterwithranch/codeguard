@@ -1,12 +1,11 @@
 from enum import StrEnum
 from pathlib import Path
-from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, ValidationInfo, field_validator
 
-SKILL_FILE = "SKILL.md"
+from codeguard.config.severity import Severity
 
-type Severity = Literal["error", "warning", "info", "hint"]
+SKILL_FILE = "SKILL.md"
 
 
 class Skip(StrEnum):
@@ -20,7 +19,7 @@ class BindingConfig(BaseModel):
 
     skill: DirectoryPath
     paths: tuple[str, ...] = Field(min_length=1)
-    severity: Severity = "error"
+    severity: Severity = Severity.ERROR
     model: str = "claude-sonnet-5-5"
     disable_skips: frozenset[Skip] = frozenset()
 
