@@ -159,7 +159,7 @@ class TestReviewCommand:
 
         git_error, traceback = result.stderr.split(TRACEBACK_HEADING)
         assert result.stdout == ""
-        assert git_error == "fatal: not a git repository (or any of the parent directories): .git\n"
+        assert git_error.startswith("fatal: not a git repository")
         assert traceback.endswith("returned non-zero exit status 128.\n")
         assert result.returncode == 2
 

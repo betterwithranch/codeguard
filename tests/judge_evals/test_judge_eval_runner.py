@@ -130,7 +130,7 @@ class FlagsText:
     def judge(self, request: JudgeRequest) -> Verdict:
         if self.text not in (self.root / request.file).read_text():
             return Verdict(violations=())
-        violation = MakeViolation(file=request.file, line=1, message="Rename it.", confidence=1.0)
+        violation = MakeViolation(file=request.file, message="Rename it.")
         return Verdict(violations=(violation,))
 
 

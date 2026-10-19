@@ -14,4 +14,4 @@ class Review:
 
     def write(self, out: TextIO) -> None:
         for diagnostic in self.diagnostics:
-            print(diagnostic, file=out)
+            out.write(f"{diagnostic}\n")

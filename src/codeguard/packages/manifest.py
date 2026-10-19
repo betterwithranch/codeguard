@@ -34,9 +34,6 @@ class Manifest(BaseModel):
     def in_repo(cls, root: Path) -> Self | None:
         return cls.load(root) if (root / MANIFEST_FILE).is_file() else None
 
-    def ruleset_dirs(self, root: Path) -> list[Path]:
-        return [root / ruleset for ruleset in self.rulesets]
-
     def ast_grep_problem(self, version: Version) -> str | None:
         if self.ast_grep.contains(version, prereleases=True):
             return None
