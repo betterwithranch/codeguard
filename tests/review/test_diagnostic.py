@@ -57,7 +57,7 @@ class TestDiagnostic:
             judge_error=True, severity=Severity.WARNING
         )
 
-    def test_json_has_every_field_and_whether_it_blocks(self, make_diagnostic):
+    def test_json_has_every_field_and_no_judged_note(self, make_diagnostic):
         diagnostic = make_diagnostic(judged=True, confidence=0.95)
 
         assert diagnostic.as_json() == {
@@ -71,7 +71,7 @@ class TestDiagnostic:
             "category": "judged",
             "confidence": 0.95,
             "error_type": None,
-            "note": "Call logger.info instead.",
+            "note": None,
             "blocks": True,
         }
 
@@ -79,3 +79,8 @@ class TestDiagnostic:
         diagnostic = make_diagnostic(judge_error=True, error_type=ErrorType.TIMEOUT)
 
         assert diagnostic.as_json()["error_type"] == "timeout"
+
+    def test_pattern_json_keeps_its_note(self, make_diagnostic):
+        diagnostic = make_diagnostic()
+
+        assert diagnostic.as_json()["note"] == diagnostic.note

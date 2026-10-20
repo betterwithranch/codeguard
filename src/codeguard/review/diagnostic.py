@@ -64,7 +64,7 @@ class Diagnostic(BaseModel):
             "category": self.category,
             "confidence": self.confidence,
             "error_type": self.error_type,
-            "note": self.note,
+            "note": None if self.category is Category.JUDGED else self.note,
             "blocks": self.blocks,
         }
 

@@ -153,7 +153,7 @@ class TestStopHook:
         violation = {"file": "a.py", "line": 1, "message": "Move it.", "note": "Move it."}
         put_claude(claude_bin, fake_claude_script([{**violation, "confidence": 0.4}]))
         finding = make_diagnostic(
-            judged=True, rule="placement", message="Move it.", note="Move it.", warning=False
+            judged=True, rule="placement", message="Move it.", note=None, warning=False
         ).as_warning()
 
         response = run_stop_hook(repo, stop(), path=path_with(claude_bin))
