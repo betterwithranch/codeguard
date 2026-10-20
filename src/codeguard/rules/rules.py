@@ -3,7 +3,7 @@ from functools import cached_property
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Config, ConfigLoader
-from codeguard.judge_evals import JudgeEvalRunner, RulePackageReview
+from codeguard.judge_evals import EvalCoverage, JudgeEvalRunner
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
     Bindings,
@@ -111,7 +111,7 @@ class Rules:
             for loader in self._resolver.own_rulesets
             for result in (
                 JudgeEvalRunner(root, loader, runs, threshold, self._ast_grep).run(),
-                RulePackageReview(loader, judges.cached, threshold).run(),
+                EvalCoverage(loader).run(),
             )
         )
 

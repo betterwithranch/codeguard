@@ -284,13 +284,7 @@ line with one of the rule's `triggers`; the message lists the kinds on that line
 `valid` case needs no violation. Verdicts are cached like reviews, so only changed cases
 and skills call Claude again.
 
-`codeguard eval` also checks each judge rule:
-
-- It needs an eval with at least one `invalid` case.
-- A rule review judges the skill with its triggers and the ruleset's gates. It fails when
-  the skill judges code no trigger matches, a trigger is broader than the skill needs, or
-  a bullet is checkable by ast-grep or a type checker setting. The review is cached like
-  any verdict.
+`codeguard eval` also fails a judge rule with no eval that has an `invalid` case.
 
 The eval also judges each case with its names renamed, without comments, and with its
 imports reordered, and each must keep its expected result. A rule whose verdict depends
@@ -443,7 +437,7 @@ codeguard review --latest     # newest tag in each package range, not the lock
 codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
 codeguard test                # pattern rule and gate tests, and judge rule eval triggers
 codeguard test --update-all   # the same, regenerating snapshots
-codeguard eval                # judge rule evals and the rule review; calls the configured judge
+codeguard eval                # judge rule evals; calls the configured judge
 codeguard update              # lock each package range to its newest tag
 ```
 
