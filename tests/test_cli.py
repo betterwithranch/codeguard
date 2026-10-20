@@ -323,7 +323,7 @@ class TestReviewOfDeletedCode:
             "service.py",
             "class ExampleService:\n    def describe(self):\n        return 'service'\n",
         )
-        violation = {"file": "service.py", "note": "Move it.", "confidence": 1.0}
+        violation = {"file": "service.py", "confidence": 1.0}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         claude = bin_dir / "claude"
@@ -499,7 +499,7 @@ class TestEvalCommand:
             "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
             "      x = 1\n",
         )
-        violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "note": "Move it."}
+        violation = {"file": "invoice.py", "line": 1, "message": "Move it."}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         claude = bin_dir / "claude"

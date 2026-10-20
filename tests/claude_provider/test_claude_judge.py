@@ -29,7 +29,6 @@ def fake_claude_executable(tmp_path, arguments) -> str:
                 "file": "a.py",
                 "line": 1,
                 "message": "Move it.",
-                "note": "Call logger.info instead.",
                 "confidence": 0.4,
             }
         ],
