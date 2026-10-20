@@ -19,7 +19,8 @@ def enum_rule(repo):
     repo.write(".codeguard/skills/enum-usage/SKILL.md", f"---\nname: enum-usage\n---\n{ENUM_SKILL}")
     repo.write(
         ".codeguard/bindings/enum-usage.yaml",
-        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\nmodel: claude-haiku-5-5\n',
+        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
+        "model: claude-haiku-5-5\n",
     )
     repo.write(f"{CASE_DIR}/status.py", "ship(status='shipped')\n")
 
@@ -45,6 +46,37 @@ class TestJudgeEvalRunner:
 
     def test_confident_violation_passes_an_invalid_case(self, repo, make_violation):
         verdict = Verdict(violations=(make_violation(file="status.py", confidence=0.9),))
+
+        result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
+
+        assert result == EvalResult()
+
+    def test_violation_outside_the_triggers_fails_with_the_kinds_on_its_line(
+        self, repo, make_violation
+    ):
+        repo.write(
+            ".codeguard/bindings/enum-usage.yaml",
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [class-header]\n',
+        )
+        verdict = Verdict(violations=(make_violation(file="status.py", line=1, confidence=0.9),))
+
+        result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
+
+        assert result == EvalResult(
+            problems=(
+                f"{CASE_DIR}/status.py: enum-usage violation on line 1 is outside the triggers "
+                "class-header\n"
+                "  Add one of the kinds on that line to triggers in its binding: "
+                "call, code, module-statement, string-literal",
+            )
+        )
+
+    def test_violation_inside_the_triggers_passes(self, repo, make_violation):
+        repo.write(
+            ".codeguard/bindings/enum-usage.yaml",
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [string-literal]\n',
+        )
+        verdict = Verdict(violations=(make_violation(file="status.py", line=1, confidence=0.9),))
 
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
 
@@ -141,7 +173,7 @@ def flagging(text: str) -> JudgeFactory:
 def run_variants(repo, runs, disable_skips="[]") -> EvalResult:
     repo.write(
         ".codeguard/bindings/enum-usage.yaml",
-        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\n'
+        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
         f"disable_skips: {disable_skips}\n",
     )
     repo.write(f"{CASE_DIR}/status.py", "# shipped\nstatus = 'shipped'\nship(status)\n")

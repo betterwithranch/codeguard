@@ -8,6 +8,13 @@ class JudgeCase:
     file: str
     violates: bool
 
+    def violation_lines(self, verdict: Verdict, confidence_threshold: float) -> list[int]:
+        return sorted(
+            violation.line
+            for violation in verdict.violations
+            if violation.file == self.file and violation.confidence >= confidence_threshold
+        )
+
     def problem(self, verdict: Verdict, confidence_threshold: float) -> str | None:
         found = [violation for violation in verdict.violations if violation.file == self.file]
         listed = "".join(

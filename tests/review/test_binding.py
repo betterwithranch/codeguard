@@ -21,7 +21,9 @@ def write_skill(tmp_path, text: str):
 
 
 def ruleset(tmp_path, skill, name=None, selection=RulesetConfig()) -> Ruleset:
-    bindings = BindingsConfig({"placement.yaml": BindingConfig(skill=skill, paths=("**",))})
+    bindings = BindingsConfig(
+        {"placement.yaml": BindingConfig(triggers=frozenset({"any"}), skill=skill, paths=("**",))}
+    )
     return Ruleset(name=name, root=tmp_path, bindings=bindings, selection=selection)
 
 
@@ -42,7 +44,9 @@ class TestBinding:
 
     def test_from_config_has_its_exclude_paths(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        config = BindingConfig(skill=skill, paths=("**",), exclude_paths=("tests/**",))
+        config = BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), exclude_paths=("tests/**",)
+        )
 
         binding = Binding.from_config(SKILL_NAME, config)
 
@@ -57,7 +61,9 @@ class TestBinding:
 
     def test_from_config_builds_its_skill(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        config = BindingConfig(skill=skill, paths=("**",), severity=Severity.WARNING)
+        config = BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), severity=Severity.WARNING
+        )
 
         binding = Binding.from_config(SKILL_NAME, config)
 
@@ -65,7 +71,9 @@ class TestBinding:
 
     def test_from_config_has_its_model(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        config = BindingConfig(skill=skill, paths=("**",), model="claude-haiku-5-5")
+        config = BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), model="claude-haiku-5-5"
+        )
 
         binding = Binding.from_config(SKILL_NAME, config)
 
@@ -77,7 +85,7 @@ class TestBinding:
     def test_disabled_skips_are_left_out(self, tmp_path, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
         config = BindingConfig.model_validate(
-            {"skill": skill, "paths": ["**"], "disable_skips": ["renames"]}
+            {"skill": skill, "paths": ["**"], "triggers": ["any"], "disable_skips": ["renames"]}
         )
 
         binding = Binding.from_config(SKILL_NAME, config)
@@ -89,7 +97,7 @@ class TestBinding:
 
         with pytest.raises(ValidationError, match="disable_skips"):
             BindingConfig.model_validate(
-                {"skill": skill, "paths": ["**"], "disable_skips": ["names"]}
+                {"skill": skill, "paths": ["**"], "triggers": ["any"], "disable_skips": ["names"]}
             )
 
 
@@ -136,7 +144,9 @@ class TestBindings:
 
     def test_override_replaces_the_excluded_paths(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        binding = BindingConfig(skill=skill, paths=("**",), exclude_paths=("tests/**",))
+        binding = BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), exclude_paths=("tests/**",)
+        )
         bindings = BindingsConfig({"placement.yaml": binding})
         selection = RulesetConfig(rules={SKILL_NAME: RuleOverride(exclude_paths=())})
         ruleset = Ruleset(name=None, root=tmp_path, bindings=bindings, selection=selection)

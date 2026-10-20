@@ -51,7 +51,7 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({2, 4})})
+        assert changed == ChangedLines({"a.py": frozenset({2, 4})}, base=git_repo.head())
 
     def test_untracked_file_has_every_line_changed(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -59,7 +59,7 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({1, 2})})
+        assert changed == ChangedLines({"a.py": frozenset({1, 2})}, base=git_repo.head())
 
     def test_removed_lines_are_a_deletion_point_after_the_line_before_them(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -69,7 +69,22 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines(lines={}, deletions={"a.py": frozenset({1})})
+        assert changed == ChangedLines(
+            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+        )
+
+    def test_base_contents_are_the_files_that_exist_in_the_base(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 2\n")
+        git_repo.write("new.py", "b = 1\n")
+
+        contents = WorkingTree(root=git_repo.root).base_contents(
+            git_repo.head(), ["a.py", "new.py"]
+        )
+
+        assert contents == {"a.py": b"a = 1\n"}
 
     def test_all_lines_has_tracked_and_untracked_files(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())

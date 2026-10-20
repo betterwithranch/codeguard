@@ -32,7 +32,7 @@ class TestBindingsConfig:
         skill = write_skill(tmp_path)
 
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": "placement", "paths": ["**"]}},
+            {"placement.yaml": {"skill": "placement", "paths": ["**"], "triggers": ["any"]}},
             context={"working_tree": tmp_path},
         )
 
@@ -43,7 +43,7 @@ class TestBindingsConfig:
 
         with pytest.raises(ValidationError) as error:
             BindingsConfig.model_validate(
-                {"placement.yaml": {"skill": "placement", "paths": ["**"]}},
+                {"placement.yaml": {"skill": "placement", "paths": ["**"], "triggers": ["any"]}},
                 context={"working_tree": tmp_path},
             )
 
@@ -51,7 +51,7 @@ class TestBindingsConfig:
 
     def test_skill_bound_twice_is_an_error(self, tmp_path):
         skill = write_skill(tmp_path)
-        binding = {"skill": skill, "paths": ["**"]}
+        binding = {"skill": skill, "paths": ["**"], "triggers": ["any"]}
 
         with pytest.raises(ValidationError) as error:
             BindingsConfig.model_validate({"a.yaml": binding, "b.yaml": binding})
@@ -205,32 +205,52 @@ class TestRulesetConfig:
     def test_override_replaces_only_the_fields_it_sets(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"], "model": "claude-haiku-5-5"}}
+            {
+                "placement.yaml": {
+                    "skill": skill,
+                    "paths": ["**"],
+                    "triggers": ["any"],
+                    "model": "claude-haiku-5-5",
+                }
+            }
         )
         selection = RulesetConfig(rules={"placement": RuleOverride(severity=Severity.WARNING)})
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
         assert binding == BindingConfig(
-            skill=skill, paths=("**",), severity=Severity.WARNING, model="claude-haiku-5-5"
+            triggers=frozenset({"any"}),
+            skill=skill,
+            paths=("**",),
+            severity=Severity.WARNING,
+            model="claude-haiku-5-5",
         )
 
     def test_ruleset_severity_applies_to_a_rule_without_an_override(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"]}}
+            {"placement.yaml": {"skill": skill, "paths": ["**"], "triggers": ["any"]}}
         )
 
         binding = RulesetConfig(severity=Severity.WARNING).apply(
             "placement", bindings.root["placement.yaml"]
         )
 
-        assert binding == BindingConfig(skill=skill, paths=("**",), severity=Severity.WARNING)
+        assert binding == BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), severity=Severity.WARNING
+        )
 
     def test_rule_override_severity_wins_over_the_ruleset_severity(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"], "severity": "info"}}
+            {
+                "placement.yaml": {
+                    "skill": skill,
+                    "paths": ["**"],
+                    "triggers": ["any"],
+                    "severity": "info",
+                }
+            }
         )
         selection = RulesetConfig(
             severity=Severity.WARNING, rules={"placement": RuleOverride(severity=Severity.ERROR)}
@@ -238,12 +258,14 @@ class TestRulesetConfig:
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
-        assert binding == BindingConfig(skill=skill, paths=("**",), severity=Severity.ERROR)
+        assert binding == BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",), severity=Severity.ERROR
+        )
 
     def test_rule_override_without_severity_takes_the_ruleset_severity(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"]}}
+            {"placement.yaml": {"skill": skill, "paths": ["**"], "triggers": ["any"]}}
         )
         selection = RulesetConfig(
             severity=Severity.WARNING, rules={"placement": RuleOverride(paths=("app/**",))}
@@ -251,12 +273,21 @@ class TestRulesetConfig:
 
         binding = selection.apply("placement", bindings.root["placement.yaml"])
 
-        assert binding == BindingConfig(skill=skill, paths=("app/**",), severity=Severity.WARNING)
+        assert binding == BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("app/**",), severity=Severity.WARNING
+        )
 
     def test_ruleset_severity_keeps_disable_skips(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"], "disable_skips": ["renames"]}}
+            {
+                "placement.yaml": {
+                    "skill": skill,
+                    "paths": ["**"],
+                    "triggers": ["any"],
+                    "disable_skips": ["renames"],
+                }
+            }
         )
 
         binding = RulesetConfig(severity=Severity.WARNING).apply(
@@ -264,6 +295,7 @@ class TestRulesetConfig:
         )
 
         assert binding == BindingConfig(
+            triggers=frozenset({"any"}),
             skill=skill,
             paths=("**",),
             severity=Severity.WARNING,

@@ -5,7 +5,7 @@ from codeguard.syntax.syntax_table import NodeKind
 
 @dataclass(frozen=True)
 class SyntaxNode:
-    kind: NodeKind
+    kind: NodeKind | str
     start: int
     end: int
     text: str

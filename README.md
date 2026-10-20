@@ -159,6 +159,7 @@ A package is a git repo with a `codeguard-package.yaml` at its root:
 name: betterwithranch
 rulesets: [python]
 ast-grep: ">=0.45,<0.46"   # the ast-grep versions its pattern rules work with
+codeguard: ">=0.2"         # the codeguard versions that can load it
 ```
 
 Each ruleset is a directory with the same layout as a project's `.codeguard/`:
@@ -200,6 +201,42 @@ Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a projec
 change it. The exception is a file name that is the convention itself, like
 `all-only-in-init` skipping `__init__.py`.
 
+A judge rule's binding lists `triggers`: the code its violations need. A binding without
+`triggers` gets `[any]`, so packages written before triggers still load. The judge
+skips a changed file whose changed lines fall inside none of it. Gate on where a
+violation appears, not on the rule's topic:
+
+```yaml
+skill: python/skills/mock-only-at-boundary
+paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+triggers: [mock-use]
+```
+
+A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
+`<ruleset>/gates/<id>.yml`, tested by `rule-tests/gates/<id>-test.yml` (`invalid` cases
+are code the gate matches):
+
+```yaml
+id: mock-use
+language: python
+rule:
+  kind: call
+  has: {field: function, regex: "(^|\\.)(Mock|MagicMock|patch)$"}
+```
+
+A file touches a trigger when a changed line falls inside a node it matches. A new file
+touches every trigger it matches. A rule that needs every change says `triggers: [any]`;
+`codeguard test` warns on `any`, `code`, `function-body` and `function-signature`. The
+built-in kinds are `comment`, `docstring`, `import`,
+`function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
+`class-header`, `class-attribute`, `module-statement`, `annotation`, `call`,
+`control-flow`, `return-yield`, `collection-literal`, `string-literal`,
+`number-literal`, `attribute-access`, `subscript`, `conditional-expression`,
+`membership-test`, `assert` and `raise`, plus three from the diff:
+`definition-added-or-removed` (a def or class name added or removed), `code` (any line
+that is not only a comment or docstring) and `any`. The syntax table in
+`src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
+
 A judge rule eval lists case files in `rule-evals/<id>/`:
 
 ```yaml
@@ -211,6 +248,17 @@ invalid: [shipment_status.py]    # the judge must report one at the confidence t
 The judge reads each case from that directory with the binding's model, so name case
 files for their code, not their expected result. Verdicts are cached like reviews, so
 only changed cases and skills call Claude again.
+
+An invalid case also fails when its violation is on a line without one of the rule's
+`triggers`. The message lists the kinds on that line.
+
+`codeguard eval` also checks each judge rule:
+
+- It needs an eval with at least one `invalid` case.
+- A rule review judges the skill with its triggers and the ruleset's gates. It fails when
+  the skill judges code no trigger matches, a trigger is broader than the skill needs, or
+  a bullet is checkable by ast-grep or a type checker setting. The review is cached like
+  any verdict.
 
 The eval also judges each case with its names renamed, without comments, and with its
 imports reordered, and each must keep its expected result. A rule whose verdict depends
@@ -306,7 +354,7 @@ codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
 codeguard review --latest     # newest tag in each package range, not the lock
-codeguard review --dry-run    # count the judge calls, by rule and file; calls no model
+codeguard review --dry-run    # count the judge calls and trigger skips; calls no model
 codeguard test                # pattern rule tests
 codeguard test --update-all   # the same, regenerating snapshots
 codeguard eval                # judge rule evals; calls Claude

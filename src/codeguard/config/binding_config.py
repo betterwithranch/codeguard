@@ -3,6 +3,7 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, ValidationInfo, field_validator
 
+from codeguard.config.change_kind import ChangeKind
 from codeguard.config.severity import Severity
 
 SKILL_FILE = "SKILL.md"
@@ -23,6 +24,7 @@ class BindingConfig(BaseModel):
     severity: Severity = Severity.ERROR
     model: str = "claude-sonnet-5-5"
     disable_skips: frozenset[Skip] = frozenset()
+    triggers: frozenset[str] = Field(frozenset({ChangeKind.ANY}), min_length=1)
 
     @field_validator("skill", mode="before")
     @classmethod

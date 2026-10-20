@@ -20,5 +20,5 @@ def write_package(repo: GitRepo, prefix: str = "") -> None:
     )
     repo.write(
         f"{prefix}python/bindings/responsibility-placement.yaml",
-        'skill: python/skills/responsibility-placement\npaths: ["**/*.py"]\n',
+        'skill: python/skills/responsibility-placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
     )

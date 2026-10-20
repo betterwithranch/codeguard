@@ -24,6 +24,7 @@ class Packages:
     working_tree: Path
     fetch: GitFetch
     ast_grep: Version
+    codeguard: Version
     refs: PackageRefs
 
     def rulesets(self, packages: Sequence[PackageConfig]) -> tuple[Ruleset, ...]:
@@ -36,6 +37,9 @@ class Packages:
     def _rulesets(self, location: str, package: PackageConfig) -> Iterator[Ruleset]:
         root = self._root(package)
         manifest = Manifest.load(root)
+        codeguard_problem = manifest.codeguard_problem(self.codeguard)
+        if codeguard_problem:
+            self._fail(f"{location}: {codeguard_problem}")
         ast_grep_problem = manifest.ast_grep_problem(self.ast_grep)
         if ast_grep_problem:
             self._fail(f"{location}: {ast_grep_problem}")

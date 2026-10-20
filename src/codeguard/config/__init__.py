@@ -1,8 +1,10 @@
 from codeguard.config.binding_config import SKILL_FILE, BindingConfig, Skip
 from codeguard.config.bindings_config import BindingsConfig
+from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config import Config
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
+from codeguard.config.gate_rule import GateRule
 from codeguard.config.lock import LOCK_FILE, Lock, LockedPackage
 from codeguard.config.package_config import (
     GitPackageConfig,
@@ -12,7 +14,14 @@ from codeguard.config.package_config import (
 )
 from codeguard.config.path_scope import PathScope
 from codeguard.config.pattern_binding_config import PatternBindingConfig, PatternBindingsConfig
-from codeguard.config.ruleset import JUDGE_EVAL_DIR, PATTERN_RULE_DIR, PATTERN_TEST_DIR, Ruleset
+from codeguard.config.ruleset import (
+    GATE_DIR,
+    GATE_TEST_DIR,
+    JUDGE_EVAL_DIR,
+    PATTERN_RULE_DIR,
+    PATTERN_TEST_DIR,
+    Ruleset,
+)
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
 from codeguard.config.ruleset_loader import RulesetLoader
 from codeguard.config.ruleset_structure import RulesetStructure
@@ -22,6 +31,8 @@ from codeguard.config.versions import ExactVersion, VersionRange
 __all__ = [
     "CONFIG_DIR",
     "CONFIG_FILE",
+    "GATE_DIR",
+    "GATE_TEST_DIR",
     "JUDGE_EVAL_DIR",
     "LOCK_FILE",
     "PATTERN_RULE_DIR",
@@ -29,10 +40,12 @@ __all__ = [
     "SKILL_FILE",
     "BindingConfig",
     "BindingsConfig",
+    "ChangeKind",
     "Config",
     "ConfigError",
     "ConfigLoader",
     "ExactVersion",
+    "GateRule",
     "GitPackageConfig",
     "Lock",
     "LockedPackage",

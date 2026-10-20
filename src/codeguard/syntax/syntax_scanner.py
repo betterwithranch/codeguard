@@ -1,11 +1,12 @@
 import subprocess
-from collections.abc import Sequence
-from dataclasses import dataclass
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from codeguard.ast_grep import AstGrep
+from codeguard.config import ChangeKind, GateRule
 from codeguard.syntax.parsed_file import ParsedFile
 from codeguard.syntax.syntax_node import SyntaxNode
 from codeguard.syntax.syntax_table import NodeKind, SyntaxTable
@@ -35,7 +36,7 @@ class _Range(BaseModel):
 class _Match(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
-    rule_id: NodeKind = Field(alias="ruleId")
+    rule_id: NodeKind | ChangeKind | str = Field(alias="ruleId", union_mode="left_to_right")
     file: str
     text: str
     range: _Range
@@ -56,6 +57,7 @@ class _Match(BaseModel):
 @dataclass(frozen=True)
 class SyntaxScanner:
     ast_grep: AstGrep
+    gates: Mapping[str, GateRule] = field(default_factory=dict)
 
     def scan(self, directory: Path) -> dict[str, ParsedFile]:
         paths = sorted(
@@ -74,7 +76,12 @@ class SyntaxScanner:
         return files
 
     def _scan(self, directory: Path, table: SyntaxTable, files: list[str]) -> dict[str, ParsedFile]:
-        command = [*self.ast_grep.executable, "scan", "--inline-rules", table.inline_rules]
+        command = [
+            *self.ast_grep.executable,
+            "scan",
+            "--inline-rules",
+            table.inline_rules(self.gates),
+        ]
         result = subprocess.run(
             [*command, "--json=stream", *files],
             cwd=directory,

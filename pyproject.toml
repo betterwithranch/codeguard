@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.1.0"
+version = "0.2.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }
@@ -61,6 +61,9 @@ extend-immutable-calls = ["codeguard.config.RulesetConfig"]
 include = ["src"]
 typeCheckingMode = "standard"
 reportExplicitAny = "error"
+reportMissingTypeArgument = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryComparison = "error"
 
 [tool.importlinter]
 root_packages = ["codeguard"]

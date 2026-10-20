@@ -2,8 +2,17 @@ from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Self
 
-from codeguard.config import SKILL_FILE, BindingConfig, PathScope, Ruleset, Severity, Skip
+from codeguard.config import (
+    SKILL_FILE,
+    BindingConfig,
+    ChangeKind,
+    PathScope,
+    Ruleset,
+    Severity,
+    Skip,
+)
 from codeguard.review.skill import Skill
+from codeguard.working_tree import AllLines, ChangedLines
 
 
 @dataclass(frozen=True)
@@ -13,6 +22,7 @@ class Binding:
     paths: tuple[str, ...]
     severity: Severity
     model: str
+    triggers: frozenset[str]
     disable_skips: frozenset[Skip] = frozenset()
     exclude_paths: tuple[str, ...] = ()
 
@@ -24,6 +34,7 @@ class Binding:
             paths=binding.paths,
             severity=binding.severity,
             model=binding.model,
+            triggers=binding.triggers,
             disable_skips=binding.disable_skips,
             exclude_paths=binding.exclude_paths,
         )
@@ -34,6 +45,12 @@ class Binding:
 
     def files(self, changed: Sequence[str]) -> list[str]:
         return [file for file in changed if self._matches(file)]
+
+    def is_triggered(self, scope: ChangedLines | AllLines, file: str) -> bool:
+        kinds = scope.kinds_of(file)
+        return (
+            kinds is None or ChangeKind.ANY in self.triggers or not self.triggers.isdisjoint(kinds)
+        )
 
     def _matches(self, file: str) -> bool:
         return PathScope(self.paths, self.exclude_paths).matches(file)

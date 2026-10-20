@@ -307,7 +307,7 @@ class TestReviewOfDeletedCode:
         repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
         repo.write(
             ".codeguard/bindings/placement.yaml",
-            'skill: .claude/skills/placement\npaths: ["**/*.py"]\n',
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
         )
         repo.write(
             "service.py",
@@ -356,7 +356,12 @@ class TestReviewDryRun:
         repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
         repo.write(
             ".codeguard/bindings/placement.yaml",
-            'skill: .claude/skills/placement\npaths: ["**/*.py"]\n',
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
+        )
+        repo.write(".claude/skills/class-shape/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/class-shape.yaml",
+            'skill: .claude/skills/class-shape\npaths: ["**/*.py"]\ntriggers: [class-header]\n',
         )
         repo.write("a.py", "x = 1\n")
         repo.write("b.rb", "x = 1\n")
@@ -375,13 +380,21 @@ class TestReviewDryRun:
         )
 
         assert result.stdout == (
-            "Judge calls: 1 (0 cached, 1 to Claude)\n"
+            "Judge calls: 1 (0 cached, 1 to Claude), 1 skipped by triggers\n"
             "\n"
-            "By rule, calls to Claude:\n"
-            "      1  placement\n"
+            "By rule:\n"
+            "  claude  cached  skipped  rule\n"
+            "       1       0        0  placement\n"
+            "       0       0        1  class-shape\n"
             "\n"
-            "By file, calls to Claude:\n"
-            "      1  a.py\n"
+            "By file:\n"
+            "  claude  cached  skipped  file\n"
+            "       1       0        1  a.py\n"
+            "\n"
+            "Calls by file:\n"
+            "a.py\n"
+            "  claude   placement\n"
+            "  skipped  class-shape\n"
         )
         assert result.returncode == 0
 
@@ -586,7 +599,45 @@ class TestTestCommand:
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
-        assert result.stderr == ""
+        assert result.stderr == (
+            f"warning: triggers not checked: {repo.root}/.codeguard is invalid:\n"
+            "  bindings.broken.yaml.skill: Field required\n"
+            "  bindings.broken.yaml.paths: Field required\n"
+            "  bindings.broken.yaml.path: Extra inputs are not permitted\n"
+        )
+        assert result.returncode == 0
+
+    def test_broad_triggers_are_a_warning(self, repo, make_skill):
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any, fixture]\n',
+        )
+
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
+
+        assert result.stderr == (
+            "warning: placement: broad triggers any; "
+            "a gate on the code its violations need skips more files\n"
+        )
+        assert result.returncode == 0
+
+    def test_gate_tests_run_with_the_pattern_tests(self, repo):
+        repo.write(
+            ".codeguard/gates/enum-value.yml",
+            "id: enum-value\nlanguage: python\nrule:\n  pattern: $X.value\n",
+        )
+        repo.write(
+            ".codeguard/rule-tests/gates/enum-value-test.yml",
+            "id: enum-value\nvalid:\n  - status.name\ninvalid:\n  - status.value\n",
+        )
+
+        result = subprocess.run(
+            [CODEGUARD, "test", "--update-all"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert (repo.root / ".codeguard/rule-tests/gates/__snapshots__").is_dir()
         assert result.returncode == 0
 
     def test_failing_rule_tests_exit_1(self, repo):

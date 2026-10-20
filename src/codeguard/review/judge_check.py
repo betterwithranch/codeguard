@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from codeguard.review.binding import Binding
 from codeguard.review.diagnostic import Diagnostic
 from codeguard.review.judge import Judge, JudgeError, JudgeRequest
+from codeguard.working_tree import AllLines, ChangedLines
 
 
 @dataclass(frozen=True)
@@ -12,9 +13,14 @@ class JudgeCheck:
     binding: Binding
     judge: Judge
     confidence_threshold: float
+    scope: ChangedLines | AllLines
 
     def check(self, files: Sequence[str]) -> list[Diagnostic]:
-        matched = self.binding.files(files)
+        matched = [
+            file
+            for file in self.binding.files(files)
+            if self.binding.is_triggered(self.scope, file)
+        ]
         if not matched:
             return []
         with ThreadPoolExecutor(max_workers=len(matched)) as executor:

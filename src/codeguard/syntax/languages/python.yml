@@ -21,6 +21,140 @@ scopes:
   any:
     - kind: function_definition
     - kind: class_definition
+scope_names:
+  kind: identifier
+  any:
+    - inside: {kind: function_definition, field: name}
+    - inside: {kind: class_definition, field: name}
+change_kinds:
+  comment:
+    kind: comment
+  docstring:
+    kind: string
+    inside:
+      kind: expression_statement
+      nthChild: 1
+      inside:
+        any:
+          - kind: module
+          - kind: block
+            any:
+              - inside: {kind: function_definition, field: body}
+              - inside: {kind: class_definition, field: body}
+  import:
+    any:
+      - kind: import_statement
+      - kind: import_from_statement
+      - kind: future_import_statement
+  function-signature:
+    any:
+      - {kind: identifier, inside: {kind: function_definition, field: name}}
+      - {kind: parameters, inside: {kind: function_definition, field: parameters}}
+      - {kind: type, inside: {kind: function_definition, field: return_type}}
+      - {kind: type_parameter, inside: {kind: function_definition, field: type_parameters}}
+      - kind: decorator
+        inside:
+          kind: decorated_definition
+          has: {kind: function_definition, field: definition}
+  function-body:
+    kind: block
+    inside: {kind: function_definition, field: body}
+  test-function:
+    kind: function_definition
+    has: {field: name, regex: "^test"}
+  fixture:
+    kind: decorated_definition
+    all:
+      - has: {kind: decorator, regex: fixture}
+      - has: {kind: function_definition, field: definition}
+  helper-function:
+    kind: function_definition
+    not:
+      any:
+        - has: {field: name, regex: "^test"}
+        - inside: {kind: decorated_definition, has: {kind: decorator, regex: fixture}}
+  class-header:
+    any:
+      - {kind: identifier, inside: {kind: class_definition, field: name}}
+      - {kind: argument_list, inside: {kind: class_definition, field: superclasses}}
+      - {kind: type_parameter, inside: {kind: class_definition, field: type_parameters}}
+      - kind: decorator
+        inside:
+          kind: decorated_definition
+          has: {kind: class_definition, field: definition}
+  class-attribute:
+    kind: expression_statement
+    inside:
+      kind: block
+      inside: {kind: class_definition, field: body}
+  module-statement:
+    inside: {kind: module}
+    any:
+      - kind: expression_statement
+      - kind: type_alias_statement
+      - kind: if_statement
+      - kind: for_statement
+      - kind: while_statement
+      - kind: try_statement
+      - kind: with_statement
+      - kind: match_statement
+      - kind: assert_statement
+      - kind: raise_statement
+      - kind: delete_statement
+  annotation:
+    kind: type
+  call:
+    kind: call
+  control-flow:
+    any:
+      - kind: if_statement
+      - kind: for_statement
+      - kind: while_statement
+      - kind: try_statement
+      - kind: with_statement
+      - kind: match_statement
+  return-yield:
+    any:
+      - kind: return_statement
+      - kind: yield
+  collection-literal:
+    any:
+      - kind: list
+      - kind: tuple
+      - kind: set
+      - kind: dictionary
+      - kind: list_comprehension
+      - kind: set_comprehension
+      - kind: dictionary_comprehension
+      - kind: generator_expression
+  string-literal:
+    kind: string
+    not: {inside: {kind: expression_statement}}
+  number-literal:
+    any:
+      - kind: integer
+      - kind: float
+  attribute-access:
+    kind: attribute
+  subscript:
+    kind: subscript
+  conditional-expression:
+    any:
+      - kind: conditional_expression
+      - kind: boolean_operator
+  membership-test:
+    any:
+      - pattern: $A in $B
+      - pattern: $A not in $B
+      - kind: call
+        has:
+          field: function
+          kind: attribute
+          has: {field: attribute, regex: "^assert(Not)?In$"}
+  assert:
+    kind: assert_statement
+  raise:
+    kind: raise_statement
 definitions:
   kind: identifier
   any:

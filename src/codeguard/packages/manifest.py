@@ -19,6 +19,7 @@ class Manifest(BaseModel):
     name: str = Field(pattern=r"^[\w.-]+$")
     rulesets: tuple[str, ...] = Field(min_length=1)
     ast_grep: VersionRange = Field(default_factory=SpecifierSet, alias="ast-grep")
+    codeguard: VersionRange = Field(default_factory=SpecifierSet)
 
     @classmethod
     def load(cls, root: Path) -> Self:
@@ -38,3 +39,8 @@ class Manifest(BaseModel):
         if self.ast_grep.contains(version, prereleases=True):
             return None
         return f"{self.name} supports ast-grep {self.ast_grep}, not {version}"
+
+    def codeguard_problem(self, version: Version) -> str | None:
+        if self.codeguard.contains(version, prereleases=True):
+            return None
+        return f"{self.name} needs codeguard {self.codeguard}, not {version}; upgrade codeguard"

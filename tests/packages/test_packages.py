@@ -19,6 +19,7 @@ from codeguard.config import (
 from codeguard.packages import GitFetch, LatestRefs, LockedRefs, Packages
 
 AST_GREP = Version("0.45.3")
+CODEGUARD = Version("0.2.0")
 
 
 @pytest.fixture
@@ -66,12 +67,14 @@ class TestVersionedPackages:
             packages=(LockedPackage(git=released.file_url, version=config.version, ref="v1.0.0"),)
         )
 
-        rulesets = Packages(repo.root, fetch, AST_GREP, LockedRefs(lock)).rulesets([config])
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, LockedRefs(lock)).rulesets(
+            [config]
+        )
 
         assert [ruleset.name for ruleset in rulesets] == ["example/python"]
 
     def test_latest_tag_in_range_is_fetched(self, repo, released, fetch):
-        rulesets = Packages(repo.root, fetch, AST_GREP, LatestRefs()).rulesets(
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, LatestRefs()).rulesets(
             [versioned(released)]
         )
 
@@ -79,7 +82,7 @@ class TestVersionedPackages:
 
     def test_unlocked_range_is_an_error(self, repo, released, fetch, no_lock):
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([versioned(released)])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([versioned(released)])
 
         assert str(error.value) == (
             f".codeguard/lock.yaml has no ref for {released.file_url} <2,>=1. Run codeguard update."
@@ -87,7 +90,9 @@ class TestVersionedPackages:
 
     def test_range_without_a_matching_tag_is_an_error(self, repo, package, fetch):
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, LatestRefs()).rulesets([versioned(package)])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, LatestRefs()).rulesets(
+                [versioned(package)]
+            )
 
         assert str(error.value) == f"{package.file_url} has no version tag in <2,>=1"
 
@@ -96,7 +101,7 @@ class TestPackages:
     def test_opted_in_ruleset_is_named_by_package_and_ruleset(self, repo, package, fetch, no_lock):
         config = PathPackageConfig(path=package.root, rulesets={"python": RulesetConfig()})
 
-        rulesets = Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         skill = package.root / "python/skills/responsibility-placement"
         assert rulesets == (
@@ -106,7 +111,7 @@ class TestPackages:
                 bindings=BindingsConfig(
                     {
                         "responsibility-placement.yaml": BindingConfig(
-                            skill=skill, paths=("**/*.py",)
+                            triggers=frozenset({"any"}), skill=skill, paths=("**/*.py",)
                         )
                     }
                 ),
@@ -117,7 +122,7 @@ class TestPackages:
         config = PathPackageConfig(path=package.root, rulesets={"ruby": RulesetConfig()})
 
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
@@ -131,7 +136,7 @@ class TestPackages:
         config = PathPackageConfig(path=package.root, rulesets={"python": RulesetConfig()})
 
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
@@ -145,7 +150,31 @@ class TestPackages:
         )
         config = PathPackageConfig(path=package.root, rulesets={"python": RulesetConfig()})
 
-        rulesets = Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
+
+        assert [ruleset.name for ruleset in rulesets] == ["example/python"]
+
+    def test_codeguard_outside_the_package_range_is_an_error(self, repo, package, fetch, no_lock):
+        package.write(
+            "codeguard-package.yaml", "name: example\nrulesets: [python]\ncodeguard: '>=0.3'\n"
+        )
+        config = PathPackageConfig(path=package.root, rulesets={"python": RulesetConfig()})
+
+        with pytest.raises(ConfigError) as error:
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            "  packages.0: example needs codeguard >=0.3, not 0.2.0; upgrade codeguard"
+        )
+
+    def test_codeguard_inside_the_package_range_loads(self, repo, package, fetch, no_lock):
+        package.write(
+            "codeguard-package.yaml", "name: example\nrulesets: [python]\ncodeguard: '>=0.2'\n"
+        )
+        config = PathPackageConfig(path=package.root, rulesets={"python": RulesetConfig()})
+
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert [ruleset.name for ruleset in rulesets] == ["example/python"]
 
@@ -156,7 +185,7 @@ class TestPackages:
         config = PathPackageConfig(path=package.root, rulesets={"python": selection})
 
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
@@ -168,7 +197,7 @@ class TestPackages:
         config = PathPackageConfig(path=package.root, rulesets={"python": selection})
 
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
@@ -179,6 +208,6 @@ class TestPackages:
         config = PathPackageConfig(path=tmp_path, rulesets={"python": RulesetConfig()})
 
         with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, no_lock).rulesets([config])
+            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
 
         assert str(error.value) == f"{tmp_path} has no codeguard-package.yaml"

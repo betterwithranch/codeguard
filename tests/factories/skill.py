@@ -23,3 +23,4 @@ class MakeBinding(factory.Factory):
     paths = ("**",)
     severity = Severity.ERROR
     model = "claude-sonnet-5-5"
+    triggers = frozenset({"any"})

@@ -23,6 +23,14 @@ blocks the agent's Stop and fails CI.
   `bindings/<id>.yaml` with `rule`, `paths` and `exclude_paths`, never with ast-grep's
   `files` or `ignores`, so a project can change the scope. The exception is a file name
   that is part of the convention itself (`__all__` only in `__init__.py`).
+- Give a judge rule's binding `triggers`: the code its violations need, as a gate
+  (`gates/<id>.yml`, an ast-grep rule with tests in `rule-tests/gates/`) or a built-in
+  change kind. Gate on where a violation appears, not on the topic: a rule about passing
+  enum members needs a gate on literals, because the enum is defined elsewhere. The judge
+  skips a file whose changes miss every trigger.
+- Give every judge rule an eval with an `invalid` case. `codeguard eval` fails a rule
+  without one, a violation outside the triggers, and a skill whose rule review finds an
+  ungated construct, a broad trigger, or a bullet ast-grep could check.
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.

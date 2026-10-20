@@ -4,13 +4,13 @@ from codeguard.review import JudgePlan, PlannedCall
 
 
 class TestJudgePlan:
-    def test_counts_calls_to_claude_by_rule_and_by_file(self):
+    def test_reports_every_call_by_rule_by_file_and_for_each_file(self):
         plan = JudgePlan(
             calls=(
-                PlannedCall(rule="no-dead-code", file="a.py", cached=False),
-                PlannedCall(rule="no-dead-code", file="b.py", cached=False),
-                PlannedCall(rule="enum-usage", file="a.py", cached=False),
-                PlannedCall(rule="enum-usage", file="b.py", cached=True),
+                PlannedCall(rule="no-dead-code", file="a.py", cached=False, triggered=True),
+                PlannedCall(rule="no-dead-code", file="b.py", cached=True, triggered=True),
+                PlannedCall(rule="enum-usage", file="a.py", cached=False, triggered=False),
+                PlannedCall(rule="enum-usage", file="b.py", cached=True, triggered=True),
             )
         )
         out = io.StringIO()
@@ -18,15 +18,25 @@ class TestJudgePlan:
         plan.write(out)
 
         assert out.getvalue() == (
-            "Judge calls: 4 (1 cached, 3 to Claude)\n"
+            "Judge calls: 3 (2 cached, 1 to Claude), 1 skipped by triggers\n"
             "\n"
-            "By rule, calls to Claude:\n"
-            "      2  no-dead-code\n"
-            "      1  enum-usage\n"
+            "By rule:\n"
+            "  claude  cached  skipped  rule\n"
+            "       1       1        0  no-dead-code\n"
+            "       0       1        1  enum-usage\n"
             "\n"
-            "By file, calls to Claude:\n"
-            "      2  a.py\n"
-            "      1  b.py\n"
+            "By file:\n"
+            "  claude  cached  skipped  file\n"
+            "       0       2        0  b.py\n"
+            "       1       0        1  a.py\n"
+            "\n"
+            "Calls by file:\n"
+            "a.py\n"
+            "  claude   no-dead-code\n"
+            "  skipped  enum-usage\n"
+            "b.py\n"
+            "  cached   enum-usage\n"
+            "  cached   no-dead-code\n"
         )
 
     def test_plan_without_calls_reports_only_the_total(self):
@@ -34,4 +44,4 @@ class TestJudgePlan:
 
         JudgePlan(calls=()).write(out)
 
-        assert out.getvalue() == "Judge calls: 0 (0 cached, 0 to Claude)\n"
+        assert out.getvalue() == "Judge calls: 0 (0 cached, 0 to Claude), 0 skipped by triggers\n"

@@ -1,15 +1,17 @@
 import os
 from dataclasses import dataclass
 from functools import cached_property
+from importlib.metadata import version
 from pathlib import Path
 from threading import Semaphore
 
 from diskcache import Cache
+from packaging.version import Version
 
 from codeguard.ast_grep import AstGrep
 from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
 from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
-from codeguard.judge_evals import EvalResult, JudgeEvalRunner
+from codeguard.judge_evals import EvalResult, JudgeEvalRunner, RulePackageReview
 from codeguard.packages import (
     MANIFEST_FILE,
     GitFetch,
@@ -31,13 +33,14 @@ from codeguard.review import (
     Review,
     Reviewer,
 )
-from codeguard.rule_tests import RuleTests
-from codeguard.syntax import SyntaxScanner
+from codeguard.rule_tests import BroadTriggers, RuleTests
+from codeguard.syntax import ChangeClassifier, SyntaxScanner
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _CACHE_DIR = Path.home() / ".cache" / "codeguard"
 _JUDGEMENT_CACHE_DIR = _CACHE_DIR / "judgements"
 _PACKAGE_CACHE_DIR = _CACHE_DIR / "packages"
+_CODEGUARD_VERSION = Version(version("codeguard"))
 
 
 @dataclass(frozen=True)
@@ -52,6 +55,7 @@ class Rules:
     def review(self, scope: ChangedLines | AllLines) -> Review:
         root = self.working_tree.root
         deadline = Deadline(self.config.review_time_limit_minutes)
+        classified = self._classified(scope)
         reviewer = Reviewer(
             steps=(
                 CheckStep(
@@ -60,30 +64,35 @@ class Rules:
                         for ruleset in self._rulesets
                     )
                 ),
-                CheckStep(checks=self._judge_checks(deadline)),
+                CheckStep(checks=self._judge_checks(classified, deadline)),
             )
         )
-        return reviewer.run(self._with_enclosing_nodes(scope))
+        return reviewer.run(classified)
 
-    def _with_enclosing_nodes(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:
+    def _classified(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:
         if isinstance(scope, AllLines):
             return scope
-        parsed = SyntaxScanner(self._ast_grep).scan_files(self.working_tree.root, scope.files)
-        return scope.with_node_starts(
-            {file: content.enclosing_starts(scope.points(file)) for file, content in parsed.items()}
-        )
+        gates = {
+            gate: rule
+            for ruleset in self._rulesets
+            for gate, rule in ruleset.qualified_gates().items()
+        }
+        scanner = SyntaxScanner(self._ast_grep, gates)
+        return ChangeClassifier(scanner, self.working_tree).classify(scope)
 
     def plan(self, scope: ChangedLines | AllLines) -> JudgePlan:
         root = self.working_tree.root
+        classified = self._classified(scope)
         return JudgePlan(
             calls=tuple(
                 PlannedCall(
                     rule=binding.rule,
                     file=file,
                     cached=self._judge(root, binding.model).has(JudgeRequest(binding.skill, file)),
+                    triggered=binding.is_triggered(classified, file),
                 )
                 for binding in Bindings.from_rulesets(self._rulesets)
-                for file in binding.files(scope.files)
+                for file in binding.files(classified.files)
             )
         )
 
@@ -92,8 +101,13 @@ class Rules:
         root = self.working_tree.root
         return RuleTests(
             runners=[
-                PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep))
+                runner
                 for loader in self._own_rulesets
+                for runner in (
+                    PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep)),
+                    PatternRuleTestRunner(Layout.gates(root, loader.root, self._ast_grep)),
+                    BroadTriggers(loader),
+                )
             ]
         )
 
@@ -102,15 +116,21 @@ class Rules:
         threshold = self.config.confidence_threshold
         runs = (self._judge, *(self._uncached_judge for _ in range(repeat - 1)))
         return EvalResult.merge(
-            JudgeEvalRunner(root, loader, runs, threshold, self._ast_grep).run()
+            result
             for loader in self._own_rulesets
+            for result in (
+                JudgeEvalRunner(root, loader, runs, threshold, self._ast_grep).run(),
+                RulePackageReview(loader, self._judge, threshold).run(),
+            )
         )
 
     @cached_property
     def _rulesets(self) -> tuple[Ruleset, ...]:
         root = self.working_tree.root
         refs = LatestRefs() if self.latest else LockedRefs(Lock.load(root))
-        packages = Packages(root, GitFetch(_PACKAGE_CACHE_DIR), self._ast_grep.version, refs)
+        packages = Packages(
+            root, GitFetch(_PACKAGE_CACHE_DIR), self._ast_grep.version, _CODEGUARD_VERSION, refs
+        )
         return (RulesetLoader.local(root).load(), *packages.rulesets(self.config.packages))
 
     @cached_property
@@ -125,9 +145,12 @@ class Rules:
         manifest = Manifest.in_repo(root)
         loaders = [RulesetLoader.local(root)]
         if manifest:
-            ast_grep_problem = manifest.ast_grep_problem(self._ast_grep.version)
-            if ast_grep_problem:
-                raise ConfigError(f"{root / MANIFEST_FILE} is invalid:\n  {ast_grep_problem}")
+            for problem in (
+                manifest.codeguard_problem(_CODEGUARD_VERSION),
+                manifest.ast_grep_problem(self._ast_grep.version),
+            ):
+                if problem:
+                    raise ConfigError(f"{root / MANIFEST_FILE} is invalid:\n  {problem}")
             loaders.extend(
                 RulesetLoader(repo=root, root=root / name, name=f"{manifest.name}/{name}")
                 for name in manifest.rulesets
@@ -156,10 +179,12 @@ class Rules:
             root, model, self._judge_processes, warmup=self._warmup, deadline=deadline
         )
 
-    def _judge_checks(self, deadline: Deadline) -> tuple[JudgeCheck, ...]:
+    def _judge_checks(
+        self, scope: ChangedLines | AllLines, deadline: Deadline
+    ) -> tuple[JudgeCheck, ...]:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         return tuple(
-            JudgeCheck(binding, self._judge(root, binding.model, deadline), threshold)
+            JudgeCheck(binding, self._judge(root, binding.model, deadline), threshold, scope)
             for binding in Bindings.from_rulesets(self._rulesets)
         )

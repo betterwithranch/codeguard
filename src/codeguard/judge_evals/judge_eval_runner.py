@@ -5,28 +5,24 @@ from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Protocol
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import JUDGE_EVAL_DIR, RulesetLoader, Skip
+from codeguard.config import JUDGE_EVAL_DIR, ChangeKind, RulesetLoader, Skip
 from codeguard.judge_evals.code_variants import CodeVariants
 from codeguard.judge_evals.eval_result import EvalResult
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_eval import JudgeEval
-from codeguard.review import Binding, Bindings, Judge, JudgeRequest
+from codeguard.judge_evals.judge_factory import JudgeFactory
+from codeguard.review import Binding, Bindings, JudgeRequest, Verdict
 from codeguard.syntax import SyntaxScanner
 
-_EVAL_FILE_GLOB = "*-eval.yml"
+EVAL_FILE_GLOB = "*-eval.yml"
 _VARIANT_DESCRIPTIONS = {
     Skip.RENAMES: "with its names renamed",
     Skip.COMMENTS: "without comments",
     Skip.IMPORTS: "with its imports reordered",
 }
 _SKIPPED_CHANGES = {Skip.RENAMES: "names", Skip.COMMENTS: "comments", Skip.IMPORTS: "imports"}
-
-
-class JudgeFactory(Protocol):
-    def __call__(self, root: Path, model: str) -> Judge: ...
 
 
 @dataclass(frozen=True)
@@ -38,13 +34,37 @@ class _CaseRun:
     variant: Skip | None
     judges: JudgeFactory
     run: int
+    scanner: SyntaxScanner
 
     def problem(self, confidence_threshold: float) -> str | None:
         if not (self.directory / self.case.file).is_file():
             return "no such file"
         judge = self.judges(self.directory, self.binding.model)
         verdict = judge.judge(JudgeRequest(self.binding.skill, self.case.file))
-        return self.case.problem(verdict, confidence_threshold)
+        return self.case.problem(verdict, confidence_threshold) or self._trigger_problem(
+            verdict, confidence_threshold
+        )
+
+    def _trigger_problem(self, verdict: Verdict, confidence_threshold: float) -> str | None:
+        if (
+            self.variant is not None
+            or not self.case.violates
+            or ChangeKind.ANY in self.binding.triggers
+        ):
+            return None
+        lines = self.case.violation_lines(verdict, confidence_threshold)
+        parsed = self.scanner.scan_files(self.directory, [self.case.file]).get(self.case.file)
+        if not lines or parsed is None:
+            return None
+        kinds = [parsed.kinds_on(line) for line in lines]
+        if any(not self.binding.triggers.isdisjoint(found) for found in kinds):
+            return None
+        on_lines = sorted({kind for found in kinds for kind in found})
+        return (
+            f"violation on line {', '.join(map(str, lines))} is outside the triggers "
+            f"{', '.join(sorted(self.binding.triggers))}\n"
+            f"  Add one of the kinds on that line to triggers in its binding: {', '.join(on_lines)}"
+        )
 
 
 @dataclass(frozen=True)
@@ -99,14 +119,14 @@ class JudgeEvalRunner:
     def run(self) -> EvalResult:
         if not self.eval_dir.is_dir():
             return EvalResult()
-        bindings = {
-            binding.skill.name: binding for binding in Bindings.from_rulesets([self.ruleset.load()])
-        }
+        ruleset = self.ruleset.load()
+        bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
+        scanner = SyntaxScanner(self.ast_grep, ruleset.qualified_gates())
         problems: list[str] = []
         with ExitStack() as stack:
             variants = _Variants(self.ast_grep, stack)
             case_runs: list[_CaseRun] = []
-            for file in sorted(self.eval_dir.glob(_EVAL_FILE_GLOB)):
+            for file in sorted(self.eval_dir.glob(EVAL_FILE_GLOB)):
                 judge_eval = JudgeEval.load(file)
                 binding = bindings.get(judge_eval.id)
                 if binding is None:
@@ -114,7 +134,7 @@ class JudgeEvalRunner:
                     continue
                 directory = self.eval_dir / judge_eval.id
                 for case in judge_eval.cases():
-                    case_runs.extend(self._case_runs(binding, directory, case, variants))
+                    case_runs.extend(self._case_runs(binding, directory, case, variants, scanner))
             problems.extend(self._problems(case_runs))
         return EvalResult(problems=tuple(problems))
 
@@ -131,12 +151,17 @@ class JudgeEvalRunner:
         ]
 
     def _case_runs(
-        self, binding: Binding, directory: Path, case: JudgeCase, variants: _Variants
+        self,
+        binding: Binding,
+        directory: Path,
+        case: JudgeCase,
+        variants: _Variants,
+        scanner: SyntaxScanner,
     ) -> list[_CaseRun]:
         path = directory / case.file
         sources = [(None, directory), *variants.of_case(binding, directory, case.file)]
         return [
-            _CaseRun(binding, case, path, source, variant, judges, run)
+            _CaseRun(binding, case, path, source, variant, judges, run, scanner)
             for variant, source in sources
             for run, judges in enumerate(self.runs, start=1)
         ]

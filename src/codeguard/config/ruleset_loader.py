@@ -6,6 +6,7 @@ import yaml
 from pydantic import ValidationError
 
 from codeguard.config.bindings_config import BindingsConfig
+from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE
 from codeguard.config.lock import LOCK_FILE
@@ -34,10 +35,7 @@ class RulesetLoader:
         )
 
     def check(self) -> None:
-        problems = RulesetStructure(self.root, self.files).problems()
-        if problems:
-            listed = "".join(f"\n  {problem}" for problem in problems)
-            raise ConfigError(f"{self.root} is invalid:{listed}")
+        self._raise_problems(RulesetStructure(self.root, self.files).problems())
 
     def load(self) -> Ruleset:
         self.check()
@@ -68,18 +66,42 @@ class RulesetLoader:
             selection=self.selection,
             pattern_bindings=pattern_bindings,
         )
-        self._check_bound_pattern_rules(ruleset)
+        self._raise_problems(
+            [*self._unbound_pattern_rules(ruleset), *self._unknown_triggers(ruleset)]
+        )
         return ruleset
 
-    def _check_bound_pattern_rules(self, ruleset: Ruleset) -> None:
+    def _unbound_pattern_rules(self, ruleset: Ruleset) -> list[str]:
         if not ruleset.pattern_bindings.root:
-            return
+            return []
         rules = ruleset.pattern_rule_ids()
-        problems = [
+        return [
             f"bindings.{file}.rule: no pattern rule {binding.rule}"
             for file, binding in ruleset.pattern_bindings.root.items()
             if binding.rule not in rules
         ]
+
+    def _unknown_triggers(self, ruleset: Ruleset) -> list[str]:
+        if not ruleset.bindings.root:
+            return []
+        try:
+            gates = ruleset.gates()
+        except ValidationError as error:
+            raise ConfigError.invalid(self.root, error, prefix="gates") from error
+        shadowed = [
+            f"gates.{gate}: a change kind has this name" for gate in gates if gate in ChangeKind
+        ]
+        return [
+            *shadowed,
+            *(
+                f"bindings.{file}.triggers: no change kind or gate {trigger}"
+                for file, binding in ruleset.bindings.root.items()
+                for trigger in sorted(binding.triggers)
+                if trigger not in ChangeKind and trigger not in gates
+            ),
+        ]
+
+    def _raise_problems(self, problems: list[str]) -> None:
         if problems:
             listed = "".join(f"\n  {problem}" for problem in problems)
             raise ConfigError(f"{self.root} is invalid:{listed}")

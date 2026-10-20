@@ -1,6 +1,6 @@
 import re
 import subprocess
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Self
@@ -13,6 +13,8 @@ class ChangedLines:
     lines: Mapping[str, frozenset[int]]
     deletions: Mapping[str, frozenset[int]] = field(default_factory=dict)
     node_starts: Mapping[str, frozenset[int]] = field(default_factory=dict)
+    kinds: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    base: str | None = None
 
     @property
     def files(self) -> tuple[str, ...]:
@@ -23,6 +25,12 @@ class ChangedLines:
 
     def with_node_starts(self, node_starts: Mapping[str, frozenset[int]]) -> Self:
         return replace(self, node_starts=node_starts)
+
+    def with_kinds(self, kinds: Mapping[str, frozenset[str]]) -> Self:
+        return replace(self, kinds=kinds)
+
+    def kinds_of(self, file: str) -> frozenset[str] | None:
+        return self.kinds.get(file)
 
     def covers(self, file: str, line: int | None, end_line: int | None = None) -> bool:
         if file not in self.files:
@@ -40,6 +48,9 @@ class AllLines:
 
     def covers(self, file: str, line: int | None, end_line: int | None = None) -> bool:
         return True
+
+    def kinds_of(self, file: str) -> frozenset[str] | None:
+        return None
 
 
 @dataclass(frozen=True)
@@ -69,7 +80,16 @@ class WorkingTree:
         return ChangedLines(
             lines={file: numbers for file, numbers in lines.items() if numbers},
             deletions={file: numbers for file, numbers in deletions.items() if numbers},
+            base=merge_base,
         )
+
+    def base_contents(self, base: str, files: Sequence[str]) -> dict[str, bytes]:
+        if not files:
+            return {}
+        in_base = self._git_paths("ls-tree", "-r", "--name-only", base, "--", *files)
+        return {
+            file: self._git_bytes("show", f"{base}:{file}") for file in files if file in in_base
+        }
 
     def all_lines(self) -> AllLines:
         listed = self._git_paths("ls-files", "--cached", "--others", "--exclude-standard")
@@ -87,6 +107,11 @@ class WorkingTree:
 
     def _git(self, *args: str) -> str:
         return _run_git(self.root, *args)
+
+    def _git_bytes(self, *args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=self.root, stdout=subprocess.PIPE, check=True
+        ).stdout
 
 
 def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:

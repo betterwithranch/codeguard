@@ -8,7 +8,9 @@ class TestSyntaxScanner:
 
         [(file, parsed)] = SyntaxScanner(AstGrep()).scan(tmp_path).items()
 
-        assert (file, parsed.content, set(parsed.nodes)) == (
+        node_kinds = {node for node in parsed.nodes if isinstance(node.kind, NodeKind)}
+
+        assert (file, parsed.content, node_kinds) == (
             "order.py",
             b"import os  # system\ntotal = os.sep\n",
             {
