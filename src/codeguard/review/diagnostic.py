@@ -16,6 +16,7 @@ class Diagnostic(BaseModel):
     severity: Severity
     note: str | None
     end_line: int | None = None
+    confidence: float | None = None
 
     @property
     def id(self) -> str:
@@ -28,7 +29,8 @@ class Diagnostic(BaseModel):
 
     def __str__(self) -> str:
         location = self.file if self.line is None else f"{self.file}:{self.line}"
-        summary = f"{location}: {self.severity} {self.rule}: {self.message} [{self.id}]"
+        confidence = "" if self.confidence is None else f" (confidence {self.confidence:.2f})"
+        summary = f"{location}: {self.severity} {self.rule}: {self.message}{confidence} [{self.id}]"
         if self.note is None:
             return summary
         return f"{summary}\n{textwrap.indent(self.note.rstrip(), '  ')}"

@@ -57,6 +57,7 @@ class Verdict(BaseModel):
                 message=violation.message,
                 severity=violation.severity(binding.severity, threshold),
                 note=None,
+                confidence=violation.confidence,
             )
             for violation in self.violations
             if violation.file == file

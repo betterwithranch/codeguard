@@ -154,4 +154,6 @@ class TestJudgeCheck:
         judge = RecordingJudge(Verdict(violations=(make_violation(confidence=0.5),)))
         check = JudgeCheck(make_binding(), judge, THRESHOLD, AllLines(()))
 
-        assert check.check(["a.py"]) == [make_diagnostic(judged=True, severity=Severity.WARNING)]
+        assert check.check(["a.py"]) == [
+            make_diagnostic(judged=True, severity=Severity.WARNING, confidence=0.5)
+        ]

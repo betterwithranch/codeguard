@@ -20,6 +20,7 @@ class MakeDiagnostic(factory.Factory):
             rule=factory.LazyFunction(lambda: MakeSkill().name),
             note=None,
             end_line=None,
+            confidence=1.0,
         )
 
     rule = "no-print"

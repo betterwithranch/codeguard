@@ -349,6 +349,12 @@ it in `.codeguard/config.yaml`:
 confidence_threshold: 0.8
 ```
 
+A judged diagnostic prints its confidence, so a warning shows how far it fell short:
+
+```
+app/orders.py:12: warning no-pre-derived-arguments: The call passes both lines and the context they come from. (confidence 0.70) [3f1c9a2b7d40]
+```
+
 A review stops judging after 5 minutes. Each rule and file it didn't judge gets a "not
 checked" diagnostic at the rule's severity, so an unchecked `error` rule fails the review.
 The GitHub Action stops the review 2 minutes after the limit, in case it hangs. Change the
