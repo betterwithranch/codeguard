@@ -37,8 +37,13 @@ runs:
       shell: bash
       run: |
         limit=$(uv run --frozen --project "${{ github.action_path }}" codeguard config review_time_limit_minutes)
-        timeout "$((limit + 2))m" uv run --frozen --project "${{ github.action_path }}" codeguard review --latest --base "${{ inputs.base }}" ${{ inputs.dry-run == 'true' && '--dry-run' || '' }}
+        judge_errors=()
+        if [ "$ALLOW_JUDGE_ERRORS" = true ]; then
+          judge_errors=(--judge-errors-as-warnings)
+        fi
+        timeout "$((limit + 2))m" uv run --frozen --project "${{ github.action_path }}" codeguard review --base "${{ inputs.base }}" ${{ inputs.dry-run == 'true' && '--dry-run' || '' }} "${judge_errors[@]}"
       env:
+        ALLOW_JUDGE_ERRORS: ${{ contains(github.event.pull_request.labels.*.name, 'codeguard-allow-judge-errors') }}
         CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
         LOGFIRE_TOKEN: ${{ inputs.logfire-token }}
     - name: Point to the plugin

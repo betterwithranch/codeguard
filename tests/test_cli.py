@@ -602,6 +602,27 @@ class TestReviewWithVersionedPackages:
         assert result.stdout == f"{local}\n{packaged}\n"
         assert result.returncode == 1
 
+    def test_newer_tag_in_range_reviews_with_the_locked_tag(
+        self, repo, released_package, make_diagnostic
+    ):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        subprocess.run([CODEGUARD, "update"], cwd=repo.root, check=True)
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        released_package.git("rm", "--quiet", "python/rules/pattern/no-print.yml")
+        released_package.commit("Remove no-print")
+        released_package.git("tag", "v1.1.0")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
     def test_latest_reviews_without_a_lock(self, repo, released_package, make_diagnostic):
         repo.write(".codeguard/config.yaml", versioned_config(released_package))
         repo.write("a.py", "x = 1\n")

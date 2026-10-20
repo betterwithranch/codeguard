@@ -72,6 +72,18 @@ The action reviews the files changed since the merge base with the PR's base bra
 then runs the rule tests. The judge needs the token; create it with `claude setup-token`
 and store it as a repository secret.
 
+A judge call that couldn't complete fails the review. To merge a PR anyway, add the
+`codeguard-allow-judge-errors` label to it: the action then passes
+`--judge-errors-as-warnings`, and rule violations still fail. A re-run reads the labels
+the PR had when the run started, so add `labeled` to the trigger to review again when
+the label is added:
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+```
+
 `v0` moves to each 0.x release, so the plugin and the action update together with no
 project edits. A release that breaks the rule format starts `v1`.
 
@@ -128,9 +140,10 @@ Diagnostics name a packaged rule by package, ruleset and id:
 A git package takes a `version` range (`kind: versioned`) or a `ref` (`kind: git`):
 
 - `version` follows the newest tag in the range. `codeguard update` writes that tag to
-  `.codeguard/lock.yaml`; commit it. Local reviews use the locked tag until the next
-  update. CI reviews (`codeguard review --latest`, which the action runs) use the newest
-  tag in the range and ignore the lock.
+  `.codeguard/lock.yaml`; commit it. Local and CI reviews use the locked tag until the
+  next update, so a commit gets the same rules everywhere. `codeguard review --latest`
+  uses the newest tag in the range and ignores the lock, for trying a new version
+  locally.
 - `ref` pins a tag or commit everywhere. `codeguard update` leaves it alone.
 
 codeguard fetches each tag once into `~/.cache/codeguard/packages` and reuses it, so a
@@ -346,7 +359,7 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
 - Everything else goes to you, not the agent: warnings, findings below the confidence
   threshold, and rules the judge couldn't check (a failed `claude` call or the time
   limit). The hook passes `--judge-errors-as-warnings`, since the agent can't fix those;
-  CI still fails on them.
+  CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
 - If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
   goes through.
 
