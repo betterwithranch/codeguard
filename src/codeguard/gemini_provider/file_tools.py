@@ -1,4 +1,5 @@
 import re
+import subprocess
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -107,11 +108,28 @@ class FileTools:
 
     def _files(self, pattern: str) -> Iterator[tuple[str, Path]]:
         root = self.root.resolve()
-        for file in sorted(root.glob(pattern)):
+        for file in _candidates(root):
             relative = file.relative_to(root)
             hidden = any(part.startswith(".") for part in relative.parts)
-            if file.is_file() and not hidden and file.resolve().is_relative_to(root):
+            if (
+                relative.full_match(pattern)
+                and file.is_file()
+                and not hidden
+                and file.resolve().is_relative_to(root)
+            ):
                 yield str(relative), file
+
+
+def _candidates(root: Path) -> list[Path]:
+    listed = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard", "-z"],
+        cwd=root,
+        capture_output=True,
+        check=False,
+    )
+    if listed.returncode != 0:
+        return sorted(root.rglob("*"))
+    return sorted(root / name for name in listed.stdout.decode().split("\0") if name)
 
 
 def _text_lines(file: Path) -> list[str]:

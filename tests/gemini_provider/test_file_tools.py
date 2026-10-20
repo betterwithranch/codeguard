@@ -1,3 +1,5 @@
+import subprocess
+
 import pytest
 
 from codeguard.gemini_provider.file_tools import FileTools
@@ -56,3 +58,12 @@ class TestFileTools:
 
     def test_unexpected_argument_is_an_error(self, tools):
         assert tools.call("glob", {"pattern": "*", "limit": 1}).startswith("Error: ")
+
+    def test_grep_skips_files_git_ignores(self, tmp_path):
+        subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
+        (tmp_path / ".gitignore").write_text("node_modules/\n")
+        (tmp_path / "node_modules" / "pkg").mkdir(parents=True)
+        (tmp_path / "node_modules" / "pkg" / "order.py").write_text("class Vendored:\n")
+        (tmp_path / "order.py").write_text("class Order:\n")
+
+        assert FileTools(tmp_path).grep("^class") == "order.py:1:class Order:"

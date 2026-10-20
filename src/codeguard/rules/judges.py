@@ -1,6 +1,5 @@
 import os
 from dataclasses import dataclass, field
-from functools import cached_property
 from pathlib import Path
 from threading import Semaphore
 
@@ -8,7 +7,7 @@ from diskcache import Cache
 
 from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
 from codeguard.config import JudgeConfig, JudgeProvider
-from codeguard.gemini_provider import GeminiClient, GeminiJudge, gemini_client
+from codeguard.gemini_provider import DeferredGeminiClient, GeminiJudge
 from codeguard.review import CachedJudge, Deadline, Judge
 
 _JUDGEMENT_CACHE_DIR = Path.home() / ".cache" / "codeguard" / "judgements"
@@ -27,9 +26,6 @@ class Judges:
     def uncached(self, root: Path, model: str, deadline: Deadline | None = None) -> Judge:
         model = self.config.model_for(model)
         if self.config.provider is JudgeProvider.GEMINI:
-            return GeminiJudge(root, model, self._gemini_client, self.processes, deadline=deadline)
+            client = DeferredGeminiClient(self.config.project, self.config.location)
+            return GeminiJudge(root, model, client, self.processes, deadline=deadline)
         return ClaudeJudge(root, model, self.processes, warmup=self.warmup, deadline=deadline)
-
-    @cached_property
-    def _gemini_client(self) -> GeminiClient:
-        return gemini_client(self.config.project, self.config.location)
