@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from codeguard.config import RulesetLoader
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.judge_evals.rule_review import RuleReview
-from codeguard.review import Bindings
+from codeguard.review import Bindings, JudgeError
 from codeguard.rule_tests import JudgeEval, RuleTestResult
 
 
@@ -32,8 +32,13 @@ class RulePackageReview:
         gates = ruleset.qualified_gates()
         reviews = [RuleReview(binding, gates) for binding in bindings]
         with ThreadPoolExecutor(max_workers=len(reviews)) as executor:
-            found = executor.map(
-                lambda review: review.problems(self.judges, self.confidence_threshold), reviews
-            )
-            reviewed = [problem for problems in found for problem in problems]
-        return RuleTestResult(problems=(*uncovered, *reviewed))
+            reviewed = list(executor.map(self._reviewed, reviews))
+        return RuleTestResult.merge([RuleTestResult(problems=tuple(uncovered)), *reviewed])
+
+    def _reviewed(self, review: RuleReview) -> RuleTestResult:
+        try:
+            problems = review.problems(self.judges, self.confidence_threshold)
+        except JudgeError as error:
+            rule = review.binding.skill.name
+            return RuleTestResult(warnings=(f"{rule}: rule review not judged: {error}",))
+        return RuleTestResult(problems=tuple(problems))

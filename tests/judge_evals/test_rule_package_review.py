@@ -1,5 +1,5 @@
 import pytest
-from recording_judge import RecordingJudge, RecordingJudges
+from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
 from codeguard.config import RulesetLoader
 from codeguard.judge_evals import RulePackageReview
@@ -49,6 +49,19 @@ class TestRulePackageReview:
 
         [request] = judge.received
         assert (request.skill.name, request.file) == ("rule-review", "rule.md")
+
+    def test_judge_error_warns_without_failing_the_review(self, repo):
+        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)
+        judges = RecordingJudges(FailingJudge())
+
+        result = RulePackageReview(RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert result == RuleTestResult(
+            warnings=(
+                "enum-usage: rule review not judged: "
+                "gemini failed with 502: upstream request failed",
+            )
+        )
 
     def test_confident_violation_fails_the_rule(self, repo, make_violation):
         repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)

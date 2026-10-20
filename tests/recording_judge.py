@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from codeguard.review import JudgeRequest, Verdict
+from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 
 @dataclass(frozen=True)
@@ -16,6 +16,15 @@ class RecordingJudge:
 
 
 @dataclass(frozen=True)
+class FailingJudge:
+    error: str = "gemini failed with 502: upstream request failed"
+    identity: str = "failing"
+
+    def judge(self, request: JudgeRequest) -> Verdict:
+        raise JudgeError(self.error)
+
+
+@dataclass(frozen=True)
 class JudgeCreation:
     root: Path
     model: str
@@ -23,9 +32,9 @@ class JudgeCreation:
 
 @dataclass(frozen=True)
 class RecordingJudges:
-    judge: RecordingJudge
+    judge: RecordingJudge | FailingJudge
     created: list[JudgeCreation] = field(default_factory=list)
 
-    def __call__(self, root: Path, model: str) -> RecordingJudge:
+    def __call__(self, root: Path, model: str) -> RecordingJudge | FailingJudge:
         self.created.append(JudgeCreation(root, model))
         return self.judge
