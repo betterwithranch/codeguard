@@ -47,19 +47,19 @@ class TestRenames:
             renamed["invoice.py"]
             == """\
 import logging
-from orders.order import name_10, Order as name_1
+from orders.order import name_9, Order as name_1
 
 
 class name_2:
-    def name_3(name_4, name_5: name_1, name_6=0):
-        name_4.name_5 = name_5  # the order being billed
-        name_4.name_6 = name_6
+    def __init__(name_3, name_4: name_1, name_5=0):
+        name_3.name_4 = name_4  # the order being billed
+        name_3.name_5 = name_5
 
-    def name_7(name_4) -> int:
+    def name_6(name_3) -> int:
         # sum line items
-        name_8 = sum(name_9.name_11 for name_9 in name_4.name_5.lines)
-        logging.info(name_8)
-        return name_8 - name_4.name_6
+        name_7 = sum(name_8.name_10 for name_8 in name_3.name_4.lines)
+        logging.info(name_7)
+        return name_7 - name_3.name_5
 """
         )
         assert (
@@ -69,8 +69,8 @@ from dataclasses import dataclass
 
 
 @dataclass
-class name_10:
-    name_11: int
+class name_9:
+    name_10: int
 """
         )
 
@@ -78,6 +78,16 @@ class name_10:
         renamed = variant(tmp_path, Skip.RENAMES, {"report.py": "print(len(orders.lines))\n"})
 
         assert renamed == {}
+
+    def test_keeps_dunder_names_and_test_functions(self, tmp_path):
+        source = '__all__ = ["total"]\n\n\ndef test_total():\n    total = 1\n    assert total\n'
+
+        renamed = variant(tmp_path, Skip.RENAMES, {"test_total.py": source})
+
+        assert renamed == {
+            "test_total.py": '__all__ = ["total"]\n\n\ndef test_total():\n'
+            "    name_1 = 1\n    assert name_1\n"
+        }
 
 
 class TestComments:

@@ -67,6 +67,14 @@ class TestPatternRuleCheck:
 
         assert diagnostics == []
 
+    def test_rule_left_out_of_include_reports_nothing(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\nbreakpoint()\n")
+        ruleset = packaged_ruleset(repo.root, RulesetConfig(include=("no-print",)))
+
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["a.py"])
+
+        assert diagnostics == [make_diagnostic(rule="example/python/no-print")]
+
     def test_overridden_severity_applies(self, repo, make_diagnostic):
         repo.write("a.py", "breakpoint()\n")
         selection = RulesetConfig(rules={"no-breakpoint": RuleOverride(severity=Severity.ERROR)})

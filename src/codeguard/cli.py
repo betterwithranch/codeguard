@@ -45,7 +45,8 @@ def main() -> int:
     review_command.add_argument(
         "--dry-run",
         action="store_true",
-        help="List the judge calls the review would make, without calling Claude.",
+        help="Run the pattern rules and list the judge calls the review would make, "
+        "without calling Claude.",
     )
     review_command.set_defaults(run=_review)
 
@@ -117,8 +118,12 @@ def _configure_telemetry() -> None:
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
     if args.dry_run:
-        Rules(working_tree, latest=args.latest).plan(_scope(working_tree, args)).write(sys.stdout)
-        return _EXIT_PASSED
+        rules = Rules(working_tree, latest=args.latest)
+        scope = _scope(working_tree, args)
+        result = rules.check_patterns(scope)
+        result.write(sys.stdout)
+        rules.plan(scope).write(sys.stdout)
+        return _EXIT_FAILED if result.blocks else _EXIT_PASSED
     with exclusive_lock(working_tree.git_path(_REVIEW_LOCK)):
         scope = _scope(working_tree, args)
         with logfire.span(

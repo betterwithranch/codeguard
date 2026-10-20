@@ -157,6 +157,7 @@ change_kinds:
     kind: raise_statement
 definitions:
   kind: identifier
+  not: {regex: "^(__.+__|test_.*)$"}
   any:
     - inside: {kind: function_definition, field: name}
     - inside: {kind: class_definition, field: name}

@@ -13,10 +13,10 @@ from codeguard.config.pattern_binding_config import PatternBindingsConfig
 from codeguard.config.ruleset_config import RulesetConfig
 
 PATTERN_RULE_DIR = "rules/pattern"
-PATTERN_TEST_DIR = "rule-tests/pattern"
 GATE_DIR = "gates"
-GATE_TEST_DIR = "rule-tests/gates"
-TRIGGER_TEST_DIR = "rule-tests/triggers"
+RULE_TEST_DIR = "rule-tests"
+SNAPSHOT_DIR = f"{RULE_TEST_DIR}/__snapshots__"
+LEGACY_PATTERN_TEST_DIR = f"{RULE_TEST_DIR}/pattern"
 JUDGE_EVAL_DIR = "rule-evals"
 BINDINGS_DIR = "bindings"
 SKILLS_DIR = "skills"

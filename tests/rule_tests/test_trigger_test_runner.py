@@ -3,6 +3,8 @@ import pytest
 from codeguard.config import RulesetLoader
 from codeguard.rule_tests import RuleTestResult, TriggerTestRunner
 
+EVAL_FILE = ".codeguard/rule-evals/enum-usage-eval.yml"
+
 
 @pytest.fixture
 def enum_rule(repo):
@@ -20,13 +22,17 @@ def enum_rule(repo):
     )
 
 
+def write_eval(repo, judge_eval: str) -> None:
+    repo.write(EVAL_FILE, judge_eval)
+
+
 @pytest.mark.usefixtures("enum_rule")
 class TestTriggerTestRunner:
-    def test_triggered_case_whose_change_touches_a_gate_passes(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+    def test_invalid_case_whose_change_touches_a_gate_passes(self, repo):
+        write_eval(
+            repo,
             "id: enum-usage\n"
-            "triggered:\n"
+            "invalid:\n"
             "  - before: |\n"
             "      label = status.name\n"
             "    after: |\n"
@@ -37,13 +43,11 @@ class TestTriggerTestRunner:
 
         assert result == RuleTestResult()
 
-    def test_triggered_case_whose_change_misses_the_triggers_fails_with_the_touched_kinds(
-        self, repo
-    ):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+    def test_invalid_case_whose_change_misses_the_triggers_fails_with_the_touched_kinds(self, repo):
+        write_eval(
+            repo,
             "id: enum-usage\n"
-            "triggered:\n"
+            "invalid:\n"
             "  - before: |\n"
             "      label = status.value\n"
             "      count = 1\n"
@@ -56,31 +60,28 @@ class TestTriggerTestRunner:
 
         assert result == RuleTestResult(
             problems=(
-                ".codeguard/rule-tests/triggers/enum-usage-test.yml triggered case 1: enum-usage "
+                f"{EVAL_FILE} invalid case 1: enum-usage "
                 "triggers definition-added-or-removed, gate:enum-value miss the change, which "
                 "touches code, module-statement, number-literal",
             ),
         )
 
     def test_skipped_case_whose_change_touches_a_gate_fails(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
-            "id: enum-usage\nskipped:\n  - after: |\n      label = status.value\n",
-        )
+        write_eval(repo, "id: enum-usage\nskipped:\n  - after: |\n      label = status.value\n")
 
         result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
         assert result == RuleTestResult(
             problems=(
-                ".codeguard/rule-tests/triggers/enum-usage-test.yml skipped case 1: enum-usage "
+                f"{EVAL_FILE} skipped case 1: enum-usage "
                 "triggers definition-added-or-removed, gate:enum-value fire on the change, which "
                 "touches attribute-access, code, gate:enum-value, module-statement",
             ),
         )
 
     def test_skipped_case_whose_change_misses_the_triggers_passes(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+        write_eval(
+            repo,
             "id: enum-usage\n"
             "skipped:\n"
             "  - before: |\n"
@@ -93,13 +94,30 @@ class TestTriggerTestRunner:
 
         assert result == RuleTestResult()
 
-    def test_triggered_case_whose_removed_function_touches_definition_added_or_removed_passes(
+    def test_valid_case_passes_whether_or_not_the_triggers_fire(self, repo):
+        write_eval(
+            repo,
+            "id: enum-usage\n"
+            "valid:\n"
+            "  - after: |\n"
+            "      label = status.value\n"
+            "  - before: |\n"
+            "      count = 1\n"
+            "    after: |\n"
+            "      count = 2\n",
+        )
+
+        result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert result == RuleTestResult()
+
+    def test_invalid_case_whose_removed_function_touches_definition_added_or_removed_passes(
         self, repo
     ):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+        write_eval(
+            repo,
             "id: enum-usage\n"
-            "triggered:\n"
+            "invalid:\n"
             "  - before: |\n"
             "      def total():\n"
             "          return 1\n"
@@ -115,10 +133,10 @@ class TestTriggerTestRunner:
         assert result == RuleTestResult()
 
     def test_case_file_outside_the_binding_paths_fails(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+        write_eval(
+            repo,
             "id: enum-usage\n"
-            "triggered:\n"
+            "valid:\n"
             "  - file: tests/test_status.py\n"
             "    after: |\n"
             "      label = status.value\n",
@@ -128,16 +146,15 @@ class TestTriggerTestRunner:
 
         assert result == RuleTestResult(
             problems=(
-                ".codeguard/rule-tests/triggers/enum-usage-test.yml triggered case 1: "
-                "tests/test_status.py is outside the enum-usage paths",
+                f"{EVAL_FILE} valid case 1: tests/test_status.py is outside the enum-usage paths",
             ),
         )
 
     def test_case_without_a_change_fails(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml",
+        write_eval(
+            repo,
             "id: enum-usage\n"
-            "triggered:\n"
+            "invalid:\n"
             "  - before: |\n"
             "      label = status.value\n"
             "    after: |\n"
@@ -147,27 +164,18 @@ class TestTriggerTestRunner:
         result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
         assert result == RuleTestResult(
-            problems=(
-                ".codeguard/rule-tests/triggers/enum-usage-test.yml triggered case 1: "
-                "the case changes no code in module.py",
-            ),
+            problems=(f"{EVAL_FILE} invalid case 1: the case changes no code in module.py",),
         )
 
-    def test_test_for_an_unknown_rule_fails(self, repo):
-        repo.write(
-            ".codeguard/rule-tests/triggers/enum-usage-test.yml", "id: enum-usag\ntriggered: []\n"
-        )
+    def test_eval_for_an_unknown_rule_fails(self, repo):
+        write_eval(repo, "id: enum-usag\ninvalid: []\n")
 
         result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
-        assert result == RuleTestResult(
-            problems=(
-                ".codeguard/rule-tests/triggers/enum-usage-test.yml: no judge rule enum-usag",
-            )
-        )
+        assert result == RuleTestResult(problems=(f"{EVAL_FILE}: no judge rule enum-usag",))
 
 
-def test_ruleset_without_trigger_tests_passes(repo):
+def test_ruleset_without_evals_passes(repo):
     result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
     assert result == RuleTestResult()

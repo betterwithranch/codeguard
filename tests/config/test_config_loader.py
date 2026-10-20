@@ -56,6 +56,13 @@ class TestConfigLoader:
 
         assert ConfigLoader(repo.root).load().review_time_limit_minutes == 10
 
+    def test_env_var_names_the_config_file_to_load(self, repo, monkeypatch):
+        repo.write(CONFIG, "review_time_limit_minutes: 10\n")
+        repo.write("codeguard.local.yaml", "review_time_limit_minutes: 20\n")
+        monkeypatch.setenv("CODEGUARD_CONFIG", "codeguard.local.yaml")
+
+        assert ConfigLoader(repo.root).load().review_time_limit_minutes == 20
+
     def test_loads_a_path_package(self, repo):
         repo.write("rules/codeguard-package.yaml", "name: example\nrulesets: [python]\n")
         repo.write(
@@ -208,6 +215,19 @@ class TestRulesetLoader:
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n  gates.fixture: a change kind has this name"
+        )
+
+    def test_gate_with_a_pattern_rule_id_is_an_error(self, repo):
+        repo.write(
+            ".codeguard/gates/no-print.yml",
+            "id: no-print\nlanguage: python\nrule:\n  pattern: print($$$A)\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n  gates.no-print: a pattern rule has this id"
         )
 
     def test_project_without_bindings_has_none(self, repo):

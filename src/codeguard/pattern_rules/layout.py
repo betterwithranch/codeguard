@@ -1,14 +1,13 @@
 import tempfile
-from collections.abc import Iterator
-from contextlib import contextmanager
+from collections.abc import Iterator, Sequence
+from contextlib import AbstractContextManager, contextmanager
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
 
 import yaml
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import GATE_DIR, GATE_TEST_DIR, PATTERN_RULE_DIR, PATTERN_TEST_DIR
+from codeguard.config import GATE_DIR, LEGACY_PATTERN_TEST_DIR, PATTERN_RULE_DIR, RULE_TEST_DIR
 
 
 @dataclass(frozen=True)
@@ -16,32 +15,38 @@ class Layout:
     root: Path
     ruleset: Path
     ast_grep: AstGrep = AstGrep()
-    rule_dir_name: str = PATTERN_RULE_DIR
-    test_dir_name: str = PATTERN_TEST_DIR
-
-    @classmethod
-    def gates(cls, root: Path, ruleset: Path, ast_grep: AstGrep) -> Self:
-        return cls(root, ruleset, ast_grep, GATE_DIR, GATE_TEST_DIR)
 
     @property
     def rule_dir(self) -> Path:
-        return self.ruleset / self.rule_dir_name
+        return self.ruleset / PATTERN_RULE_DIR
 
     @property
-    def test_dir(self) -> Path:
-        return self.ruleset / self.test_dir_name
+    def test_dirs(self) -> list[Path]:
+        candidates = (self.ruleset / RULE_TEST_DIR, self.ruleset / LEGACY_PATTERN_TEST_DIR)
+        return [directory for directory in candidates if directory.is_dir()]
+
+    @property
+    def tested_rule_dirs(self) -> list[Path]:
+        candidates = (self.rule_dir, self.ruleset / GATE_DIR)
+        return [directory for directory in candidates if directory.is_dir()]
 
     def has_rules(self) -> bool:
         return self.rule_dir.is_dir()
 
     def has_tests(self) -> bool:
-        return self.has_rules() and self.test_dir.is_dir()
+        return bool(self.tested_rule_dirs) and bool(self.test_dirs)
+
+    def scan_config(self) -> AbstractContextManager[Path]:
+        return self._config([self.rule_dir])
+
+    def test_config(self) -> AbstractContextManager[Path]:
+        return self._config(self.tested_rule_dirs)
 
     @contextmanager
-    def config(self) -> Iterator[Path]:
+    def _config(self, rule_dirs: Sequence[Path]) -> Iterator[Path]:
         settings = {
-            "ruleDirs": [str(self.rule_dir)],
-            "testConfigs": [{"testDir": str(self.test_dir)}],
+            "ruleDirs": [str(directory) for directory in rule_dirs],
+            "testConfigs": [{"testDir": str(directory)} for directory in self.test_dirs],
         }
         with tempfile.TemporaryDirectory() as directory:
             config = Path(directory) / "sgconfig.yml"

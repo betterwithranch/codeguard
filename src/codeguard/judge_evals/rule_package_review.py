@@ -1,13 +1,11 @@
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
-from codeguard.config import JUDGE_EVAL_DIR, RulesetLoader
-from codeguard.judge_evals.judge_eval import JudgeEval
-from codeguard.judge_evals.judge_eval_runner import EVAL_FILE_GLOB
+from codeguard.config import RulesetLoader
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.judge_evals.rule_review import RuleReview
 from codeguard.review import Bindings
-from codeguard.rule_tests import RuleTestResult
+from codeguard.rule_tests import JudgeEval, RuleTestResult
 
 
 @dataclass(frozen=True)
@@ -23,8 +21,8 @@ class RulePackageReview:
             return RuleTestResult()
         evaluated = {
             judge_eval.id
-            for file in sorted((ruleset.root / JUDGE_EVAL_DIR).glob(EVAL_FILE_GLOB))
-            if (judge_eval := JudgeEval.load(file)).invalid
+            for _, judge_eval in JudgeEval.in_ruleset(ruleset.root)
+            if judge_eval.invalid
         }
         uncovered = [
             f"{binding.skill.name}: no eval with an invalid case"

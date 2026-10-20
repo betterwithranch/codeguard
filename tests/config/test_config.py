@@ -202,6 +202,12 @@ class TestRulesetConfig:
 
         assert messages(error) == ["Value error, excluded rules are also overridden: no-print"]
 
+    def test_include_with_exclude_is_an_error(self):
+        with pytest.raises(ValidationError) as error:
+            RulesetConfig.model_validate({"include": ["no-print"], "exclude": ["no-breakpoint"]})
+
+        assert messages(error) == ["Value error, set include or exclude, not both"]
+
     def test_override_replaces_only_the_fields_it_sets(self, tmp_path):
         skill = write_skill(tmp_path)
         bindings = BindingsConfig.model_validate(

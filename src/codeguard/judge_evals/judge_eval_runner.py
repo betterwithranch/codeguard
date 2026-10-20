@@ -7,16 +7,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import JUDGE_EVAL_DIR, ChangeKind, RulesetLoader, Skip
+from codeguard.config import ChangeKind, RulesetLoader, Skip
 from codeguard.judge_evals.code_variants import CodeVariants
 from codeguard.judge_evals.judge_case import JudgeCase
-from codeguard.judge_evals.judge_eval import JudgeEval
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings, JudgeRequest, Verdict
-from codeguard.rule_tests import RuleTestResult
+from codeguard.rule_tests import JudgeEval, NumberedCase, Outcome, RuleTestResult
 from codeguard.syntax import SyntaxScanner
 
-EVAL_FILE_GLOB = "*-eval.yml"
 _VARIANT_DESCRIPTIONS = {
     Skip.RENAMES: "with its names renamed",
     Skip.COMMENTS: "without comments",
@@ -29,7 +27,7 @@ _SKIPPED_CHANGES = {Skip.RENAMES: "names", Skip.COMMENTS: "comments", Skip.IMPOR
 class _CaseRun:
     binding: Binding
     case: JudgeCase
-    path: Path
+    name: str
     directory: Path
     variant: Skip | None
     judges: JudgeFactory
@@ -37,8 +35,6 @@ class _CaseRun:
     scanner: SyntaxScanner
 
     def problem(self, confidence_threshold: float) -> str | None:
-        if not (self.directory / self.case.file).is_file():
-            return "no such file"
         judge = self.judges(self.directory, self.binding.model)
         verdict = judge.judge(JudgeRequest(self.binding.skill, self.case.file))
         return self.case.problem(verdict, confidence_threshold) or self._trigger_problem(
@@ -81,8 +77,6 @@ class _Variants:
     written: dict[tuple[Path, Skip], _Variant] = field(default_factory=dict)
 
     def of_case(self, binding: Binding, directory: Path, file: str) -> list[tuple[Skip, Path]]:
-        if not directory.is_dir():
-            return []
         variants = ((skip, self._variant(directory, skip)) for skip in binding.skips)
         return [(skip, variant.directory) for skip, variant in variants if file in variant.changed]
 
@@ -112,12 +106,9 @@ class JudgeEvalRunner:
     confidence_threshold: float
     ast_grep: AstGrep = AstGrep()
 
-    @property
-    def eval_dir(self) -> Path:
-        return self.ruleset.root / JUDGE_EVAL_DIR
-
     def run(self) -> RuleTestResult:
-        if not self.eval_dir.is_dir():
+        evals = JudgeEval.in_ruleset(self.ruleset.root)
+        if not evals:
             return RuleTestResult()
         ruleset = self.ruleset.load()
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
@@ -126,15 +117,15 @@ class JudgeEvalRunner:
         with ExitStack() as stack:
             variants = _Variants(self.ast_grep, stack)
             case_runs: list[_CaseRun] = []
-            for file in sorted(self.eval_dir.glob(EVAL_FILE_GLOB)):
-                judge_eval = JudgeEval.load(file)
+            for file, judge_eval in evals:
+                where = file.relative_to(self.root)
                 binding = bindings.get(judge_eval.id)
                 if binding is None:
-                    problems.append(f"{file.relative_to(self.root)}: no judge rule {judge_eval.id}")
+                    problems.append(f"{where}: no judge rule {judge_eval.id}")
                     continue
-                directory = self.eval_dir / judge_eval.id
-                for case in judge_eval.cases():
-                    case_runs.extend(self._case_runs(binding, directory, case, variants, scanner))
+                for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID):
+                    name = f"{where} {case.name}"
+                    case_runs.extend(self._case_runs(binding, case, name, variants, scanner))
             problems.extend(self._problems(case_runs))
         return RuleTestResult(problems=tuple(problems))
 
@@ -143,25 +134,26 @@ class JudgeEvalRunner:
             return []
         with ThreadPoolExecutor(max_workers=len(case_runs)) as executor:
             found = list(zip(case_runs, executor.map(self._problem, case_runs), strict=True))
-        failed = {run.path for run, problem in found if problem and run.variant is None}
+        failed = {run.name for run, problem in found if problem and run.variant is None}
         return [
             problem
             for run, problem in found
-            if problem and not (run.variant is not None and run.path in failed)
+            if problem and not (run.variant is not None and run.name in failed)
         ]
 
     def _case_runs(
         self,
         binding: Binding,
-        directory: Path,
-        case: JudgeCase,
+        case: NumberedCase,
+        name: str,
         variants: _Variants,
         scanner: SyntaxScanner,
     ) -> list[_CaseRun]:
-        path = directory / case.file
-        sources = [(None, directory), *variants.of_case(binding, directory, case.file)]
+        directory = _written(variants.stack, case)
+        judged = JudgeCase(file=case.edit.file, violates=case.outcome == Outcome.INVALID)
+        sources = [(None, directory), *variants.of_case(binding, directory, judged.file)]
         return [
-            _CaseRun(binding, case, path, source, variant, judges, run, scanner)
+            _CaseRun(binding, judged, name, source, variant, judges, run, scanner)
             for variant, source in sources
             for run, judges in enumerate(self.runs, start=1)
         ]
@@ -170,7 +162,7 @@ class JudgeEvalRunner:
         problem = case_run.problem(self.confidence_threshold)
         if problem is None:
             return None
-        where = str(case_run.path.relative_to(self.root))
+        where = case_run.name
         if case_run.variant is not None:
             where += f" {_VARIANT_DESCRIPTIONS[case_run.variant]}"
         if len(self.runs) > 1:
@@ -183,3 +175,11 @@ class JudgeEvalRunner:
                 f"add {case_run.variant} to disable_skips in its binding."
             )
         return message
+
+
+def _written(stack: ExitStack, case: NumberedCase) -> Path:
+    directory = Path(stack.enter_context(tempfile.TemporaryDirectory())) / case.directory
+    file = directory / case.edit.file
+    file.parent.mkdir(parents=True)
+    file.write_text(case.edit.after)
+    return directory

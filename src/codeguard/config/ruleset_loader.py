@@ -1,3 +1,4 @@
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path, PurePath
 from typing import Self
@@ -9,6 +10,7 @@ from codeguard.config.bindings_config import BindingsConfig
 from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE
+from codeguard.config.gate_rule import GateRule
 from codeguard.config.lock import LOCK_FILE
 from codeguard.config.pattern_binding_config import PatternBindingsConfig
 from codeguard.config.ruleset import BINDINGS_DIR, Ruleset
@@ -66,10 +68,24 @@ class RulesetLoader:
             selection=self.selection,
             pattern_bindings=pattern_bindings,
         )
+        try:
+            gates = ruleset.gates()
+        except ValidationError as error:
+            raise ConfigError.invalid(self.root, error, prefix="gates") from error
         self._raise_problems(
-            [*self._unbound_pattern_rules(ruleset), *self._unknown_triggers(ruleset)]
+            [
+                *self._unbound_pattern_rules(ruleset),
+                *self._unknown_triggers(ruleset, gates),
+                *self._shared_ids(ruleset, gates),
+            ]
         )
         return ruleset
+
+    def _shared_ids(self, ruleset: Ruleset, gates: Mapping[str, GateRule]) -> list[str]:
+        if not gates:
+            return []
+        shared = sorted(ruleset.pattern_rule_ids() & gates.keys())
+        return [f"gates.{gate}: a pattern rule has this id" for gate in shared]
 
     def _unbound_pattern_rules(self, ruleset: Ruleset) -> list[str]:
         if not ruleset.pattern_bindings.root:
@@ -81,13 +97,9 @@ class RulesetLoader:
             if binding.rule not in rules
         ]
 
-    def _unknown_triggers(self, ruleset: Ruleset) -> list[str]:
+    def _unknown_triggers(self, ruleset: Ruleset, gates: Mapping[str, GateRule]) -> list[str]:
         if not ruleset.bindings.root:
             return []
-        try:
-            gates = ruleset.gates()
-        except ValidationError as error:
-            raise ConfigError.invalid(self.root, error, prefix="gates") from error
         shadowed = [
             f"gates.{gate}: a change kind has this name" for gate in gates if gate in ChangeKind
         ]

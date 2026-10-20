@@ -13,8 +13,8 @@ from codeguard.file_lock import exclusive_lock
 
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
 BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
-NO_PRINT_TEST = ".codeguard/rule-tests/pattern/no-print-test.yml"
-NO_PRINT_SNAPSHOT = ".codeguard/rule-tests/pattern/__snapshots__/no-print-snapshot.yml"
+NO_PRINT_TEST = ".codeguard/rule-tests/no-print-test.yml"
+NO_PRINT_SNAPSHOT = ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml"
 TRACEBACK_HEADING = "Traceback (most recent call last):\n"
 PASSING_NO_PRINT_TEST_REPORT = (
     "Running 1 tests\n"
@@ -398,6 +398,19 @@ class TestReviewDryRun:
         )
         assert result.returncode == 0
 
+    def test_pattern_rule_error_is_printed_and_exits_1(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == (
+            f"{make_diagnostic()}\nJudge calls: 0 (0 cached, 0 to Claude), 0 skipped by triggers\n"
+        )
+        assert result.stderr == ""
+        assert result.returncode == 1
+
 
 class TestConfigCommand:
     def test_prints_the_default_without_a_config(self, repo):
@@ -476,14 +489,16 @@ class TestReviewWithVersionedPackages:
 
 
 class TestEvalCommand:
-    def test_package_repo_evaluates_judge_rules(self, tmp_path, tmp_path_factory):
+    def test_invalid_case_below_the_confidence_threshold_is_reported_and_exits_1(
+        self, tmp_path, tmp_path_factory
+    ):
         package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
         write_package(package)
         package.write(
             "python/rule-evals/responsibility-placement-eval.yml",
-            "id: responsibility-placement\ninvalid: [invoice.py]\n",
+            "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
+            "      x = 1\n",
         )
-        package.write("python/rule-evals/responsibility-placement/invoice.py", "x = 1\n")
         violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "note": "Move it."}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
@@ -500,7 +515,7 @@ class TestEvalCommand:
         )
 
         assert result.stderr == (
-            "python/rule-evals/responsibility-placement/invoice.py: "
+            "python/rule-evals/responsibility-placement-eval.yml invalid case 1: "
             "responsibility-placement expected a violation with confidence 0.90, got:\n"
             "  line 1 (0.40): Move it.\n"
         )
@@ -530,7 +545,7 @@ class TestTestCommand:
     def test_unexpected_ruleset_entry_exits_2(self, tmp_path):
         package = GitRepo.init(tmp_path.resolve())
         write_package(package)
-        package.write("python/rule-tests/judge/no-print-test.yml", "id: no-print\n")
+        package.write("python/rule-tests/triggers/no-print-test.yml", "id: no-print\n")
 
         result = subprocess.run(
             [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
@@ -539,7 +554,7 @@ class TestTestCommand:
         _, traceback = result.stderr.split(TRACEBACK_HEADING)
         assert traceback.splitlines()[-2:] == [
             f"codeguard.config.config_error.ConfigError: {package.root}/python is invalid:",
-            "  unexpected rule-tests/judge",
+            "  unexpected rule-tests/triggers",
         ]
         assert result.returncode == 2
 
@@ -547,7 +562,7 @@ class TestTestCommand:
         package = GitRepo.init(tmp_path.resolve())
         write_package(package)
         package.write(
-            "python/rule-tests/pattern/no-print-test.yml",
+            "python/rule-tests/no-print-test.yml",
             "id: no-print\nvalid:\n  - logging.info(1)\n",
         )
 
@@ -578,7 +593,7 @@ class TestTestCommand:
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stderr == (
-            ".codeguard/rule-tests/pattern/__snapshots__/no-print-snapshot.yml: stale snapshot "
+            ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml: stale snapshot "
             "entries for no-print. Run codeguard test --update-all.\n"
         )
         assert result.returncode == 1
@@ -629,7 +644,7 @@ class TestTestCommand:
             "id: enum-value\nlanguage: python\nrule:\n  pattern: $X.value\n",
         )
         repo.write(
-            ".codeguard/rule-tests/gates/enum-value-test.yml",
+            ".codeguard/rule-tests/enum-value-test.yml",
             "id: enum-value\nvalid:\n  - status.name\ninvalid:\n  - status.value\n",
         )
 
@@ -637,10 +652,10 @@ class TestTestCommand:
             [CODEGUARD, "test", "--update-all"], cwd=repo.root, capture_output=True, text=True
         )
 
-        assert (repo.root / ".codeguard/rule-tests/gates/__snapshots__").is_dir()
+        assert (repo.root / ".codeguard/rule-tests/__snapshots__/enum-value-snapshot.yml").is_file()
         assert result.returncode == 0
 
-    def test_trigger_test_whose_change_misses_the_triggers_exits_1(self, repo, make_skill):
+    def test_eval_case_whose_change_misses_the_triggers_exits_1(self, repo, make_skill):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
         repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
         repo.write(
@@ -648,14 +663,14 @@ class TestTestCommand:
             'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [comment]\n',
         )
         repo.write(
-            ".codeguard/rule-tests/triggers/placement-test.yml",
-            "id: placement\ntriggered:\n  - after: |\n      count = 1\n",
+            ".codeguard/rule-evals/placement-eval.yml",
+            "id: placement\ninvalid:\n  - after: |\n      count = 1\n",
         )
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stderr == (
-            ".codeguard/rule-tests/triggers/placement-test.yml triggered case 1: placement "
+            ".codeguard/rule-evals/placement-eval.yml invalid case 1: placement "
             "triggers comment miss the change, which touches code, module-statement, "
             "number-literal\n"
         )

@@ -37,6 +37,7 @@ class RulesetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     severity: Severity | None = None
+    include: tuple[str, ...] | None = None
     exclude: tuple[str, ...] = ()
     rules: dict[str, RuleOverride] = {}
 
@@ -47,11 +48,19 @@ class RulesetConfig(BaseModel):
             raise ValueError(f"excluded rules are also overridden: {', '.join(overridden)}")
         return self
 
+    @model_validator(mode="after")
+    def validate_include_or_exclude(self) -> Self:
+        if self.include is not None and self.exclude:
+            raise ValueError("set include or exclude, not both")
+        return self
+
     @property
     def rule_ids(self) -> tuple[str, ...]:
-        return (*self.exclude, *self.rules)
+        return (*(self.include or ()), *self.exclude, *self.rules)
 
     def excludes(self, rule: str) -> bool:
+        if self.include is not None:
+            return rule not in self.include
         return rule in self.exclude
 
     def apply(self, rule: str, binding: BindingConfig) -> BindingConfig:

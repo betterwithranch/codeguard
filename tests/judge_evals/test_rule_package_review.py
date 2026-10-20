@@ -7,6 +7,7 @@ from codeguard.review import Verdict
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
+INVALID_EVAL = "id: enum-usage\ninvalid:\n  - after: |\n      ship('shipped')\n"
 
 
 @pytest.fixture
@@ -33,15 +34,15 @@ class TestRulePackageReview:
         assert result == RuleTestResult(problems=("enum-usage: no eval with an invalid case",))
 
     def test_judge_rule_with_an_invalid_case_passes(self, repo):
-        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "id: enum-usage\ninvalid: [a.py]\n")
+        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)
         judges = RecordingJudges(RecordingJudge())
 
         result = RulePackageReview(RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert result == RuleTestResult()
 
-    def test_reviews_the_skill_with_its_triggers_and_gates(self, repo):
-        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "id: enum-usage\ninvalid: [a.py]\n")
+    def test_reviews_the_rule_file_with_the_rule_review_skill(self, repo):
+        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)
         judge = RecordingJudge()
 
         RulePackageReview(RulesetLoader.local(repo.root), RecordingJudges(judge), 0.9).run()
@@ -49,8 +50,8 @@ class TestRulePackageReview:
         [request] = judge.received
         assert (request.skill.name, request.file) == ("rule-review", "rule.md")
 
-    def test_confident_review_finding_fails_the_rule(self, repo, make_violation):
-        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "id: enum-usage\ninvalid: [a.py]\n")
+    def test_confident_violation_fails_the_rule(self, repo, make_violation):
+        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)
         finding = make_violation(file="rule.md", message="No gate matches enum members.")
         judges = RecordingJudges(RecordingJudge(Verdict(violations=(finding,))))
 

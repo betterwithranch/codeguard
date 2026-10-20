@@ -33,7 +33,8 @@ BROKEN_RULE_ERROR = (
 
 REQUIRED_FIXES = (
     "These errors are required fixes, not suggestions. Fix the code. If the fix needs a "
-    "decision, ask the user. Don't change .codeguard/config.yaml to silence them."
+    "decision, ask the user. Don't change .codeguard/config.yaml to silence them. Leave the "
+    "warnings: CI logs them for review, so don't fix them or raise them with the user."
 )
 ALREADY_REPORTED = "codeguard already reported these errors, so the stop goes through."
 

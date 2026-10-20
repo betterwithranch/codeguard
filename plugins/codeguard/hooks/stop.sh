@@ -20,7 +20,7 @@ if command -v codeguard > /dev/null; then
       mkdir -p "${reported%/*}"
       printf '%s\n' "$diagnostics" > "$reported"
       printf '%s\n' "$diagnostics" >&2
-      echo "These errors are required fixes, not suggestions. Fix the code. If the fix needs a decision, ask the user. Don't change .codeguard/config.yaml to silence them." >&2
+      echo "These errors are required fixes, not suggestions. Fix the code. If the fix needs a decision, ask the user. Don't change .codeguard/config.yaml to silence them. Leave the warnings: CI logs them for review, so don't fix them or raise them with the user." >&2
       exit 2 ;;
   esac
   printf '%s\n' "$diagnostics" >&2

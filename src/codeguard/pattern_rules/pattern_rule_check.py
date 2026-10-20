@@ -35,7 +35,10 @@ class PatternRuleCheck:
     def _options(self) -> list[str]:
         selection = self.ruleset.selection
         ruleset_severity = [] if selection.severity is None else [f"--{selection.severity}"]
-        excluded = [f"--off={rule}" for rule in selection.exclude]
+        candidates = (
+            selection.exclude if selection.include is None else self.ruleset.pattern_rule_ids()
+        )
+        excluded = [f"--off={rule}" for rule in sorted(candidates) if selection.excludes(rule)]
         severities = [
             f"--{override.severity}={rule}"
             for rule, override in selection.rules.items()

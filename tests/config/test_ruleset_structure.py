@@ -9,10 +9,30 @@ def make_dirs(root, *paths: str) -> None:
 class TestRulesetStructure:
     def test_ruleset_layout_has_no_problems(self, tmp_path):
         make_dirs(
-            tmp_path, "rules/pattern", "rule-tests/pattern", "rule-evals", "bindings", "skills"
+            tmp_path,
+            "rules/pattern",
+            "gates",
+            "rule-tests/__snapshots__",
+            "rule-evals",
+            "bindings",
+            "skills",
         )
+        (tmp_path / "rule-tests/no-print-test.yml").write_text("id: no-print\n")
 
         assert RulesetStructure(tmp_path).problems() == []
+
+    def test_pattern_rule_tests_in_their_own_directory_have_no_problems(self, tmp_path):
+        make_dirs(tmp_path, "rules/pattern", "rule-tests/pattern/__snapshots__")
+
+        assert RulesetStructure(tmp_path).problems() == []
+
+    def test_rule_test_subdirectory_is_unexpected(self, tmp_path):
+        make_dirs(tmp_path, "rule-tests/gates", "rule-tests/triggers")
+
+        assert RulesetStructure(tmp_path).problems() == [
+            "unexpected rule-tests/gates",
+            "unexpected rule-tests/triggers",
+        ]
 
     def test_unknown_directory_is_unexpected(self, tmp_path):
         make_dirs(tmp_path, "rules/pattern", "checks")

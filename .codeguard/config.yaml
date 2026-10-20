@@ -1,6 +1,26 @@
 packages:
   - kind: versioned
     git: https://github.com/betterwithranch/codeguard-rules.git
-    version: ">=0.2,<1"
+    version: ">=0.4,<1"
     rulesets:
-      python: {}
+      python:
+        include:
+          - enum-usage
+          - all-only-in-init
+          - no-append-in-every-branch
+          - no-assert-in-fixtures
+          - no-assert-on-lookup-field
+          - no-bucket-module-names
+          - no-comments-in-tests
+          - no-constructed-test-constants
+          - no-default-constructor-fixtures
+          - no-del-param
+          - no-dict-round-trip-between-models
+          - no-field-tuple-asserts
+          - no-len-asserts
+          - no-manual-kwargs-check
+          - no-normalized-asserts
+          - no-pop-from-kwargs
+          - no-sleep-in-async-tests
+          - no-tuple-fixtures
+          - typed-dispatch-registries

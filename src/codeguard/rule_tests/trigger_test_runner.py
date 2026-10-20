@@ -6,10 +6,10 @@ from pathlib import Path
 from typing import Self
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import TRIGGER_TEST_DIR, ChangeKind, ConfigError, Ruleset, RulesetLoader
+from codeguard.config import ChangeKind, ConfigError, Ruleset, RulesetLoader
 from codeguard.review import Binding, Bindings
+from codeguard.rule_tests.judge_eval import JudgeEval, NumberedCase, Outcome
 from codeguard.rule_tests.rule_test_result import RuleTestResult
-from codeguard.rule_tests.trigger_test import TRIGGER_TEST_GLOB, TriggerCase, TriggerTest
 from codeguard.syntax import ChangeClassifier
 from codeguard.working_tree import ChangedLines, WorkingTree
 
@@ -17,24 +17,26 @@ from codeguard.working_tree import ChangedLines, WorkingTree
 @dataclass(frozen=True)
 class _CaseCheck:
     binding: Binding
-    case: TriggerCase
-    triggered: bool
+    case: NumberedCase
     name: str
     path: str
 
     def problem(self, changed: ChangedLines) -> str | None:
         rule = self.binding.skill.name
-        if not self.binding.files([self.case.file]):
-            return f"{self.name}: {self.case.file} is outside the {rule} paths"
+        file = self.case.edit.file
+        if not self.binding.files([file]):
+            return f"{self.name}: {file} is outside the {rule} paths"
         kinds = changed.kinds_of(self.path)
         if kinds is None:
-            return f"{self.name}: the case changes no code in {self.case.file}"
-        fired = self.binding.is_triggered(changed, self.path)
-        if fired == self.triggered:
+            return f"{self.name}: the case changes no code in {file}"
+        if self.case.outcome == Outcome.VALID:
+            return None
+        should_fire = self.case.outcome == Outcome.INVALID
+        if self.binding.is_triggered(changed, self.path) == should_fire:
             return None
         touched = ", ".join(sorted(kinds - {ChangeKind.ANY}))
         triggers = ", ".join(sorted(self.binding.triggers))
-        verb = "miss" if self.triggered else "fire on"
+        verb = "miss" if should_fire else "fire on"
         return f"{self.name}: {rule} triggers {triggers} {verb} the change, which touches {touched}"
 
 
@@ -44,51 +46,35 @@ class TriggerTestRunner:
     ruleset: RulesetLoader
     ast_grep: AstGrep = AstGrep()
 
-    @property
-    def test_dir(self) -> Path:
-        return self.ruleset.root / TRIGGER_TEST_DIR
-
     def run(self) -> RuleTestResult:
-        if not self.test_dir.is_dir():
+        evals = JudgeEval.in_ruleset(self.ruleset.root)
+        if not evals:
             return RuleTestResult()
         try:
             ruleset = self.ruleset.load()
         except ConfigError as error:
             return RuleTestResult(warnings=(f"trigger tests not run: {error}",))
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
-        tests = [
-            (file.relative_to(self.root), TriggerTest.load(file))
-            for file in sorted(self.test_dir.glob(TRIGGER_TEST_GLOB))
-        ]
+        named = [(file.relative_to(self.root), judge_eval) for file, judge_eval in evals]
         unknown = [
-            f"{where}: no judge rule {test.id}" for where, test in tests if test.id not in bindings
+            f"{where}: no judge rule {judge_eval.id}"
+            for where, judge_eval in named
+            if judge_eval.id not in bindings
         ]
         checks = [
-            check
-            for where, test in tests
-            if test.id in bindings
-            for check in _case_checks(where, test, bindings[test.id])
+            _CaseCheck(
+                bindings[judge_eval.id],
+                case,
+                name=f"{where} {case.name}",
+                path=f"{judge_eval.id}/{case.directory}/{case.edit.file}",
+            )
+            for where, judge_eval in named
+            if judge_eval.id in bindings
+            for case in judge_eval.cases()
         ]
         changed = _classify_changes(checks, self.ast_grep, ruleset)
         failed = [problem for check in checks if (problem := check.problem(changed))]
         return RuleTestResult(problems=(*unknown, *failed))
-
-
-def _case_checks(where: Path, test: TriggerTest, binding: Binding) -> list[_CaseCheck]:
-    return [
-        _CaseCheck(
-            binding,
-            case,
-            triggered,
-            name=f"{where} {outcome} case {number}",
-            path=f"{test.id}/{outcome}-{number}/{case.file}",
-        )
-        for triggered, outcome, cases in (
-            (True, "triggered", test.triggered),
-            (False, "skipped", test.skipped),
-        )
-        for number, case in enumerate(cases, start=1)
-    ]
 
 
 @dataclass(frozen=True)
@@ -135,10 +121,14 @@ def _classify_changes(
     with tempfile.TemporaryDirectory() as directory:
         repo = _ScratchRepo.init(Path(directory))
         repo.write(
-            {check.path: check.case.before for check in checks if check.case.before is not None}
+            {
+                check.path: check.case.edit.before
+                for check in checks
+                if check.case.edit.before is not None
+            }
         )
         repo.commit()
-        repo.write({check.path: check.case.after for check in checks})
+        repo.write({check.path: check.case.edit.after for check in checks})
         working_tree = WorkingTree(repo.root)
         classifier = ChangeClassifier.for_rulesets(ast_grep, [ruleset], working_tree)
         return classifier.classify(working_tree.changed_lines("HEAD"))

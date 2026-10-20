@@ -16,11 +16,11 @@ from codeguard.config.path_scope import PathScope
 from codeguard.config.pattern_binding_config import PatternBindingConfig, PatternBindingsConfig
 from codeguard.config.ruleset import (
     GATE_DIR,
-    GATE_TEST_DIR,
     JUDGE_EVAL_DIR,
+    LEGACY_PATTERN_TEST_DIR,
     PATTERN_RULE_DIR,
-    PATTERN_TEST_DIR,
-    TRIGGER_TEST_DIR,
+    RULE_TEST_DIR,
+    SNAPSHOT_DIR,
     Ruleset,
 )
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
@@ -33,13 +33,13 @@ __all__ = [
     "CONFIG_DIR",
     "CONFIG_FILE",
     "GATE_DIR",
-    "GATE_TEST_DIR",
     "JUDGE_EVAL_DIR",
+    "LEGACY_PATTERN_TEST_DIR",
     "LOCK_FILE",
     "PATTERN_RULE_DIR",
-    "PATTERN_TEST_DIR",
+    "RULE_TEST_DIR",
     "SKILL_FILE",
-    "TRIGGER_TEST_DIR",
+    "SNAPSHOT_DIR",
     "BindingConfig",
     "BindingsConfig",
     "ChangeKind",

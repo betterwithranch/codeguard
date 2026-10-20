@@ -124,6 +124,22 @@ class TestBindings:
 
         assert bindings == ()
 
+    def test_binding_left_out_of_include_is_dropped(self, tmp_path, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        selection = RulesetConfig(include=("another-rule",))
+
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])
+
+        assert bindings == ()
+
+    def test_included_binding_is_kept(self, tmp_path, make_binding, make_skill):
+        skill = write_skill(tmp_path, make_skill().text)
+        selection = RulesetConfig(include=(SKILL_NAME,))
+
+        bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])
+
+        assert bindings == (make_binding(rule=f"example/python/{SKILL_NAME}"),)
+
     def test_override_replaces_the_binding_fields(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
         override = RuleOverride(

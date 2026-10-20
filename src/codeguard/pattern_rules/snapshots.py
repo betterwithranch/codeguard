@@ -43,10 +43,8 @@ class Snapshots:
 
     @classmethod
     def load(cls, test_dir: Path) -> Self:
-        snapshot_dir = test_dir / _SNAPSHOT_DIR
-        paths = sorted(test_dir.rglob("*.y*ml"))
-        snapshot_paths = [path for path in paths if snapshot_dir in path.parents]
-        test_paths = [path for path in paths if path not in snapshot_paths]
+        snapshot_paths = sorted((test_dir / _SNAPSHOT_DIR).glob("*.y*ml"))
+        test_paths = sorted(test_dir.glob("*.y*ml"))
         tests = [
             _RuleTestFile.model_validate(yaml.safe_load(path.read_text())) for path in test_paths
         ]
