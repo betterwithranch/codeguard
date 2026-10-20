@@ -73,13 +73,13 @@ class TestConfigLoader:
     def test_loads_a_gemini_judge(self, repo):
         repo.write(
             CONFIG,
-            "judge:\n  provider: gemini\n  model: gemini-3.8-flash\n"
+            "judge:\n  provider: gemini\n  model: gemini-3.1-pro-preview\n"
             "  project: my-project\n  location: global\n",
         )
 
         assert ConfigLoader(repo.root).load().judge == JudgeConfig(
             provider=JudgeProvider.GEMINI,
-            model="gemini-3.8-flash",
+            model="gemini-3.1-pro-preview",
             project="my-project",
             location="global",
         )
@@ -92,7 +92,8 @@ class TestConfigLoader:
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
-            "  judge: Value error, the gemini provider needs a model, such as gemini-3.8-flash"
+            "  judge: Value error, the gemini provider needs a model, "
+            "such as gemini-3.1-pro-preview"
         )
 
     def test_claude_judge_with_a_project_is_an_error(self, repo):
@@ -102,9 +103,9 @@ class TestConfigLoader:
             ConfigLoader(repo.root).load()
 
     def test_judge_model_replaces_the_rule_model(self):
-        judge = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.8-flash")
+        judge = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
 
-        assert judge.model_for("claude-sonnet-5-5") == "gemini-3.8-flash"
+        assert judge.model_for("claude-sonnet-5-5") == "gemini-3.1-pro-preview"
 
     def test_rule_model_stays_without_a_judge_model(self):
         assert JudgeConfig().model_for("claude-haiku-5-5") == "claude-haiku-5-5"

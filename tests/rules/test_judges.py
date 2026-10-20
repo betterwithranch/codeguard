@@ -20,11 +20,11 @@ class TestJudges:
         assert cached.wrapped.warmup is uncached.warmup is judges.warmup
 
     def test_gemini_config_builds_gemini_judges_with_its_model(self, tmp_path):
-        config = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.8-flash")
+        config = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
         judges = Judges(config, store=Cache(tmp_path))
 
         judge = judges.uncached(tmp_path, "claude-sonnet-5-5")
 
         assert isinstance(judge, GeminiJudge)
-        assert judge.model == "gemini-3.8-flash"
+        assert judge.model == "gemini-3.1-pro-preview"
         assert judge.processes is judges.processes

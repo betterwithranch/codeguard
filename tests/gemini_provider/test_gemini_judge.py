@@ -17,7 +17,7 @@ from codeguard.review import (
     Verdict,
 )
 
-MODEL = "gemini-3.8-flash"
+MODEL = "gemini-3.1-pro-preview"
 VIOLATION = {
     "file": "a.py",
     "line": 1,

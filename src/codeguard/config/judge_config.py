@@ -20,7 +20,7 @@ class JudgeConfig(BaseModel):
     @model_validator(mode="after")
     def validate_provider_settings(self) -> Self:
         if self.provider is JudgeProvider.GEMINI and self.model is None:
-            raise ValueError("the gemini provider needs a model, such as gemini-3.8-flash")
+            raise ValueError("the gemini provider needs a model, such as gemini-3.1-pro-preview")
         if self.provider is JudgeProvider.CLAUDE_CLI and (self.project or self.location):
             raise ValueError("project and location apply to the gemini provider only")
         return self

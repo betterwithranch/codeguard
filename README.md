@@ -389,16 +389,19 @@ instead, set `judge` in `.codeguard/config.yaml`:
 
 ```yaml
 judge:
-  provider: gemini         # default: claude-cli
-  model: gemini-3.8-flash  # replaces every rule's model
-  project: my-project      # default: GOOGLE_CLOUD_PROJECT
-  location: global         # default: GOOGLE_CLOUD_LOCATION
+  provider: gemini                # default: claude-cli
+  model: gemini-3.1-pro-preview   # replaces every rule's model
+  project: my-project             # default: GOOGLE_CLOUD_PROJECT
+  location: global                # default: GOOGLE_CLOUD_LOCATION
 ```
 
 Gemini reads the working directory through read-only `read_file`, `grep` and `glob`
 tools, limited to the repository, and reports through a `submit_verdict` tool that
 takes the same verdict schema as Claude. Verdicts are cached per provider and model,
 so switching providers doesn't reuse Claude's verdicts.
+
+Use `gemini-3.1-pro-preview`, the Gemini model the judge evals were run against.
+Flash was unreliable in testing.
 
 codeguard signs in with Application Default Credentials. Set it up once per project:
 
@@ -474,7 +477,7 @@ after changing the judge's instructions, request, model or tools:
 ```sh
 uv run evals/judge_eval.py              # each case once
 uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
-uv run evals/judge_eval.py --gemini gemini-3.8-flash  # a Gemini model instead of Claude
+uv run evals/judge_eval.py --gemini gemini-3.1-pro-preview  # a Gemini model instead of Claude
 ```
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
