@@ -1,3 +1,5 @@
+import time
+from collections.abc import Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +16,7 @@ from codeguard.review import Deadline, JudgeError, JudgeRequest, Verdict
 
 _PROVIDER = "gemini"
 _MAX_TURNS = 25
+_REQUEST_LIMIT_SECONDS = 120
 _SUBMIT_VERDICT = types.FunctionDeclaration(
     name="submit_verdict",
     description="Report the violations in the file under review. Call it once, last.",
@@ -22,9 +25,9 @@ _SUBMIT_VERDICT = types.FunctionDeclaration(
 
 
 class GeminiModels(Protocol):
-    def generate_content(
+    def generate_content_stream(
         self, *, model: str, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> types.GenerateContentResponse: ...
+    ) -> Iterator[types.GenerateContentResponse]: ...
 
 
 class GeminiClient(Protocol):
@@ -40,6 +43,7 @@ class GeminiJudge:
     processes: AbstractContextManager[object]
     deadline: Deadline | None = None
     max_turns: int = _MAX_TURNS
+    request_limit_seconds: float = _REQUEST_LIMIT_SECONDS
 
     @property
     def identity(self) -> str:
@@ -86,12 +90,11 @@ class GeminiJudge:
     def _generate(
         self, instructions: str, contents: list[types.Content], tools: FileTools
     ) -> types.GenerateContentResponse:
-        http_options = None
+        limit = self.request_limit_seconds
         if self.deadline is not None:
-            remaining = self.deadline.remaining_seconds()
-            if remaining <= 0:
+            limit = min(limit, self.deadline.remaining_seconds())
+            if limit <= 0:
                 raise self.deadline.reached()
-            http_options = types.HttpOptions(timeout=int(remaining * 1000))
         config = types.GenerateContentConfig(
             system_instruction=instructions,
             tools=[types.Tool(function_declarations=[*tools.declarations, _SUBMIT_VERDICT])],
@@ -101,18 +104,56 @@ class GeminiJudge:
                 )
             ),
             automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            http_options=http_options,
+            # Streamed thought summaries keep bytes flowing while the model thinks, so proxies
+            # that drop a response slow to start don't cut long calls off.
+            thinking_config=types.ThinkingConfig(include_thoughts=True),
+            http_options=types.HttpOptions(timeout=int(limit * 1000)),
         )
         try:
-            return self.client.models.generate_content(
-                model=self.model, contents=contents, config=config
-            )
+            return _merged(list(self._stream(contents, config, time.monotonic() + limit)))
         except httpx.TimeoutException as error:
-            if self.deadline is None:
-                raise JudgeError(f"{self.model} timed out: {error}") from error
-            raise self.deadline.reached() from error
+            raise self._timed_out() from error
         except errors.APIError as error:
             raise JudgeError(f"{self.model} failed with {error.code}: {error.message}") from error
+
+    def _stream(
+        self, contents: list[types.Content], config: types.GenerateContentConfig, until: float
+    ) -> Iterator[types.GenerateContentResponse]:
+        chunks = self.client.models.generate_content_stream(
+            model=self.model, contents=contents, config=config
+        )
+        for chunk in chunks:
+            if time.monotonic() > until:
+                raise self._timed_out()
+            yield chunk
+
+    def _timed_out(self) -> JudgeError:
+        if self.deadline is not None and self.deadline.remaining_seconds() <= 0:
+            return self.deadline.reached()
+        return JudgeError(f"{self.model} took over {self.request_limit_seconds:g}s to answer.")
+
+
+def _merged(chunks: Sequence[types.GenerateContentResponse]) -> types.GenerateContentResponse:
+    candidates = [chunk.candidates[0] for chunk in chunks if chunk.candidates]
+    parts = [
+        part
+        for candidate in candidates
+        if candidate.content
+        for part in candidate.content.parts or []
+        if not part.thought or part.thought_signature
+    ]
+    usages = [chunk.usage_metadata for chunk in chunks if chunk.usage_metadata]
+    return types.GenerateContentResponse(
+        candidates=[
+            types.Candidate(
+                content=types.Content(role="model", parts=parts),
+                finish_reason=candidates[-1].finish_reason,
+            )
+        ]
+        if candidates
+        else [],
+        usage_metadata=usages[-1] if usages else None,
+    )
 
 
 def _reply(call: types.FunctionCall, result: str) -> types.Part:
