@@ -1,20 +1,30 @@
-# A judge rule runs only where its violations can be
+# Every violation a judge rule describes is inside code its triggers match
 
-The file under review describes one judge rule: its skill, the triggers in its binding,
-and the gates its rule package defines. The judge runs the skill on a changed file only
-when a changed line falls inside code that one of the triggers matches. A built-in
-change kind matches by syntax (`fixture`, `call`, `import`); a gate is an ast-grep rule.
+The file under review describes one judge rule. codeguard judges a changed file with the
+rule only when a changed line is inside code one of the rule's triggers matches. A trigger
+matches every line of each node its rule matches: a gate on a function matches every line
+of that function. A violation in code no trigger matches is never judged.
 
-Report a violation when:
+The file has four sections:
 
-- The skill judges a construct (an enum, a `Literal`, a fixture, a mock, a `Protocol`,
-  a loop, an import) and no trigger matches the code where that construct's violations
-  appear. Name the construct and the gate that would match it.
-- A trigger is `any`, `code`, `function-body` or `function-signature` where a narrower
-  gate would hold every violation the skill describes. Name the narrower gate.
-- A bullet of the skill can be checked by an ast-grep pattern or a type checker setting
-  alone. Name the bullet and the pattern or setting.
+- `Skill`: the convention the rule judges.
+- `Triggers`: each of the rule's triggers and what it matches.
+- `Other gates`: gates in the rule's package that are not triggers of this rule.
+- `Other change kinds`: built-in change kinds that are not triggers of this rule.
 
-Gate on where a violation appears, not on the rule's topic. A rule that wants enum
-members passed instead of bare literals needs a gate on literals, because the enum is
-defined in another file.
+Report each bullet or sentence of the skill that describes a violation no trigger matches:
+
+- `line`: the line of that bullet or sentence.
+- `message`: one line of code that breaks it and that no trigger matches, in backticks, and
+  the part of the skill it breaks.
+- `note`: the clause of the closest trigger that leaves the code out, then a gate from
+  `Other gates` or a change kind from `Other change kinds` that would match it, or "no gate
+  or change kind matches it".
+
+Also report a bullet that an ast-grep rule could check alone, without judgment. Its
+`message` names the bullet and the node kind and condition of that ast-grep rule.
+
+Judge each trigger by its definition in the file, not by its name. Report a bullet only
+when you can write the line of code. A violation's line can be outside the node the skill
+talks about: a rule that wants enum members passed instead of bare literals is broken at
+the literal, because the enum is defined in another file.
