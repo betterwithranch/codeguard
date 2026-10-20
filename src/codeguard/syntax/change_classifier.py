@@ -1,7 +1,11 @@
 import tempfile
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Self
 
+from codeguard.ast_grep import AstGrep
+from codeguard.config import Ruleset
 from codeguard.syntax.parsed_file import ParsedFile
 from codeguard.syntax.syntax_scanner import SyntaxScanner
 from codeguard.working_tree import ChangedLines, WorkingTree
@@ -11,6 +15,12 @@ from codeguard.working_tree import ChangedLines, WorkingTree
 class ChangeClassifier:
     scanner: SyntaxScanner
     working_tree: WorkingTree
+
+    @classmethod
+    def for_rulesets(
+        cls, ast_grep: AstGrep, rulesets: Iterable[Ruleset], working_tree: WorkingTree
+    ) -> Self:
+        return cls(SyntaxScanner.for_rulesets(ast_grep, rulesets), working_tree)
 
     def classify(self, scope: ChangedLines) -> ChangedLines:
         head = self.scanner.scan_files(self.working_tree.root, scope.files)

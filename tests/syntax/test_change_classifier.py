@@ -1,7 +1,7 @@
 from git_repo import GitRepo
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import ChangeKind, GateRule
+from codeguard.config import ChangeKind, GateRule, Ruleset
 from codeguard.syntax import ChangeClassifier, SyntaxScanner
 from codeguard.working_tree import WorkingTree
 
@@ -110,6 +110,25 @@ class TestChangeClassifier:
 
         assert kinds is not None
         assert "gate:enum-value" not in kinds
+
+    def test_for_rulesets_touches_a_rulesets_gate(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write(
+            "python/gates/enum-value.yml",
+            "id: enum-value\nlanguage: python\nrule:\n  pattern: $X.value\n",
+        )
+        git_repo.write("a.py", "label = status.name\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "label = status.value\n")
+        working_tree = WorkingTree(git_repo.root)
+        ruleset = Ruleset(name="example/python", root=git_repo.root / "python")
+        classifier = ChangeClassifier.for_rulesets(AstGrep(), [ruleset], working_tree)
+
+        changed = classifier.classify(working_tree.changed_lines("HEAD"))
+
+        kinds = changed.kinds_of("a.py")
+        assert kinds is not None
+        assert "gate:example/python/enum-value" in kinds
 
     def test_fixture_is_its_own_kind(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())

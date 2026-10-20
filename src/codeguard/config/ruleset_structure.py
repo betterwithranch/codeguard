@@ -10,6 +10,7 @@ from codeguard.config.ruleset import (
     PATTERN_RULE_DIR,
     PATTERN_TEST_DIR,
     SKILLS_DIR,
+    TRIGGER_TEST_DIR,
 )
 
 _DIRECTORIES = frozenset(
@@ -18,6 +19,7 @@ _DIRECTORIES = frozenset(
         PATTERN_TEST_DIR,
         GATE_DIR,
         GATE_TEST_DIR,
+        TRIGGER_TEST_DIR,
         JUDGE_EVAL_DIR,
         BINDINGS_DIR,
         SKILLS_DIR,

@@ -237,6 +237,38 @@ built-in kinds are `comment`, `docstring`, `import`,
 that is not only a comment or docstring) and `any`. The syntax table in
 `src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
 
+A trigger test in `rule-tests/triggers/<id>-test.yml` checks a judge rule's triggers
+against edits, with no model call. Each case is a `before` (left out for a new file), an
+`after` and a `file` (default `module.py`), which must match the binding's paths:
+
+```yaml
+id: one-concept-per-module
+triggered:                       # edits the judge must see
+  - before: |
+      class Order:
+          pass
+    after: |
+      class Order:
+          pass
+
+
+      class Invoice:
+          pass
+skipped:                         # edits that must not reach the judge
+  - before: |
+      class Order:
+          total = 1
+    after: |
+      class Order:
+          total = 2
+```
+
+`codeguard test` commits each `before` to a scratch repository, writes each `after`, and
+classifies the diff the way a review does. A `triggered` case fails when the rule's
+triggers miss the change, and a `skipped` case fails when they fire. The message lists
+the kinds the change touches. Narrow a gate until a `skipped` case passes, and keep every
+`triggered` case passing.
+
 A judge rule eval lists case files in `rule-evals/<id>/`:
 
 ```yaml

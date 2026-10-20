@@ -9,11 +9,11 @@ from pathlib import Path
 from codeguard.ast_grep import AstGrep
 from codeguard.config import JUDGE_EVAL_DIR, ChangeKind, RulesetLoader, Skip
 from codeguard.judge_evals.code_variants import CodeVariants
-from codeguard.judge_evals.eval_result import EvalResult
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_eval import JudgeEval
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings, JudgeRequest, Verdict
+from codeguard.rule_tests import RuleTestResult
 from codeguard.syntax import SyntaxScanner
 
 EVAL_FILE_GLOB = "*-eval.yml"
@@ -116,12 +116,12 @@ class JudgeEvalRunner:
     def eval_dir(self) -> Path:
         return self.ruleset.root / JUDGE_EVAL_DIR
 
-    def run(self) -> EvalResult:
+    def run(self) -> RuleTestResult:
         if not self.eval_dir.is_dir():
-            return EvalResult()
+            return RuleTestResult()
         ruleset = self.ruleset.load()
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
-        scanner = SyntaxScanner(self.ast_grep, ruleset.qualified_gates())
+        scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         problems: list[str] = []
         with ExitStack() as stack:
             variants = _Variants(self.ast_grep, stack)
@@ -136,7 +136,7 @@ class JudgeEvalRunner:
                 for case in judge_eval.cases():
                     case_runs.extend(self._case_runs(binding, directory, case, variants, scanner))
             problems.extend(self._problems(case_runs))
-        return EvalResult(problems=tuple(problems))
+        return RuleTestResult(problems=tuple(problems))
 
     def _problems(self, case_runs: list[_CaseRun]) -> list[str]:
         if not case_runs:

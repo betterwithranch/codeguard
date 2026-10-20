@@ -1,12 +1,13 @@
 import subprocess
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import ChangeKind, GateRule
+from codeguard.config import ChangeKind, GateRule, Ruleset
 from codeguard.syntax.parsed_file import ParsedFile
 from codeguard.syntax.syntax_node import SyntaxNode
 from codeguard.syntax.syntax_table import NodeKind, SyntaxTable
@@ -58,6 +59,17 @@ class _Match(BaseModel):
 class SyntaxScanner:
     ast_grep: AstGrep
     gates: Mapping[str, GateRule] = field(default_factory=dict)
+
+    @classmethod
+    def for_rulesets(cls, ast_grep: AstGrep, rulesets: Iterable[Ruleset]) -> Self:
+        return cls(
+            ast_grep,
+            {
+                gate: rule
+                for ruleset in rulesets
+                for gate, rule in ruleset.qualified_gates().items()
+            },
+        )
 
     def scan(self, directory: Path) -> dict[str, ParsedFile]:
         paths = sorted(

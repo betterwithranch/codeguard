@@ -31,6 +31,3 @@ class BroadTriggers:
                 if (broad := _BROAD & binding.triggers)
             ),
         )
-
-    def update_snapshots(self) -> RuleTestResult:
-        return self.run()

@@ -1,5 +1,9 @@
 from codeguard.ast_grep import AstGrep
+from codeguard.config import GateRule, Ruleset
 from codeguard.syntax import NodeKind, SyntaxNode, SyntaxScanner
+
+ENUM_VALUE_GATE = "id: enum-value\nlanguage: python\nrule:\n  pattern: $X.value\n"
+MOCK_USE_GATE = "id: mock-use\nlanguage: python\nrule:\n  pattern: Mock()\n"
 
 
 class TestSyntaxScanner:
@@ -53,3 +57,25 @@ class TestSyntaxScanner:
         (tmp_path / "order.rb").write_text("total = 1\n")
 
         assert SyntaxScanner(AstGrep()).scan(tmp_path) == {}
+
+    def test_for_rulesets_has_each_rulesets_gates_by_qualified_name(self, tmp_path):
+        local = tmp_path / ".codeguard"
+        package = tmp_path / "python"
+        (local / "gates").mkdir(parents=True)
+        (package / "gates").mkdir(parents=True)
+        (local / "gates/enum-value.yml").write_text(ENUM_VALUE_GATE)
+        (package / "gates/mock-use.yml").write_text(MOCK_USE_GATE)
+
+        scanner = SyntaxScanner.for_rulesets(
+            AstGrep(),
+            [Ruleset(name=None, root=local), Ruleset(name="example/python", root=package)],
+        )
+
+        assert scanner.gates == {
+            "gate:enum-value": GateRule(
+                id="enum-value", language="python", rule={"pattern": "$X.value"}
+            ),
+            "gate:example/python/mock-use": GateRule(
+                id="mock-use", language="python", rule={"pattern": "Mock()"}
+            ),
+        }

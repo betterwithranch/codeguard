@@ -640,6 +640,28 @@ class TestTestCommand:
         assert (repo.root / ".codeguard/rule-tests/gates/__snapshots__").is_dir()
         assert result.returncode == 0
 
+    def test_trigger_test_whose_change_misses_the_triggers_exits_1(self, repo, make_skill):
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [comment]\n',
+        )
+        repo.write(
+            ".codeguard/rule-tests/triggers/placement-test.yml",
+            "id: placement\ntriggered:\n  - after: |\n      count = 1\n",
+        )
+
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
+
+        assert result.stderr == (
+            ".codeguard/rule-tests/triggers/placement-test.yml triggered case 1: placement "
+            "triggers comment miss the change, which touches code, module-statement, "
+            "number-literal\n"
+        )
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
+        assert result.returncode == 1
+
     def test_failing_rule_tests_exit_1(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - print(1)\n")
 

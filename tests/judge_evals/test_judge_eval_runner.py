@@ -6,8 +6,9 @@ from factories.diagnostic import MakeViolation
 from recording_judge import JudgeCreation, RecordingJudge, RecordingJudges
 
 from codeguard.config import RulesetLoader
-from codeguard.judge_evals import EvalResult, JudgeEvalRunner, JudgeFactory
+from codeguard.judge_evals import JudgeEvalRunner, JudgeFactory
 from codeguard.review import JudgeRequest, Skill, Verdict
+from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
 CASE_DIR = ".codeguard/rule-evals/enum-usage"
@@ -25,7 +26,7 @@ def enum_rule(repo):
     repo.write(f"{CASE_DIR}/status.py", "ship(status='shipped')\n")
 
 
-def run(repo, judge_eval: str, verdict: Verdict) -> EvalResult:
+def run(repo, judge_eval: str, verdict: Verdict) -> RuleTestResult:
     repo.write(EVAL_FILE, judge_eval)
     judges = RecordingJudges(RecordingJudge(verdict))
     return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
@@ -49,7 +50,7 @@ class TestJudgeEvalRunner:
 
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()
 
     def test_violation_outside_the_triggers_fails_with_the_kinds_on_its_line(
         self, repo, make_violation
@@ -62,7 +63,7 @@ class TestJudgeEvalRunner:
 
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py: enum-usage violation on line 1 is outside the triggers "
                 "class-header\n"
@@ -80,7 +81,7 @@ class TestJudgeEvalRunner:
 
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()
 
     def test_unconfident_violation_fails_an_invalid_case(self, repo, make_violation):
         violation = make_violation(
@@ -91,7 +92,7 @@ class TestJudgeEvalRunner:
             repo, "id: enum-usage\ninvalid: [status.py]\n", Verdict(violations=(violation,))
         )
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py: "
                 "enum-usage expected a violation with confidence 0.90, got:\n"
@@ -102,7 +103,7 @@ class TestJudgeEvalRunner:
     def test_no_violation_fails_an_invalid_case(self, repo):
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", Verdict(violations=()))
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(f"{CASE_DIR}/status.py: enum-usage expected a violation, got none",),
         )
 
@@ -111,14 +112,14 @@ class TestJudgeEvalRunner:
 
         result = run(repo, "id: enum-usage\ninvalid: [status.py]\n", verdict)
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(f"{CASE_DIR}/status.py: enum-usage expected a violation, got none",),
         )
 
     def test_no_violation_passes_a_valid_case(self, repo):
         result = run(repo, "id: enum-usage\nvalid: [status.py]\n", Verdict(violations=()))
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()
 
     def test_any_violation_fails_a_valid_case(self, repo, make_violation):
         violation = make_violation(
@@ -127,7 +128,7 @@ class TestJudgeEvalRunner:
 
         result = run(repo, "id: enum-usage\nvalid: [status.py]\n", Verdict(violations=(violation,)))
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py: enum-usage expected no violation, got:\n"
                 "  line 1 (0.30): Pass the member.",
@@ -137,7 +138,9 @@ class TestJudgeEvalRunner:
     def test_missing_case_file_fails(self, repo):
         result = run(repo, "id: enum-usage\nvalid: [missing.py]\n", Verdict(violations=()))
 
-        assert result == EvalResult(problems=(f"{CASE_DIR}/missing.py: enum-usage no such file",))
+        assert result == RuleTestResult(
+            problems=(f"{CASE_DIR}/missing.py: enum-usage no such file",)
+        )
 
     def test_unknown_rule_fails(self, repo):
         repo.write(
@@ -147,7 +150,7 @@ class TestJudgeEvalRunner:
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(".codeguard/rule-evals/enum-usge-eval.yml: no judge rule enum-usge",),
         )
 
@@ -170,7 +173,7 @@ def flagging(text: str) -> JudgeFactory:
     return lambda root, model: FlagsText(text, root)
 
 
-def run_variants(repo, runs, disable_skips="[]") -> EvalResult:
+def run_variants(repo, runs, disable_skips="[]") -> RuleTestResult:
     repo.write(
         ".codeguard/bindings/enum-usage.yaml",
         'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
@@ -201,7 +204,7 @@ class TestVariants:
     def test_variant_with_another_verdict_fails_and_names_the_skip(self, repo):
         result = run_variants(repo, (flagging("name_1"),))
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py with its names renamed: "
                 "enum-usage expected no violation, got:\n"
@@ -213,7 +216,7 @@ class TestVariants:
     def test_failing_case_reports_only_its_own_failure(self, repo):
         result = run_variants(repo, (flagging("ship"),))
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py: enum-usage expected no violation, got:\n"
                 "  line 1 (1.00): Rename it.",
@@ -223,7 +226,7 @@ class TestVariants:
     def test_disabled_skip_has_no_variant(self, repo):
         result = run_variants(repo, (flagging("name_1"),), disable_skips="[renames]")
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()
 
 
 @pytest.mark.usefixtures("enum_rule")
@@ -246,7 +249,7 @@ class TestRepeats:
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), runs, 0.9).run()
 
-        assert result == EvalResult(
+        assert result == RuleTestResult(
             problems=(
                 f"{CASE_DIR}/status.py (run 2 of 2): enum-usage expected no violation, got:\n"
                 "  line 1 (1.00): Rename it.",
@@ -261,4 +264,4 @@ class TestWithoutJudgeEvals:
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()

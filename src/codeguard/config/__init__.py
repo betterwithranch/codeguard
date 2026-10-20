@@ -20,6 +20,7 @@ from codeguard.config.ruleset import (
     JUDGE_EVAL_DIR,
     PATTERN_RULE_DIR,
     PATTERN_TEST_DIR,
+    TRIGGER_TEST_DIR,
     Ruleset,
 )
 from codeguard.config.ruleset_config import RuleOverride, RulesetConfig
@@ -38,6 +39,7 @@ __all__ = [
     "PATTERN_RULE_DIR",
     "PATTERN_TEST_DIR",
     "SKILL_FILE",
+    "TRIGGER_TEST_DIR",
     "BindingConfig",
     "BindingsConfig",
     "ChangeKind",

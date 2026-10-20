@@ -2,12 +2,12 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 
 from codeguard.config import JUDGE_EVAL_DIR, RulesetLoader
-from codeguard.judge_evals.eval_result import EvalResult
 from codeguard.judge_evals.judge_eval import JudgeEval
 from codeguard.judge_evals.judge_eval_runner import EVAL_FILE_GLOB
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.judge_evals.rule_review import RuleReview
 from codeguard.review import Bindings
+from codeguard.rule_tests import RuleTestResult
 
 
 @dataclass(frozen=True)
@@ -16,11 +16,11 @@ class RulePackageReview:
     judges: JudgeFactory
     confidence_threshold: float
 
-    def run(self) -> EvalResult:
+    def run(self) -> RuleTestResult:
         ruleset = self.ruleset.load()
         bindings = Bindings.from_rulesets([ruleset])
         if not bindings:
-            return EvalResult()
+            return RuleTestResult()
         evaluated = {
             judge_eval.id
             for file in sorted((ruleset.root / JUDGE_EVAL_DIR).glob(EVAL_FILE_GLOB))
@@ -38,4 +38,4 @@ class RulePackageReview:
                 lambda review: review.problems(self.judges, self.confidence_threshold), reviews
             )
             reviewed = [problem for problems in found for problem in problems]
-        return EvalResult(problems=(*uncovered, *reviewed))
+        return RuleTestResult(problems=(*uncovered, *reviewed))

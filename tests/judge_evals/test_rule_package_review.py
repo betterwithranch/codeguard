@@ -2,8 +2,9 @@ import pytest
 from recording_judge import RecordingJudge, RecordingJudges
 
 from codeguard.config import RulesetLoader
-from codeguard.judge_evals import EvalResult, RulePackageReview
+from codeguard.judge_evals import RulePackageReview
 from codeguard.review import Verdict
+from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
 
@@ -29,7 +30,7 @@ class TestRulePackageReview:
 
         result = RulePackageReview(RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == EvalResult(problems=("enum-usage: no eval with an invalid case",))
+        assert result == RuleTestResult(problems=("enum-usage: no eval with an invalid case",))
 
     def test_judge_rule_with_an_invalid_case_passes(self, repo):
         repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "id: enum-usage\ninvalid: [a.py]\n")
@@ -37,7 +38,7 @@ class TestRulePackageReview:
 
         result = RulePackageReview(RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == EvalResult()
+        assert result == RuleTestResult()
 
     def test_reviews_the_skill_with_its_triggers_and_gates(self, repo):
         repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "id: enum-usage\ninvalid: [a.py]\n")
@@ -55,4 +56,4 @@ class TestRulePackageReview:
 
         result = RulePackageReview(RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == EvalResult(problems=("enum-usage: No gate matches enum members.",))
+        assert result == RuleTestResult(problems=("enum-usage: No gate matches enum members.",))

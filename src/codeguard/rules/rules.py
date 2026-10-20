@@ -11,7 +11,7 @@ from packaging.version import Version
 from codeguard.ast_grep import AstGrep
 from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
 from codeguard.config import Config, ConfigError, ConfigLoader, Lock, Ruleset, RulesetLoader
-from codeguard.judge_evals import EvalResult, JudgeEvalRunner, RulePackageReview
+from codeguard.judge_evals import JudgeEvalRunner, RulePackageReview
 from codeguard.packages import (
     MANIFEST_FILE,
     GitFetch,
@@ -33,8 +33,8 @@ from codeguard.review import (
     Review,
     Reviewer,
 )
-from codeguard.rule_tests import BroadTriggers, RuleTests
-from codeguard.syntax import ChangeClassifier, SyntaxScanner
+from codeguard.rule_tests import BroadTriggers, RuleTestResult, RuleTests, TriggerTestRunner
+from codeguard.syntax import ChangeClassifier
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _CACHE_DIR = Path.home() / ".cache" / "codeguard"
@@ -72,13 +72,10 @@ class Rules:
     def _classified(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:
         if isinstance(scope, AllLines):
             return scope
-        gates = {
-            gate: rule
-            for ruleset in self._rulesets
-            for gate, rule in ruleset.qualified_gates().items()
-        }
-        scanner = SyntaxScanner(self._ast_grep, gates)
-        return ChangeClassifier(scanner, self.working_tree).classify(scope)
+        classifier = ChangeClassifier.for_rulesets(
+            self._ast_grep, self._rulesets, self.working_tree
+        )
+        return classifier.classify(scope)
 
     def plan(self, scope: ChangedLines | AllLines) -> JudgePlan:
         root = self.working_tree.root
@@ -99,23 +96,31 @@ class Rules:
     @property
     def tests(self) -> RuleTests:
         root = self.working_tree.root
+        loaders = self._own_rulesets
         return RuleTests(
-            runners=[
+            snapshot_runners=[
                 runner
-                for loader in self._own_rulesets
+                for loader in loaders
                 for runner in (
                     PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep)),
                     PatternRuleTestRunner(Layout.gates(root, loader.root, self._ast_grep)),
-                    BroadTriggers(loader),
                 )
-            ]
+            ],
+            runners=[
+                runner
+                for loader in loaders
+                for runner in (
+                    BroadTriggers(loader),
+                    TriggerTestRunner(root, loader, self._ast_grep),
+                )
+            ],
         )
 
-    def evaluate(self, repeat: int = 1) -> EvalResult:
+    def evaluate(self, repeat: int = 1) -> RuleTestResult:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         runs = (self._judge, *(self._uncached_judge for _ in range(repeat - 1)))
-        return EvalResult.merge(
+        return RuleTestResult.merge(
             result
             for loader in self._own_rulesets
             for result in (
