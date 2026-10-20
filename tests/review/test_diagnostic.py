@@ -1,4 +1,7 @@
-from codeguard.review import Severity
+import pytest
+from pydantic import ValidationError
+
+from codeguard.review import ErrorType, Severity
 
 
 class TestDiagnostic:
@@ -38,3 +41,41 @@ class TestDiagnostic:
         assert str(diagnostic) == (
             f"a.py:1: warning no-breakpoint: Remove breakpoint(). [{diagnostic.id}]"
         )
+
+    def test_judge_error_without_an_error_type_is_invalid(self, make_diagnostic):
+        with pytest.raises(ValidationError):
+            make_diagnostic(judge_error=True, error_type=None)
+
+    def test_error_type_on_a_finding_is_invalid(self, make_diagnostic):
+        with pytest.raises(ValidationError):
+            make_diagnostic(judged=True, error_type=ErrorType.TIMEOUT)
+
+    def test_as_warning_keeps_everything_but_the_severity(self, make_diagnostic):
+        diagnostic = make_diagnostic(judge_error=True)
+
+        assert diagnostic.as_warning() == make_diagnostic(
+            judge_error=True, severity=Severity.WARNING
+        )
+
+    def test_json_has_every_field_and_whether_it_blocks(self, make_diagnostic):
+        diagnostic = make_diagnostic(judged=True, confidence=0.95)
+
+        assert diagnostic.as_json() == {
+            "id": diagnostic.id,
+            "rule": diagnostic.rule,
+            "file": "a.py",
+            "line": 1,
+            "end_line": None,
+            "message": "Use logging, not print.",
+            "severity": "error",
+            "category": "judged",
+            "confidence": 0.95,
+            "error_type": None,
+            "note": "Call logger.info instead.",
+            "blocks": True,
+        }
+
+    def test_judge_error_json_has_its_error_type(self, make_diagnostic):
+        diagnostic = make_diagnostic(judge_error=True, error_type=ErrorType.TIMEOUT)
+
+        assert diagnostic.as_json()["error_type"] == "timeout"

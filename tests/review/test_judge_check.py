@@ -5,10 +5,12 @@ from recording_judge import RecordingJudge
 
 from codeguard.config import ChangeKind
 from codeguard.review import (
-    Diagnostic,
+    ErrorType,
     JudgeCheck,
-    JudgeError,
+    JudgeNoVerdict,
+    JudgeProcessError,
     JudgeRequest,
+    JudgeTimeout,
     Severity,
     Verdict,
 )
@@ -29,42 +31,43 @@ class WaitingJudge:
 
 @dataclass(frozen=True)
 class FailingJudge:
+    error: Exception = JudgeProcessError("claude exited with 1.")
     identity: str = "failing"
 
     def judge(self, request):
-        raise JudgeError("claude exited with 1.")
+        raise self.error
 
 
 class TestJudgeCheck:
-    def test_failed_judge_call_is_an_error_on_the_file(self, make_binding, make_skill):
+    def test_failed_judge_call_is_a_judge_error_on_the_file(self, make_binding, make_diagnostic):
         check = JudgeCheck(make_binding(), FailingJudge(), THRESHOLD, AllLines(()))
 
-        assert check.check(["a.py"]) == [
-            Diagnostic(
-                rule=make_skill().name,
-                file="a.py",
-                line=None,
-                message="The judge call failed, so this rule was not checked.",
-                severity=Severity.ERROR,
-                note="claude exited with 1.",
-            )
-        ]
+        assert check.check(["a.py"]) == [make_diagnostic(judge_error=True)]
 
-    def test_failed_judge_call_has_the_binding_severity(self, make_binding, make_skill):
+    def test_failed_judge_call_has_the_binding_severity(self, make_binding, make_diagnostic):
         check = JudgeCheck(
             make_binding(severity=Severity.WARNING), FailingJudge(), THRESHOLD, AllLines(())
         )
 
         assert check.check(["a.py"]) == [
-            Diagnostic(
-                rule=make_skill().name,
-                file="a.py",
-                line=None,
-                message="The judge call failed, so this rule was not checked.",
-                severity=Severity.WARNING,
-                note="claude exited with 1.",
-            )
+            make_diagnostic(judge_error=True, severity=Severity.WARNING)
         ]
+
+    def test_judge_call_past_the_time_limit_is_a_timeout(self, make_binding):
+        error = JudgeTimeout("The review reached its 5-minute time limit.")
+        check = JudgeCheck(make_binding(), FailingJudge(error), THRESHOLD, AllLines(()))
+
+        [diagnostic] = check.check(["a.py"])
+
+        assert diagnostic.error_type is ErrorType.TIMEOUT
+
+    def test_judge_call_without_a_verdict_is_no_verdict(self, make_binding):
+        error = JudgeNoVerdict("claude returned no verdict.")
+        check = JudgeCheck(make_binding(), FailingJudge(error), THRESHOLD, AllLines(()))
+
+        [diagnostic] = check.check(["a.py"])
+
+        assert diagnostic.error_type is ErrorType.NO_VERDICT
 
     def test_every_file_is_judged_at_the_same_time(self, make_binding):
         files = [f"{index}.py" for index in range(40)]
@@ -154,4 +157,6 @@ class TestJudgeCheck:
         judge = RecordingJudge(Verdict(violations=(make_violation(confidence=0.5),)))
         check = JudgeCheck(make_binding(), judge, THRESHOLD, AllLines(()))
 
-        assert check.check(["a.py"]) == [make_diagnostic(judged=True, severity=Severity.WARNING)]
+        assert check.check(["a.py"]) == [
+            make_diagnostic(judged=True, severity=Severity.WARNING, confidence=0.5)
+        ]

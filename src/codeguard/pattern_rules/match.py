@@ -1,6 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
-from codeguard.review import Diagnostic, Severity
+from codeguard.review import Category, Diagnostic, Severity
 
 
 class _Position(BaseModel):
@@ -35,4 +35,6 @@ class AstGrepMatch(BaseModel):
             message=self.message,
             severity=self.severity,
             note=self.note,
+            category=Category.PATTERN,
+            confidence=1.0,
         )

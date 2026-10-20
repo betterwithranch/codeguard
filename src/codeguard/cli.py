@@ -42,11 +42,28 @@ def main() -> int:
         action="store_true",
         help="Use the newest tag in each package's version range instead of the lock file.",
     )
-    review_command.add_argument(
+    output = review_command.add_mutually_exclusive_group()
+    output.add_argument(
         "--dry-run",
         action="store_true",
         help="Run the pattern rules and list the judge calls the review would make, "
         "without calling Claude.",
+    )
+    output.add_argument(
+        "--format",
+        choices=("text", "json"),
+        default="text",
+        help="Print diagnostics as text lines or as one JSON object. Default: text.",
+    )
+    review_command.add_argument(
+        "--judge-errors-as-warnings",
+        action="store_true",
+        help="Report each judge call that couldn't complete as a warning, so it doesn't fail "
+        "the review.",
+    )
+    review_command.add_argument(
+        "--host",
+        help="Name the caller (such as claude-code or codex) in telemetry. Changes nothing else.",
     )
     review_command.set_defaults(run=_review)
 
@@ -131,15 +148,21 @@ def _review(args: argparse.Namespace) -> int:
             repository=working_tree.root.name,
             files=len(scope.files),
             latest=args.latest,
+            host=args.host,
         ) as span:
             result = Rules(working_tree, latest=args.latest).review(scope)
+            if args.judge_errors_as_warnings:
+                result = result.with_judge_errors_as_warnings()
             span.set_attributes(
                 {
                     "diagnostics": len(result.diagnostics),
                     "errors": sum(diagnostic.blocks for diagnostic in result.diagnostics),
                 }
             )
-    result.write(sys.stdout)
+    if args.format == "json":
+        result.write_json(sys.stdout)
+    else:
+        result.write(sys.stdout)
     return _EXIT_FAILED if result.blocks else _EXIT_PASSED
 
 

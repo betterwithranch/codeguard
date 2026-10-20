@@ -1,3 +1,4 @@
+import json
 import os
 import subprocess
 import sysconfig
@@ -410,6 +411,136 @@ class TestReviewDryRun:
         )
         assert result.stderr == ""
         assert result.returncode == 1
+
+
+class TestReviewJsonFormat:
+    def test_prints_one_object_with_each_diagnostic(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\nbreakpoint()\n")
+        error = make_diagnostic()
+        warning = make_diagnostic(warning=True, line=2)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--format", "json"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert json.loads(result.stdout) == {"diagnostics": [warning.as_json(), error.as_json()]}
+        assert result.returncode == 1
+
+    def test_low_confidence_finding_is_a_warning_with_its_confidence(
+        self, repo, tmp_path, make_skill
+    ):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+        violation = {"file": "a.py", "line": 1, "message": "Move it.", "note": "Move it."}
+        (bin_dir / "claude").write_text(fake_claude_script([{**violation, "confidence": 0.4}]))
+
+        result = run_review(repo, tmp_path, bin_dir, "--format", "json")
+
+        [diagnostic] = json.loads(result.stdout)["diagnostics"]
+        assert (diagnostic["severity"], diagnostic["category"], diagnostic["confidence"]) == (
+            "warning",
+            "judged",
+            0.4,
+        )
+        assert diagnostic["blocks"] is False
+        assert result.returncode == 0
+
+    def test_failed_judge_call_is_a_judge_error(self, repo, tmp_path, make_skill):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+
+        result = run_review(repo, tmp_path, bin_dir, "--format", "json")
+
+        [diagnostic] = json.loads(result.stdout)["diagnostics"]
+        assert (diagnostic["category"], diagnostic["error_type"], diagnostic["confidence"]) == (
+            "judge_error",
+            "process",
+            0.0,
+        )
+
+    def test_dry_run_has_no_json_format(self, repo):
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run", "--format", "json"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert "not allowed with argument" in result.stderr
+        assert result.returncode == 2
+
+
+class TestReviewJudgeErrorsAsWarnings:
+    def test_judge_error_fails_the_review_without_the_flag(self, repo, tmp_path, make_skill):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+
+        result = run_review(repo, tmp_path, bin_dir)
+
+        assert result.stdout.startswith("a.py: error placement: The judge call failed")
+        assert result.returncode == 1
+
+    def test_judge_error_is_a_warning_with_the_flag(self, repo, tmp_path, make_skill):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+
+        result = run_review(repo, tmp_path, bin_dir, "--judge-errors-as-warnings")
+
+        assert result.stdout.startswith("a.py: warning placement: The judge call failed")
+        assert result.returncode == 0
+
+    def test_rule_violation_still_fails_the_review_with_the_flag(self, repo, tmp_path, make_skill):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+        repo.write("a.py", "print(1)\n")
+
+        result = run_review(repo, tmp_path, bin_dir, "--judge-errors-as-warnings")
+
+        assert result.returncode == 1
+
+
+class TestReviewHost:
+    def test_host_changes_nothing_in_the_output(self, repo):
+        repo.write("a.py", "print(1)\n")
+
+        with_host, without_host = (
+            subprocess.run(
+                [CODEGUARD, "review", *arguments], cwd=repo.root, capture_output=True, text=True
+            )
+            for arguments in (["--host", "codex"], [])
+        )
+
+        assert (with_host.stdout, with_host.returncode) == (
+            without_host.stdout,
+            without_host.returncode,
+        )
+
+
+def judged_repo(repo: GitRepo, tmp_path: Path, make_skill) -> Path:
+    """Bind a skill to every Python file, change a.py, and put a failing claude on PATH."""
+    repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+    repo.write(
+        ".codeguard/bindings/placement.yaml",
+        'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
+    )
+    repo.commit("Bind the skill")
+    repo.write("a.py", "x = 1\n")
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    claude = bin_dir / "claude"
+    claude.write_text("#!/bin/sh\ncat > /dev/null\necho 'rate limited'\nexit 1\n")
+    claude.chmod(0o755)
+    return bin_dir
+
+
+def run_review(
+    repo: GitRepo, home: Path, bin_dir: Path, *arguments: str
+) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [CODEGUARD, "review", *arguments],
+        cwd=repo.root,
+        capture_output=True,
+        text=True,
+        env={**os.environ, "HOME": str(home), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+    )
 
 
 class TestConfigCommand:

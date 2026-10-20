@@ -3,7 +3,7 @@ from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from codeguard.review import JudgeError, Verdict
+from codeguard.review import JudgeNoVerdict, Verdict
 
 
 class ModelUsage(BaseModel):
@@ -41,7 +41,7 @@ class ClaudeResult(BaseModel):
         messages = [json.loads(line) for line in stream.splitlines() if line.strip()]
         results = [message for message in messages if message["type"] == "result"]
         if not results:
-            raise JudgeError(f"claude printed no result:\n{stream}")
+            raise JudgeNoVerdict(f"claude printed no result:\n{stream}")
         windows = [
             message["rate_limit_info"].get("unifiedWindows", {})
             for message in messages
