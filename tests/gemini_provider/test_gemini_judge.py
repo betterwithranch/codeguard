@@ -8,7 +8,14 @@ from google.genai import errors, types
 from spans import finished_span_attributes
 
 from codeguard.gemini_provider import GeminiJudge
-from codeguard.review import Deadline, JudgeError, JudgeRequest, Verdict
+from codeguard.review import (
+    Deadline,
+    JudgeNoVerdict,
+    JudgeProcessError,
+    JudgeRequest,
+    JudgeTimeout,
+    Verdict,
+)
 
 MODEL = "gemini-3.8-flash"
 VIOLATION = {
@@ -178,7 +185,7 @@ class TestGeminiJudge:
     def test_response_without_a_tool_call_is_a_judge_error(self, tmp_path, make_skill):
         models = ScriptedClient.answering(response(types.Part.from_text(text="It looks fine.")))
 
-        with pytest.raises(JudgeError, match=f"^{MODEL} called no tool"):
+        with pytest.raises(JudgeNoVerdict, match=f"^{MODEL} called no tool"):
             judge_with(tmp_path, models).judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_no_verdict_within_the_turn_limit_is_a_judge_error(self, tmp_path, make_skill):
@@ -186,13 +193,13 @@ class TestGeminiJudge:
             *[response(call("glob", pattern="*.py")) for _ in range(2)]
         )
 
-        with pytest.raises(JudgeError, match=f"^{MODEL} returned no verdict in 2 turns.$"):
+        with pytest.raises(JudgeNoVerdict, match=f"^{MODEL} returned no verdict in 2 turns.$"):
             judge_with(tmp_path, models, max_turns=2).judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_api_error_is_a_judge_error(self, tmp_path, make_skill):
         error = errors.ClientError(429, {"error": {"message": "Quota exceeded."}})
 
-        with pytest.raises(JudgeError, match=f"^{MODEL} failed with 429: Quota exceeded.$"):
+        with pytest.raises(JudgeProcessError, match=f"^{MODEL} failed with 429: Quota exceeded.$"):
             judge_with(tmp_path, FailingClient(error)).judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_call_after_the_deadline_is_a_judge_error_without_calling_gemini(
@@ -201,7 +208,7 @@ class TestGeminiJudge:
         models = ScriptedClient.answering()
         deadline = Deadline(minutes=1, started=time.monotonic() - 60)
 
-        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
             judge_with(tmp_path, models, deadline=deadline).judge(
                 JudgeRequest(make_skill(), "a.py")
             )
@@ -221,7 +228,7 @@ class TestGeminiJudge:
         models = FailingClient(httpx.ReadTimeout("timed out"))
         deadline = Deadline(minutes=1)
 
-        with pytest.raises(JudgeError, match=f"^{MODEL} took over 120s to answer.$"):
+        with pytest.raises(JudgeTimeout, match=f"^{MODEL} took over 120s to answer.$"):
             judge_with(tmp_path, models, deadline=deadline).judge(
                 JudgeRequest(make_skill(), "a.py")
             )
@@ -284,7 +291,7 @@ class TestGeminiJudge:
     def test_stream_running_past_the_deadline_is_the_time_limit_error(self, tmp_path, make_skill):
         deadline = Deadline(minutes=1, started=time.monotonic() - 59.9)
 
-        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
             judge_with(tmp_path, SlowClient(seconds=0.2), deadline=deadline).judge(
                 JudgeRequest(make_skill(), "a.py")
             )
@@ -292,7 +299,7 @@ class TestGeminiJudge:
     def test_stream_running_past_the_request_limit_is_a_judge_error(self, tmp_path, make_skill):
         judge = judge_with(tmp_path, SlowClient(seconds=0.2), request_limit_seconds=0.1)
 
-        with pytest.raises(JudgeError, match=f"^{MODEL} took over 0.1s to answer.$"):
+        with pytest.raises(JudgeTimeout, match=f"^{MODEL} took over 0.1s to answer.$"):
             judge.judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_requests_time_out_at_the_request_limit(self, tmp_path, make_skill):

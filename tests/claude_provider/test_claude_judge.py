@@ -7,11 +7,18 @@ from pathlib import Path
 from threading import Semaphore
 
 import pytest
-from claude_output import MODEL_USAGE, fake_claude_script
+from claude_output import MODEL_USAGE, claude_result, fake_claude_script
 from spans import finished_span_attributes
 
 from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
-from codeguard.review import Deadline, JudgeError, JudgeRequest, Verdict
+from codeguard.review import (
+    Deadline,
+    JudgeNoVerdict,
+    JudgeProcessError,
+    JudgeRequest,
+    JudgeTimeout,
+    Verdict,
+)
 
 MODEL = "claude-sonnet-5-5"
 
@@ -77,6 +84,13 @@ def failing_claude_executable(tmp_path) -> str:
 def hanging_claude_executable(tmp_path) -> str:
     executable = tmp_path / "claude"
     executable.write_text("#!/bin/sh\nsleep 10\n")
+    executable.chmod(0o755)
+    return str(executable)
+
+
+def claude_printing(tmp_path: Path, stream: str) -> str:
+    executable = tmp_path / "claude"
+    executable.write_text(f"#!/bin/sh\ncat > /dev/null\ncat <<'EOF'\n{stream}\nEOF\n")
     executable.chmod(0o755)
     return str(executable)
 
@@ -150,12 +164,12 @@ class TestClaudeJudge:
             }
         ]
 
-    def test_failed_call_is_a_judge_error_with_claude_output(
+    def test_failed_call_is_a_process_error_with_claude_output(
         self, tmp_path, processes, failing_claude_executable, make_skill
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, failing_claude_executable)
 
-        with pytest.raises(JudgeError) as error:
+        with pytest.raises(JudgeProcessError) as error:
             judge.judge(JudgeRequest(make_skill(), "a.py"))
 
         assert str(error.value) == (
@@ -163,25 +177,42 @@ class TestClaudeJudge:
             "stdout:\nrate limited\n\nstderr:\ntry later\n"
         )
 
-    def test_call_after_the_deadline_is_a_judge_error_without_running_claude(
+    def test_call_after_the_deadline_is_a_timeout_without_running_claude(
         self, tmp_path, processes, fake_claude_executable, arguments, make_skill
     ):
         judge = ClaudeJudge(
             tmp_path, MODEL, processes, fake_claude_executable, deadline=deadline_in(0)
         )
 
-        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
             judge.judge(JudgeRequest(make_skill(), "a.py"))
         assert not arguments.exists()
 
-    def test_call_running_past_the_deadline_is_a_judge_error(
+    def test_call_running_past_the_deadline_is_a_timeout(
         self, tmp_path, processes, hanging_claude_executable, make_skill
     ):
         judge = ClaudeJudge(
             tmp_path, MODEL, processes, hanging_claude_executable, deadline=deadline_in(0.5)
         )
 
-        with pytest.raises(JudgeError, match="^The review reached its 1-minute time limit.$"):
+        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
+            judge.judge(JudgeRequest(make_skill(), "a.py"))
+
+    def test_result_without_structured_output_is_no_verdict(self, tmp_path, processes, make_skill):
+        result = {
+            key: value for key, value in claude_result([]).items() if key != "structured_output"
+        }
+        executable = claude_printing(tmp_path, json.dumps(result))
+        judge = ClaudeJudge(tmp_path, MODEL, processes, executable)
+
+        with pytest.raises(JudgeNoVerdict, match="returned no verdict"):
+            judge.judge(JudgeRequest(make_skill(), "a.py"))
+
+    def test_output_without_a_result_is_no_verdict(self, tmp_path, processes, make_skill):
+        executable = claude_printing(tmp_path, json.dumps({"type": "system"}))
+        judge = ClaudeJudge(tmp_path, MODEL, processes, executable)
+
+        with pytest.raises(JudgeNoVerdict, match="^claude printed no result"):
             judge.judge(JudgeRequest(make_skill(), "a.py"))
 
     def test_each_call_holds_a_process_slot(self, tmp_path, fake_claude_executable, make_skill):

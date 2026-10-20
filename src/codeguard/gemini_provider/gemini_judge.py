@@ -12,7 +12,14 @@ from pydantic import ValidationError
 
 from codeguard.gemini_provider.file_tools import FileTools
 from codeguard.gemini_provider.gemini_usage import GeminiUsage
-from codeguard.review import Deadline, JudgeError, JudgeRequest, Verdict
+from codeguard.review import (
+    Deadline,
+    JudgeNoVerdict,
+    JudgeProcessError,
+    JudgeRequest,
+    JudgeTimeout,
+    Verdict,
+)
 
 _PROVIDER = "gemini"
 _MAX_TURNS = 25
@@ -72,7 +79,7 @@ class GeminiJudge:
             usage.add(response)
             calls = response.function_calls
             if not response.candidates or not response.candidates[0].content or not calls:
-                raise JudgeError(f"{self.model} called no tool:\n{response.model_dump_json()}")
+                raise JudgeNoVerdict(f"{self.model} called no tool:\n{response.model_dump_json()}")
             contents.append(response.candidates[0].content)
             replies: list[types.Part] = []
             for call in calls:
@@ -85,7 +92,7 @@ class GeminiJudge:
                         continue
                 replies.append(_reply(call, tools.call(call.name or "", arguments)))
             contents.append(types.Content(role="user", parts=replies))
-        raise JudgeError(f"{self.model} returned no verdict in {self.max_turns} turns.")
+        raise JudgeNoVerdict(f"{self.model} returned no verdict in {self.max_turns} turns.")
 
     def _generate(
         self, instructions: str, contents: list[types.Content], tools: FileTools
@@ -114,7 +121,9 @@ class GeminiJudge:
         except httpx.TimeoutException as error:
             raise self._timed_out() from error
         except errors.APIError as error:
-            raise JudgeError(f"{self.model} failed with {error.code}: {error.message}") from error
+            raise JudgeProcessError(
+                f"{self.model} failed with {error.code}: {error.message}"
+            ) from error
 
     def _stream(
         self, contents: list[types.Content], config: types.GenerateContentConfig, until: float
@@ -127,10 +136,10 @@ class GeminiJudge:
                 raise self._timed_out()
             yield chunk
 
-    def _timed_out(self) -> JudgeError:
+    def _timed_out(self) -> JudgeTimeout:
         if self.deadline is not None and self.deadline.remaining_seconds() <= 0:
             return self.deadline.reached()
-        return JudgeError(f"{self.model} took over {self.request_limit_seconds:g}s to answer.")
+        return JudgeTimeout(f"{self.model} took over {self.request_limit_seconds:g}s to answer.")
 
 
 def _merged(chunks: Sequence[types.GenerateContentResponse]) -> types.GenerateContentResponse:

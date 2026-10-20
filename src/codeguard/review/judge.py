@@ -1,11 +1,11 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import ClassVar, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from codeguard.review.binding import Binding
-from codeguard.review.diagnostic import Diagnostic, Severity
+from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severity
 from codeguard.review.skill import Skill
 
 INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
@@ -57,6 +57,7 @@ class Verdict(BaseModel):
                 message=violation.message,
                 severity=violation.severity(binding.severity, threshold),
                 note=None,
+                category=Category.JUDGED,
                 confidence=violation.confidence,
             )
             for violation in self.violations
@@ -65,7 +66,19 @@ class Verdict(BaseModel):
 
 
 class JudgeError(Exception):
-    pass
+    error_type: ClassVar[ErrorType]
+
+
+class JudgeTimeout(JudgeError):
+    error_type = ErrorType.TIMEOUT
+
+
+class JudgeProcessError(JudgeError):
+    error_type = ErrorType.PROCESS
+
+
+class JudgeNoVerdict(JudgeError):
+    error_type = ErrorType.NO_VERDICT
 
 
 class Judge(Protocol):
