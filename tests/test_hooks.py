@@ -10,7 +10,7 @@ from claude_output import fake_claude_script
 
 PLUGIN = Path(__file__).resolve().parent.parent / "plugins" / "codeguard"
 SCRIPTS = sysconfig.get_path("scripts")
-UV = shutil.which("uv")
+UV = Path(shutil.which("uv") or "uv")
 CLAUDE_CODE_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" claude-code'
 CODEX_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" codex'
 REQUIRED_FIXES = (
@@ -39,7 +39,6 @@ def home(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPat
 def uv_only(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """A PATH directory with uv and nothing else, so codeguard is not on PATH."""
     path = tmp_path_factory.mktemp("uv-only")
-    assert UV is not None
     (path / "uv").symlink_to(UV)
     return path
 
@@ -89,7 +88,7 @@ def run_stop_hook(
 
 
 def path_with(*first: Path) -> list[Path | str]:
-    return [*first, SCRIPTS, Path(UV or "uv").parent, "/usr/bin", "/bin"]
+    return [*first, SCRIPTS, UV.parent, "/usr/bin", "/bin"]
 
 
 def stop(stop_hook_active: bool = False) -> dict:

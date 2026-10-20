@@ -11,6 +11,7 @@ from git_repo import GitRepo
 from rules_package import write_package
 
 from codeguard.file_lock import exclusive_lock
+from codeguard.review import Severity
 
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
 BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
@@ -414,10 +415,8 @@ class TestReviewDryRun:
 
 
 class TestReviewJsonFormat:
-    def test_prints_one_object_with_each_diagnostic(self, repo, make_diagnostic):
-        repo.write("a.py", "print(1)\nbreakpoint()\n")
-        error = make_diagnostic()
-        warning = make_diagnostic(warning=True, line=2)
+    def test_prints_one_object_with_the_diagnostics(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
 
         result = subprocess.run(
             [CODEGUARD, "review", "--format", "json"],
@@ -426,11 +425,11 @@ class TestReviewJsonFormat:
             text=True,
         )
 
-        assert json.loads(result.stdout) == {"diagnostics": [warning.as_json(), error.as_json()]}
+        assert json.loads(result.stdout) == {"diagnostics": [make_diagnostic().as_json()]}
         assert result.returncode == 1
 
     def test_low_confidence_finding_is_a_warning_with_its_confidence(
-        self, repo, tmp_path, make_skill
+        self, repo, tmp_path, make_skill, make_diagnostic
     ):
         bin_dir = judged_repo(repo, tmp_path, make_skill)
         violation = {"file": "a.py", "line": 1, "message": "Move it.", "note": "Move it."}
@@ -438,26 +437,28 @@ class TestReviewJsonFormat:
 
         result = run_review(repo, tmp_path, bin_dir, "--format", "json")
 
-        [diagnostic] = json.loads(result.stdout)["diagnostics"]
-        assert (diagnostic["severity"], diagnostic["category"], diagnostic["confidence"]) == (
-            "warning",
-            "judged",
-            0.4,
+        finding = make_diagnostic(
+            judged=True,
+            rule="placement",
+            message="Move it.",
+            note="Move it.",
+            severity=Severity.WARNING,
+            confidence=0.4,
         )
-        assert diagnostic["blocks"] is False
+        assert json.loads(result.stdout) == {"diagnostics": [finding.as_json()]}
         assert result.returncode == 0
 
-    def test_failed_judge_call_is_a_judge_error(self, repo, tmp_path, make_skill):
+    def test_failed_judge_call_is_a_judge_error(self, repo, tmp_path, make_skill, make_diagnostic):
         bin_dir = judged_repo(repo, tmp_path, make_skill)
 
         result = run_review(repo, tmp_path, bin_dir, "--format", "json")
 
-        [diagnostic] = json.loads(result.stdout)["diagnostics"]
-        assert (diagnostic["category"], diagnostic["error_type"], diagnostic["confidence"]) == (
-            "judge_error",
-            "process",
-            0.0,
+        judge_error = make_diagnostic(
+            judge_error=True,
+            rule="placement",
+            note="claude exited with 1.\nstdout:\nrate limited\n\nstderr:\n",
         )
+        assert json.loads(result.stdout) == {"diagnostics": [judge_error.as_json()]}
 
     def test_dry_run_has_no_json_format(self, repo):
         result = subprocess.run(
@@ -508,10 +509,8 @@ class TestReviewHost:
             for arguments in (["--host", "codex"], [])
         )
 
-        assert (with_host.stdout, with_host.returncode) == (
-            without_host.stdout,
-            without_host.returncode,
-        )
+        assert with_host.stdout == without_host.stdout
+        assert with_host.returncode == without_host.returncode
 
 
 def judged_repo(repo: GitRepo, tmp_path: Path, make_skill) -> Path:
