@@ -5,6 +5,7 @@ from codeguard.config.config import Config
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
 from codeguard.config.gate_rule import GateRule
+from codeguard.config.judge_config import JudgeConfig, JudgeProvider
 from codeguard.config.lock import LOCK_FILE, Lock, LockedPackage
 from codeguard.config.package_config import (
     GitPackageConfig,
@@ -49,6 +50,8 @@ __all__ = [
     "ExactVersion",
     "GateRule",
     "GitPackageConfig",
+    "JudgeConfig",
+    "JudgeProvider",
     "Lock",
     "LockedPackage",
     "PackageConfig",

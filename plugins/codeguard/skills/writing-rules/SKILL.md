@@ -29,8 +29,7 @@ blocks the agent's Stop and fails CI.
   enum members needs a gate on literals, because the enum is defined elsewhere. The judge
   skips a file whose changes miss every trigger.
 - Give every judge rule an eval with an `invalid` case. `codeguard eval` fails a rule
-  without one, a violation outside the triggers, and a skill whose rule review finds an
-  ungated construct, a broad trigger, or a bullet ast-grep could check.
+  without one, and a violation outside the triggers.
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.

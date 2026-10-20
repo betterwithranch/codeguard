@@ -18,9 +18,10 @@ class MakeDiagnostic(factory.Factory):
         )
         judged = factory.Trait(
             rule=factory.LazyFunction(lambda: MakeSkill().name),
-            note="Call logger.info instead.",
+            note=None,
             category=Category.JUDGED,
             end_line=None,
+            confidence=1.0,
         )
         judge_error = factory.Trait(
             rule=factory.LazyFunction(lambda: MakeSkill().name),
@@ -51,5 +52,4 @@ class MakeViolation(factory.Factory):
     file = "a.py"
     line = 1
     message = "Use logging, not print."
-    note = "Call logger.info instead."
     confidence = 1.0

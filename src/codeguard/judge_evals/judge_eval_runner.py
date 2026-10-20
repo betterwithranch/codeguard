@@ -3,7 +3,7 @@ import tempfile
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 
 from codeguard.ast_grep import AstGrep
@@ -11,7 +11,7 @@ from codeguard.config import ChangeKind, RulesetLoader, Skip
 from codeguard.judge_evals.code_variants import CodeVariants
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_factory import JudgeFactory
-from codeguard.review import Binding, Bindings, JudgeRequest, Verdict
+from codeguard.review import Binding, Bindings, JudgeError, JudgeRequest, Verdict
 from codeguard.rule_tests import JudgeEval, NumberedCase, Outcome, RuleTestResult
 from codeguard.syntax import SyntaxScanner
 
@@ -114,6 +114,7 @@ class JudgeEvalRunner:
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
         scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         problems: list[str] = []
+        judged = RuleTestResult()
         with ExitStack() as stack:
             variants = _Variants(self.ast_grep, stack)
             case_runs: list[_CaseRun] = []
@@ -126,20 +127,21 @@ class JudgeEvalRunner:
                 for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID):
                     name = f"{where} {case.name}"
                     case_runs.extend(self._case_runs(binding, case, name, variants, scanner))
-            problems.extend(self._problems(case_runs))
-        return RuleTestResult(problems=tuple(problems))
+            judged = self._judged(case_runs)
+        return RuleTestResult.merge([RuleTestResult(problems=tuple(problems)), judged])
 
-    def _problems(self, case_runs: list[_CaseRun]) -> list[str]:
+    def _judged(self, case_runs: list[_CaseRun]) -> RuleTestResult:
         if not case_runs:
-            return []
+            return RuleTestResult()
         with ThreadPoolExecutor(max_workers=len(case_runs)) as executor:
-            found = list(zip(case_runs, executor.map(self._problem, case_runs), strict=True))
-        failed = {run.name for run, problem in found if problem and run.variant is None}
-        return [
-            problem
-            for run, problem in found
-            if problem and not (run.variant is not None and run.name in failed)
-        ]
+            found = list(zip(case_runs, executor.map(self._result, case_runs), strict=True))
+        failed = {run.name for run, result in found if result.problems and run.variant is None}
+        return RuleTestResult.merge(
+            replace(result, problems=())
+            if run.variant is not None and run.name in failed
+            else result
+            for run, result in found
+        )
 
     def _case_runs(
         self,
@@ -158,23 +160,31 @@ class JudgeEvalRunner:
             for run, judges in enumerate(self.runs, start=1)
         ]
 
-    def _problem(self, case_run: _CaseRun) -> str | None:
-        problem = case_run.problem(self.confidence_threshold)
-        if problem is None:
-            return None
-        where = case_run.name
-        if case_run.variant is not None:
-            where += f" {_VARIANT_DESCRIPTIONS[case_run.variant]}"
-        if len(self.runs) > 1:
-            where += f" (run {case_run.run} of {len(self.runs)})"
+    def _result(self, case_run: _CaseRun) -> RuleTestResult:
         rule = case_run.binding.skill.name
-        message = f"{where}: {rule} {problem}"
+        try:
+            problem = case_run.problem(self.confidence_threshold)
+        except JudgeError as error:
+            return RuleTestResult(
+                warnings=(f"{self._where(case_run)}: {rule} not judged: {error}",)
+            )
+        if problem is None:
+            return RuleTestResult()
+        message = f"{self._where(case_run)}: {rule} {problem}"
         if case_run.variant is not None:
             message += (
                 f"\n  If {rule} judges {_SKIPPED_CHANGES[case_run.variant]}, "
                 f"add {case_run.variant} to disable_skips in its binding."
             )
-        return message
+        return RuleTestResult(problems=(message,))
+
+    def _where(self, case_run: _CaseRun) -> str:
+        where = case_run.name
+        if case_run.variant is not None:
+            where += f" {_VARIANT_DESCRIPTIONS[case_run.variant]}"
+        if len(self.runs) > 1:
+            where += f" (run {case_run.run} of {len(self.runs)})"
+        return where
 
 
 def _written(stack: ExitStack, case: NumberedCase) -> Path:

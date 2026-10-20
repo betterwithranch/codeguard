@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 from factories.diagnostic import MakeViolation
-from recording_judge import RecordingJudge, RecordingJudges
+from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
 from codeguard.config import RulesetLoader
 from codeguard.judge_evals import JudgeEvalRunner, JudgeFactory
@@ -175,6 +175,19 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert judges.created == []
+
+    def test_judge_error_warns_without_failing_the_eval(self, repo):
+        repo.write(EVAL_FILE, f"id: enum-usage\ninvalid:\n{STATUS_CASE}")
+        judges = RecordingJudges(FailingJudge())
+
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+
+        assert result == RuleTestResult(
+            warnings=(
+                f"{EVAL_FILE} invalid case 1: enum-usage not judged: "
+                "gemini failed with 502: upstream request failed",
+            )
+        )
 
     def test_unknown_rule_fails(self, repo):
         repo.write(

@@ -10,8 +10,9 @@ import pytest
 from claude_output import MODEL_USAGE, claude_result, fake_claude_script
 from spans import finished_span_attributes
 
-from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
+from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
 from codeguard.review import (
+    Deadline,
     JudgeNoVerdict,
     JudgeProcessError,
     JudgeRequest,
@@ -35,7 +36,6 @@ def fake_claude_executable(tmp_path, arguments) -> str:
                 "file": "a.py",
                 "line": 1,
                 "message": "Move it.",
-                "note": "Call logger.info instead.",
                 "confidence": 0.4,
             }
         ],

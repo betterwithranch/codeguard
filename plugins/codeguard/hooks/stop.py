@@ -70,9 +70,14 @@ def items(diagnostics: list[dict[str, object]]) -> dict[str, str]:
 def render(diagnostic: dict[str, object]) -> str:
     file, line, note = diagnostic["file"], diagnostic["line"], diagnostic["note"]
     location = file if line is None else f"{file}:{line}"
+    confidence = (
+        f" (confidence {diagnostic['confidence']:.2f})"
+        if diagnostic["category"] == "judged"
+        else ""
+    )
     summary = (
         f"{location}: {diagnostic['severity']} {diagnostic['rule']}: "
-        f"{diagnostic['message']} [{diagnostic['id']}]"
+        f"{diagnostic['message']}{confidence} [{diagnostic['id']}]"
     )
     if note is None:
         return summary

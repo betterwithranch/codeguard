@@ -9,7 +9,6 @@ For each violation give:
 - `file`: the path exactly as given.
 - `line`: the line number where the violation is.
 - `message`: what breaks the convention, in one plain sentence.
-- `note`: how to fix it, in one or two plain sentences.
 - `confidence`: a number from 0 to 1 for how certain you are that the code breaks the convention, on the scale below.
 
 Confidence scale:

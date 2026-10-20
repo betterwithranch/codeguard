@@ -70,7 +70,10 @@ class Diagnostic(BaseModel):
 
     def __str__(self) -> str:
         location = self.file if self.line is None else f"{self.file}:{self.line}"
-        summary = f"{location}: {self.severity} {self.rule}: {self.message} [{self.id}]"
+        confidence = (
+            f" (confidence {self.confidence:.2f})" if self.category is Category.JUDGED else ""
+        )
+        summary = f"{location}: {self.severity} {self.rule}: {self.message}{confidence} [{self.id}]"
         if self.note is None:
             return summary
         return f"{summary}\n{textwrap.indent(self.note.rstrip(), '  ')}"

@@ -1,6 +1,8 @@
 import time
 from dataclasses import dataclass, field
 
+from codeguard.review.judge import JudgeTimeout
+
 
 @dataclass(frozen=True)
 class Deadline:
@@ -9,3 +11,6 @@ class Deadline:
 
     def remaining_seconds(self) -> float:
         return self.started + self.minutes * 60 - time.monotonic()
+
+    def reached(self) -> JudgeTimeout:
+        return JudgeTimeout(f"The review reached its {self.minutes}-minute time limit.")

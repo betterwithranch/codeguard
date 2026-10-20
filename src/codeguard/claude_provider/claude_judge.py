@@ -7,13 +7,12 @@ from pathlib import Path
 import logfire
 
 from codeguard.claude_provider.claude_result import ClaudeResult
-from codeguard.claude_provider.deadline import Deadline
 from codeguard.claude_provider.prompt_cache_warmup import PromptCacheWarmup
 from codeguard.review import (
+    Deadline,
     JudgeNoVerdict,
     JudgeProcessError,
     JudgeRequest,
-    JudgeTimeout,
     Verdict,
 )
 
@@ -62,11 +61,11 @@ class ClaudeJudge:
             return self._run_until(instructions, prompt, None)
         remaining = self.deadline.remaining_seconds()
         if remaining <= 0:
-            raise _time_limit_reached(self.deadline)
+            raise self.deadline.reached()
         try:
             return self._run_until(instructions, prompt, remaining)
         except subprocess.TimeoutExpired as error:
-            raise _time_limit_reached(self.deadline) from error
+            raise self.deadline.reached() from error
 
     def _run_until(
         self, instructions: str, prompt: str, timeout: float | None
@@ -98,7 +97,3 @@ class ClaudeJudge:
             check=False,
             timeout=timeout,
         )
-
-
-def _time_limit_reached(deadline: Deadline) -> JudgeTimeout:
-    return JudgeTimeout(f"The review reached its {deadline.minutes}-minute time limit.")

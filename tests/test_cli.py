@@ -325,7 +325,7 @@ class TestReviewOfDeletedCode:
             "service.py",
             "class ExampleService:\n    def describe(self):\n        return 'service'\n",
         )
-        violation = {"file": "service.py", "note": "Move it.", "confidence": 1.0}
+        violation = {"file": "service.py", "confidence": 1.0}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         claude = bin_dir / "claude"
@@ -432,7 +432,7 @@ class TestReviewJsonFormat:
         self, repo, tmp_path, make_skill, make_diagnostic
     ):
         bin_dir = judged_repo(repo, tmp_path, make_skill)
-        violation = {"file": "a.py", "line": 1, "message": "Move it.", "note": "Move it."}
+        violation = {"file": "a.py", "line": 1, "message": "Move it."}
         (bin_dir / "claude").write_text(fake_claude_script([{**violation, "confidence": 0.4}]))
 
         result = run_review(repo, tmp_path, bin_dir, "--format", "json")
@@ -629,7 +629,7 @@ class TestEvalCommand:
             "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
             "      x = 1\n",
         )
-        violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "note": "Move it."}
+        violation = {"file": "invoice.py", "line": 1, "message": "Move it."}
         bin_dir = tmp_path / "bin"
         bin_dir.mkdir()
         claude = bin_dir / "claude"

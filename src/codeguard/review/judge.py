@@ -33,7 +33,6 @@ class Violation(BaseModel):
     file: str
     line: int
     message: str
-    note: str
     confidence: float = Field(ge=0, le=1)
 
     def severity(self, severity: Severity, threshold: float) -> Severity:
@@ -57,7 +56,7 @@ class Verdict(BaseModel):
                 line=violation.line,
                 message=violation.message,
                 severity=violation.severity(binding.severity, threshold),
-                note=violation.note,
+                note=None,
                 category=Category.JUDGED,
                 confidence=violation.confidence,
             )

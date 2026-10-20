@@ -1,6 +1,7 @@
 from codeguard.review.binding import Binding, Bindings
 from codeguard.review.cached_judge import CachedJudge
 from codeguard.review.check_step import Check, CheckStep
+from codeguard.review.deadline import Deadline
 from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severity
 from codeguard.review.judge import (
     Judge,
@@ -24,6 +25,7 @@ __all__ = [
     "Category",
     "Check",
     "CheckStep",
+    "Deadline",
     "Diagnostic",
     "ErrorType",
     "Judge",

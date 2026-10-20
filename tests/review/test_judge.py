@@ -2,7 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from codeguard.review import JudgeRequest, Severity, Verdict
-from codeguard.review.judge import INSTRUCTIONS
+from codeguard.review.judge import INSTRUCTIONS, Violation
 
 THRESHOLD = 0.9
 
@@ -33,8 +33,41 @@ class TestViolation:
         with pytest.raises(ValidationError):
             make_violation(confidence=1.1)
 
+    def test_note_is_invalid(self):
+        with pytest.raises(ValidationError):
+            Violation.model_validate(
+                {
+                    "file": "a.py",
+                    "line": 1,
+                    "message": "Move it.",
+                    "note": "Fix it.",
+                    "confidence": 1,
+                }
+            )
+
 
 class TestVerdict:
+    def test_unconfident_violation_shows_why_it_is_only_a_warning(
+        self, make_violation, make_binding
+    ):
+        verdict = Verdict(violations=(make_violation(confidence=0.7),))
+
+        [diagnostic] = verdict.diagnostics_for(make_binding(), "a.py", THRESHOLD)
+
+        assert str(diagnostic).startswith(
+            f"a.py:1: warning {make_binding().rule}: Use logging, not print. (confidence 0.70)"
+        )
+
+    def test_judged_diagnostic_prints_only_its_summary(self, make_violation, make_binding):
+        verdict = Verdict(violations=(make_violation(),))
+
+        [diagnostic] = verdict.diagnostics_for(make_binding(), "a.py", THRESHOLD)
+
+        assert str(diagnostic) == (
+            f"a.py:1: error {make_binding().rule}: Use logging, not print. (confidence 1.00) "
+            f"[{diagnostic.id}]"
+        )
+
     def test_diagnostic_has_the_binding_skill_and_severity(
         self, make_violation, make_binding, make_diagnostic
     ):

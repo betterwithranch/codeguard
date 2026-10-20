@@ -7,6 +7,8 @@ from codeguard.config import (
     Config,
     ConfigError,
     ConfigLoader,
+    JudgeConfig,
+    JudgeProvider,
     PathPackageConfig,
     PatternBindingConfig,
     PatternBindingsConfig,
@@ -62,6 +64,51 @@ class TestConfigLoader:
         monkeypatch.setenv("CODEGUARD_CONFIG", "codeguard.local.yaml")
 
         assert ConfigLoader(repo.root).load().review_time_limit_minutes == 20
+
+    def test_judge_defaults_to_the_claude_cli(self, repo):
+        assert ConfigLoader(repo.root).load().judge == JudgeConfig(
+            provider=JudgeProvider.CLAUDE_CLI
+        )
+
+    def test_loads_a_gemini_judge(self, repo):
+        repo.write(
+            CONFIG,
+            "judge:\n  provider: gemini\n  model: gemini-3.1-pro-preview\n"
+            "  project: my-project\n  location: global\n",
+        )
+
+        assert ConfigLoader(repo.root).load().judge == JudgeConfig(
+            provider=JudgeProvider.GEMINI,
+            model="gemini-3.1-pro-preview",
+            project="my-project",
+            location="global",
+        )
+
+    def test_gemini_judge_without_a_model_is_an_error(self, repo):
+        repo.write(CONFIG, "judge:\n  provider: gemini\n")
+
+        with pytest.raises(ConfigError) as error:
+            ConfigLoader(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            "  judge: Value error, the gemini provider needs a model, "
+            "such as gemini-3.1-pro-preview"
+        )
+
+    def test_claude_judge_with_a_project_is_an_error(self, repo):
+        repo.write(CONFIG, "judge:\n  project: my-project\n")
+
+        with pytest.raises(ConfigError, match="project and location apply to the gemini"):
+            ConfigLoader(repo.root).load()
+
+    def test_judge_model_replaces_the_rule_model(self):
+        judge = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
+
+        assert judge.model_for("claude-sonnet-5-5") == "gemini-3.1-pro-preview"
+
+    def test_rule_model_stays_without_a_judge_model(self):
+        assert JudgeConfig().model_for("claude-haiku-5-5") == "claude-haiku-5-5"
 
     def test_loads_a_path_package(self, repo):
         repo.write("rules/codeguard-package.yaml", "name: example\nrulesets: [python]\n")

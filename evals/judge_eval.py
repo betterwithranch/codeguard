@@ -10,7 +10,8 @@ from pydantic_evals.evaluators import EqualsExpected
 
 from codeguard.claude_provider import ClaudeJudge
 from codeguard.config import SKILL_FILE
-from codeguard.review import JudgeRequest, Skill
+from codeguard.gemini_provider import GeminiJudge, gemini_client
+from codeguard.review import Judge, JudgeRequest, Skill
 
 _FIXTURES = Path(__file__).parent / "fixtures"
 _MAX_CONCURRENCY = 4
@@ -52,27 +53,43 @@ _DATASET = Dataset[JudgeCase, bool, None](
 )
 
 
-def violates(model: str, case: JudgeCase) -> bool:
+def violates(judge: Judge, case: JudgeCase) -> bool:
     skill = Skill.from_file(case.skill, _FIXTURES / "skills" / case.skill / SKILL_FILE)
-    verdict = ClaudeJudge(_FIXTURES, model, _PROCESSES).judge(JudgeRequest(skill, case.file))
+    verdict = judge.judge(JudgeRequest(skill, case.file))
     return any(violation.file == case.file for violation in verdict.violations)
 
 
-def passes(model: str, repeat: int) -> bool:
+def passes(model: str, judge: Judge, repeat: int) -> bool:
     report = _DATASET.evaluate_sync(
-        partial(violates, model), task_name=model, repeat=repeat, max_concurrency=_MAX_CONCURRENCY
+        partial(violates, judge), task_name=model, repeat=repeat, max_concurrency=_MAX_CONCURRENCY
     )
     report.print(include_input=True, include_output=True)
     averages = report.averages()
-    return averages is not None and averages.assertions == 1.0
+    return not report.failures and averages is not None and averages.assertions == 1.0
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Evaluate the judge against fixture skills.")
     parser.add_argument("--repeat", type=int, default=1, help="Runs per case. Default: 1.")
+    parser.add_argument(
+        "--gemini",
+        metavar="MODEL",
+        action="append",
+        help="Evaluate this Gemini model on Google Cloud instead of the Claude models. Repeatable.",
+    )
     args = parser.parse_args()
-    results = [passes(model, args.repeat) for model in _MODELS]
+    judges = _gemini_judges(args.gemini) if args.gemini else _claude_judges()
+    results = [passes(model, judge, args.repeat) for model, judge in judges.items()]
     return 0 if all(results) else 1
+
+
+def _claude_judges() -> dict[str, Judge]:
+    return {model: ClaudeJudge(_FIXTURES, model, _PROCESSES) for model in _MODELS}
+
+
+def _gemini_judges(models: list[str]) -> dict[str, Judge]:
+    client = gemini_client()
+    return {model: GeminiJudge(_FIXTURES, model, client, _PROCESSES) for model in models}
 
 
 if __name__ == "__main__":
