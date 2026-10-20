@@ -2,13 +2,13 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from codeguard.ast_grep import AstGrep
-from codeguard.claude_provider import Deadline
 from codeguard.config import Config, ConfigLoader
 from codeguard.judge_evals import JudgeEvalRunner, RulePackageReview
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
     Bindings,
     CheckStep,
+    Deadline,
     JudgeCheck,
     JudgePlan,
     JudgeRequest,
@@ -129,7 +129,7 @@ class Rules:
 
     @cached_property
     def _judges(self) -> Judges:
-        return Judges()
+        return Judges(self.config.judge)
 
     def _judge_checks(
         self, scope: ChangedLines | AllLines, deadline: Deadline

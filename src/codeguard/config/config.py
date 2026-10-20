@@ -1,5 +1,6 @@
 from pydantic import BaseModel, ConfigDict, Field
 
+from codeguard.config.judge_config import JudgeConfig
 from codeguard.config.package_config import PackageConfig
 from codeguard.config.versions import ExactVersion
 
@@ -13,3 +14,4 @@ class Config(BaseModel):
     review_time_limit_minutes: int = Field(default=5, ge=1)
     ast_grep: ExactVersion | None = Field(default=None, alias="ast-grep")
     packages: tuple[PackageConfig, ...] = ()
+    judge: JudgeConfig = JudgeConfig()

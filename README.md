@@ -372,6 +372,48 @@ paths: ["app/**/*.py"]
 model: claude-haiku-5-5
 ```
 
+### Judge with Gemini on Google Cloud
+
+By default the judge runs `claude -p`. To judge with Gemini on Google Cloud (Vertex AI)
+instead, set `judge` in `.codeguard/config.yaml`:
+
+```yaml
+judge:
+  provider: gemini         # default: claude-cli
+  model: gemini-3.8-flash  # replaces every rule's model
+  project: my-project      # default: GOOGLE_CLOUD_PROJECT
+  location: global         # default: GOOGLE_CLOUD_LOCATION
+```
+
+Gemini reads the working directory through read-only `read_file`, `grep` and `glob`
+tools, limited to the repository, and reports through a `submit_verdict` tool that
+takes the same verdict schema as Claude. Verdicts are cached per provider and model,
+so switching providers doesn't reuse Claude's verdicts.
+
+codeguard signs in with Application Default Credentials. Set it up once per project:
+
+1. Enable the Vertex AI API:
+   `gcloud services enable aiplatform.googleapis.com --project my-project`.
+2. Create a service account with the Vertex AI User role:
+   ```sh
+   gcloud iam service-accounts create codeguard --project my-project
+   gcloud projects add-iam-policy-binding my-project \
+     --member serviceAccount:codeguard@my-project.iam.gserviceaccount.com \
+     --role roles/aiplatform.user
+   ```
+3. Give codeguard the credentials. On your machine, `gcloud auth application-default login`
+   is enough. Elsewhere, create a key with
+   `gcloud iam service-accounts keys create key.json --iam-account codeguard@my-project.iam.gserviceaccount.com`
+   and set `GOOGLE_APPLICATION_CREDENTIALS` to its path. In GitHub Actions, use
+   `google-github-actions/auth` before the codeguard action.
+
+Where a proxy adds credentials to requests, as Claude Code cloud environments' network
+secrets do, use an API key bound to the service account instead: create it under
+**APIs & Services → Credentials** with only Agent Platform API allowed, have the proxy send
+it as the `x-goog-api-key` header to `aiplatform.googleapis.com`, and set
+`GOOGLE_API_KEY=proxy-injected` with `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`,
+`project` and `location` unset. The key identifies the project.
+
 ## Telemetry
 
 Set `LOGFIRE_TOKEN` to a Logfire write token and codeguard sends a trace of each run.
@@ -381,6 +423,9 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
 - `claude judges {rule} on {file}`: one span per Claude call, with `model`, `num_turns`,
   `duration_ms`, `cost_usd`, `input_tokens`, `output_tokens`, `cache_read_input_tokens`,
   `cache_creation_input_tokens` and `thinking_tokens`.
+- `gemini judges {rule} on {file}`: one span per Gemini judgement, with `model`,
+  `num_turns`, `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
+  `thinking_tokens`, summed over its turns.
 - `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
 - `review {repository}`: `files`, `diagnostics` and `errors`.
 
@@ -398,7 +443,7 @@ codeguard review --latest     # newest tag in each package range, not the lock
 codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
 codeguard test                # pattern rule and gate tests, and judge rule eval triggers
 codeguard test --update-all   # the same, regenerating snapshots
-codeguard eval                # judge rule evals and the rule review; calls Claude
+codeguard eval                # judge rule evals and the rule review; calls the configured judge
 codeguard update              # lock each package range to its newest tag
 ```
 
@@ -416,6 +461,7 @@ after changing the judge's instructions, request, model or tools:
 ```sh
 uv run evals/judge_eval.py              # each case once
 uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
+uv run evals/judge_eval.py --gemini gemini-3.8-flash  # a Gemini model instead of Claude
 ```
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits

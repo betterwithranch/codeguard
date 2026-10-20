@@ -10,8 +10,8 @@ import pytest
 from claude_output import MODEL_USAGE, fake_claude_script
 from spans import finished_span_attributes
 
-from codeguard.claude_provider import ClaudeJudge, Deadline, PromptCacheWarmup
-from codeguard.review import JudgeError, JudgeRequest, Verdict
+from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
+from codeguard.review import Deadline, JudgeError, JudgeRequest, Verdict
 
 MODEL = "claude-sonnet-5-5"
 

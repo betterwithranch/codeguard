@@ -46,7 +46,7 @@ def main() -> int:
         "--dry-run",
         action="store_true",
         help="Run the pattern rules and list the judge calls the review would make, "
-        "without calling Claude.",
+        "without calling the judge.",
     )
     review_command.set_defaults(run=_review)
 
