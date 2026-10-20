@@ -1,8 +1,16 @@
 from codeguard.review.binding import Binding, Bindings
 from codeguard.review.cached_judge import CachedJudge
 from codeguard.review.check_step import Check, CheckStep
-from codeguard.review.diagnostic import Diagnostic, Severity
-from codeguard.review.judge import Judge, JudgeError, JudgeRequest, Verdict
+from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severity
+from codeguard.review.judge import (
+    Judge,
+    JudgeError,
+    JudgeNoVerdict,
+    JudgeProcessError,
+    JudgeRequest,
+    JudgeTimeout,
+    Verdict,
+)
 from codeguard.review.judge_check import JudgeCheck
 from codeguard.review.judge_plan import JudgePlan, PlannedCall
 from codeguard.review.review import Review
@@ -13,14 +21,19 @@ __all__ = [
     "Binding",
     "Bindings",
     "CachedJudge",
+    "Category",
     "Check",
     "CheckStep",
     "Diagnostic",
+    "ErrorType",
     "Judge",
     "JudgeCheck",
     "JudgeError",
+    "JudgeNoVerdict",
     "JudgePlan",
+    "JudgeProcessError",
     "JudgeRequest",
+    "JudgeTimeout",
     "PlannedCall",
     "Review",
     "Reviewer",

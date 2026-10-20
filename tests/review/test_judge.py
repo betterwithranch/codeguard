@@ -58,7 +58,7 @@ class TestVerdict:
 
         diagnostics = verdict.diagnostics_for(make_binding(), "a.py", THRESHOLD)
 
-        assert diagnostics == (make_diagnostic(judged=True),)
+        assert diagnostics == (make_diagnostic(judged=True, confidence=THRESHOLD),)
 
     def test_error_below_the_threshold_is_a_warning(
         self, make_violation, make_binding, make_diagnostic
@@ -67,7 +67,9 @@ class TestVerdict:
 
         diagnostics = verdict.diagnostics_for(make_binding(), "a.py", THRESHOLD)
 
-        assert diagnostics == (make_diagnostic(judged=True, severity=Severity.WARNING),)
+        assert diagnostics == (
+            make_diagnostic(judged=True, severity=Severity.WARNING, confidence=0.5),
+        )
 
     def test_info_below_the_threshold_stays_info(
         self, make_violation, make_binding, make_diagnostic
@@ -78,4 +80,6 @@ class TestVerdict:
             make_binding(severity=Severity.INFO), "a.py", THRESHOLD
         )
 
-        assert diagnostics == (make_diagnostic(judged=True, severity=Severity.INFO),)
+        assert diagnostics == (
+            make_diagnostic(judged=True, severity=Severity.INFO, confidence=0.5),
+        )

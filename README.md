@@ -342,21 +342,31 @@ In Codex, trust codeguard's hooks in `/hooks`.
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
-directory: the uncommitted and untracked files, whoever changed them and however. An
-error blocks the stop, and the agent sees the diagnostics. If the agent stops again with
-the same errors, the stop goes through, so the agent can ask you about them. It runs the `codeguard` the
-installer put on your PATH, the same one you run from the command line.
+directory: the uncommitted and untracked files, whoever changed them and however. It runs
+the `codeguard` the installer put on your PATH, the same one you run from the command
+line, through `uv`. Claude Code and Codex get the same behaviour.
+
+- An error blocks the stop, and only errors reach the agent. It blocks every time the
+  agent stops until the errors are fixed. When the agent can't fix one, interrupt it
+  and fix the rule.
+- Everything else goes to you, not the agent: warnings, findings below the confidence
+  threshold, and rules the judge couldn't check (a failed `claude` call or the time
+  limit). The hook passes `--judge-errors-as-warnings`, since the agent can't fix those;
+  CI still fails on them.
+- If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
+  goes through.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
-threshold is reported as a warning and doesn't block. The threshold defaults to 0.9; set
-it in `.codeguard/config.yaml`:
+threshold is reported as a warning, with its confidence, and doesn't block. The
+threshold defaults to 0.9; set it in `.codeguard/config.yaml`:
 
 ```yaml
 confidence_threshold: 0.8
 ```
 
-A review stops judging after 5 minutes. Each rule and file it didn't judge gets a "not
-checked" diagnostic at the rule's severity, so an unchecked `error` rule fails the review.
+A review stops judging after 5 minutes. Each rule and file it didn't judge gets a
+`judge_error` diagnostic at the rule's severity, so an unchecked `error` rule fails the
+review. A failed `claude` call does the same.
 The GitHub Action stops the review 2 minutes after the limit, in case it hangs. Change the
 limit in `.codeguard/config.yaml`:
 
@@ -382,7 +392,8 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
   `duration_ms`, `cost_usd`, `input_tokens`, `output_tokens`, `cache_read_input_tokens`,
   `cache_creation_input_tokens` and `thinking_tokens`.
 - `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
-- `review {repository}`: `files`, `diagnostics` and `errors`.
+- `review {repository}`: `files`, `diagnostics`, `errors`, and `host` (the caller passed
+  with `--host`, such as `claude-code` or `codex`).
 
 In CI, pass the token as the action's `logfire-token` input.
 
@@ -396,6 +407,8 @@ codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
 codeguard review --latest     # newest tag in each package range, not the lock
 codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
+codeguard review --format json  # one JSON object with every diagnostic
+codeguard review --judge-errors-as-warnings  # judge calls that couldn't complete don't fail
 codeguard test                # pattern rule and gate tests, and judge rule eval triggers
 codeguard test --update-all   # the same, regenerating snapshots
 codeguard eval                # judge rule evals and the rule review; calls Claude

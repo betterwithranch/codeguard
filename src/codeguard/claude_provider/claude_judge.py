@@ -9,7 +9,13 @@ import logfire
 from codeguard.claude_provider.claude_result import ClaudeResult
 from codeguard.claude_provider.deadline import Deadline
 from codeguard.claude_provider.prompt_cache_warmup import PromptCacheWarmup
-from codeguard.review import JudgeError, JudgeRequest, Verdict
+from codeguard.review import (
+    JudgeNoVerdict,
+    JudgeProcessError,
+    JudgeRequest,
+    JudgeTimeout,
+    Verdict,
+)
 
 _EXECUTABLE = "claude"
 _READ_ONLY_TOOLS = "Read,Grep,Glob"
@@ -41,14 +47,14 @@ class ClaudeJudge:
                 process = self._run(instructions, request.prompt)
             span.set_attribute("returncode", process.returncode)
             if process.returncode != 0:
-                raise JudgeError(
+                raise JudgeProcessError(
                     f"{self.executable} exited with {process.returncode}.\n"
                     f"stdout:\n{process.stdout}\nstderr:\n{process.stderr}"
                 )
             result = ClaudeResult.from_stream(process.stdout)
             span.set_attributes(result.telemetry)
             if result.structured_output is None:
-                raise JudgeError(f"{self.executable} returned no verdict:\n{process.stdout}")
+                raise JudgeNoVerdict(f"{self.executable} returned no verdict:\n{process.stdout}")
             return result.structured_output
 
     def _run(self, instructions: str, prompt: str) -> subprocess.CompletedProcess[str]:
@@ -94,5 +100,5 @@ class ClaudeJudge:
         )
 
 
-def _time_limit_reached(deadline: Deadline) -> JudgeError:
-    return JudgeError(f"The review reached its {deadline.minutes}-minute time limit.")
+def _time_limit_reached(deadline: Deadline) -> JudgeTimeout:
+    return JudgeTimeout(f"The review reached its {deadline.minutes}-minute time limit.")
