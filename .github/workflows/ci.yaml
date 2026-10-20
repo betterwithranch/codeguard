@@ -8,8 +8,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
+      - run: uv run --frozen ruff check
+      - run: uv run --frozen ruff format --check
       - run: uv run --frozen pytest
       - run: uv run --frozen lint-imports
+      - run: uv run --frozen basedpyright
   codeguard:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
@@ -20,6 +23,8 @@ jobs:
       - uses: ./
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          logfire-token: ${{ secrets.LOGFIRE_TOKEN }}
+          dry-run: true
   judge-evals:
     runs-on: ubuntu-latest
     steps:

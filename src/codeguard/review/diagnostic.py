@@ -1,15 +1,9 @@
 import hashlib
 import textwrap
-from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict
 
-
-class Severity(StrEnum):
-    ERROR = "error"
-    WARNING = "warning"
-    INFO = "info"
-    HINT = "hint"
+from codeguard.config import Severity
 
 
 class Diagnostic(BaseModel):
@@ -17,10 +11,11 @@ class Diagnostic(BaseModel):
 
     rule: str
     file: str
-    line: int
+    line: int | None
     message: str
     severity: Severity
     note: str | None
+    end_line: int | None = None
 
     @property
     def id(self) -> str:
@@ -32,7 +27,7 @@ class Diagnostic(BaseModel):
         return self.severity is Severity.ERROR
 
     def __str__(self) -> str:
-        location = f"{self.file}:{self.line}"
+        location = self.file if self.line is None else f"{self.file}:{self.line}"
         summary = f"{location}: {self.severity} {self.rule}: {self.message} [{self.id}]"
         if self.note is None:
             return summary

@@ -1,10 +1,20 @@
+import os
 import subprocess
 import sysconfig
+from importlib import metadata
 from pathlib import Path
 
+import pytest
+from claude_output import fake_claude_script
+from git_repo import GitRepo
+from rules_package import write_package
+
+from codeguard.file_lock import exclusive_lock
+
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
-NO_PRINT_TEST = ".codeguard/rule-tests/pattern/no-print-test.yml"
-NO_PRINT_SNAPSHOT = ".codeguard/rule-tests/pattern/__snapshots__/no-print-snapshot.yml"
+BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
+NO_PRINT_TEST = ".codeguard/rule-tests/no-print-test.yml"
+NO_PRINT_SNAPSHOT = ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml"
 TRACEBACK_HEADING = "Traceback (most recent call last):\n"
 PASSING_NO_PRINT_TEST_REPORT = (
     "Running 1 tests\n"
@@ -32,6 +42,23 @@ class TestReviewCommand:
         )
         assert result.stderr == ""
         assert result.returncode == 1
+
+    def test_review_waits_for_a_running_review(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+        diagnostic = make_diagnostic()
+
+        with exclusive_lock(repo.root / ".git" / "codeguard-review.lock"):
+            process = subprocess.Popen(
+                [CODEGUARD, "review"], cwd=repo.root, stdout=subprocess.PIPE, text=True
+            )
+            with pytest.raises(subprocess.TimeoutExpired):
+                process.wait(timeout=1)
+        stdout, _ = process.communicate(timeout=30)
+
+        assert stdout.startswith(
+            f"a.py:1: error no-print: Use logging, not print. [{diagnostic.id}]\n"
+        )
+        assert process.returncode == 1
 
     def test_warning_diagnostic_prints_and_exits_0(self, repo, make_diagnostic):
         repo.write("a.py", "breakpoint()\n")
@@ -128,24 +155,428 @@ class TestReviewCommand:
         assert result.returncode == 2
 
     def test_outside_a_working_tree_exits_2(self, tmp_path):
-        result = subprocess.run(
-            [CODEGUARD, "review"], cwd=tmp_path, capture_output=True, text=True
-        )
+        result = subprocess.run([CODEGUARD, "review"], cwd=tmp_path, capture_output=True, text=True)
 
         git_error, traceback = result.stderr.split(TRACEBACK_HEADING)
         assert result.stdout == ""
-        assert git_error == "fatal: not a git repository (or any of the parent directories): .git\n"
+        assert git_error.startswith("fatal: not a git repository")
         assert traceback.endswith("returned non-zero exit status 128.\n")
         assert result.returncode == 2
 
 
+class TestReviewWithAstGrepVersion:
+    def test_pinned_ast_grep_runs_the_rules(self, repo, make_diagnostic):
+        repo.write(".codeguard/config.yaml", f"ast-grep: {BUNDLED_AST_GREP}\n")
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{make_diagnostic()}\n"
+        assert result.returncode == 1
+
+    def test_ast_grep_outside_a_package_range_exits_2(self, repo):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            "rules/codeguard-package.yaml",
+            "name: example\nrulesets: [python]\nast-grep: '<0.45'\n",
+        )
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n  - kind: path\n    path: rules\n    rulesets:\n      python: {}\n",
+        )
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-2:] == [
+            f"codeguard.config.config_error.ConfigError: {repo.root}/.codeguard is invalid:",
+            f"  packages.0: example supports ast-grep <0.45, not {BUNDLED_AST_GREP}",
+        ]
+        assert result.returncode == 2
+
+
+class TestReviewWithPackages:
+    def test_opted_in_rule_reports_with_its_full_id(self, repo, make_diagnostic):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n"
+            "  - kind: path\n"
+            "    path: rules\n"
+            "    rulesets:\n"
+            "      python:\n"
+            "        exclude: [responsibility-placement]\n",
+        )
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
+    def test_excluded_rule_reports_nothing(self, repo):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n"
+            "  - kind: path\n"
+            "    path: rules\n"
+            "    rulesets:\n"
+            "      python:\n"
+            "        exclude: [no-print, responsibility-placement]\n",
+        )
+        (repo.root / ".codeguard/rules/pattern/no-print.yml").unlink()
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == ""
+        assert result.returncode == 0
+
+    def test_unknown_excluded_rule_exits_2(self, repo):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n"
+            "  - kind: path\n"
+            "    path: rules\n"
+            "    rulesets:\n"
+            "      python:\n"
+            "        exclude: [no-prnt]\n",
+        )
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-2:] == [
+            f"codeguard.config.config_error.ConfigError: {repo.root}/.codeguard is invalid:",
+            "  packages.0.rulesets.python: unknown rule no-prnt",
+        ]
+        assert result.returncode == 2
+
+
+@pytest.fixture
+def released_package(tmp_path_factory) -> GitRepo:
+    package = GitRepo.init(tmp_path_factory.mktemp("released").resolve())
+    write_package(package)
+    package.commit("Add rules")
+    package.git("tag", "v1.0.0")
+    return package
+
+
+def versioned_config(package: GitRepo) -> str:
+    return (
+        f"packages:\n  - kind: versioned\n    git: {package.file_url}\n    version: '>=1,<2'\n"
+        "    rulesets:\n      python:\n        exclude: [responsibility-placement]\n"
+    )
+
+
+class TestUpdateCommand:
+    def test_prints_each_locked_ref(self, repo, released_package):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+
+        result = subprocess.run(
+            [CODEGUARD, "update"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{released_package.file_url}: unlocked -> v1.0.0\n"
+        assert result.stderr == ""
+        assert result.returncode == 0
+
+
+class TestReviewOfDeletedCode:
+    def test_violation_on_the_class_that_lost_a_method_is_reported(
+        self, repo, tmp_path, make_skill
+    ):
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
+        )
+        repo.write(
+            "service.py",
+            "class ExampleService:\n"
+            "    def execute(self):\n"
+            "        return 1\n"
+            "\n"
+            "    def describe(self):\n"
+            "        return 'service'\n",
+        )
+        repo.commit("Add the service")
+        repo.write(
+            "service.py",
+            "class ExampleService:\n    def describe(self):\n        return 'service'\n",
+        )
+        violation = {"file": "service.py", "note": "Move it.", "confidence": 1.0}
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        claude = bin_dir / "claude"
+        claude.write_text(
+            fake_claude_script(
+                [
+                    {**violation, "line": 1, "message": "The class lost its entry point."},
+                    {**violation, "line": 2, "message": "Untouched method."},
+                ]
+            )
+        )
+        claude.chmod(0o755)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert result.stdout.splitlines()[0].startswith(
+            "service.py:1: error placement: The class lost its entry point."
+        )
+        assert "Untouched method." not in result.stdout
+
+
+class TestReviewDryRun:
+    def test_lists_judge_calls_without_calling_claude(self, repo, tmp_path, make_skill):
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any]\n',
+        )
+        repo.write(".claude/skills/class-shape/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/class-shape.yaml",
+            'skill: .claude/skills/class-shape\npaths: ["**/*.py"]\ntriggers: [class-header]\n',
+        )
+        repo.write("a.py", "x = 1\n")
+        repo.write("b.rb", "x = 1\n")
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        claude = bin_dir / "claude"
+        claude.write_text("#!/bin/sh\nexit 1\n")
+        claude.chmod(0o755)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert result.stdout == (
+            "Judge calls: 1 (0 cached, 1 to Claude), 1 skipped by triggers\n"
+            "\n"
+            "By rule:\n"
+            "  claude  cached  skipped  rule\n"
+            "       1       0        0  placement\n"
+            "       0       0        1  class-shape\n"
+            "\n"
+            "By file:\n"
+            "  claude  cached  skipped  file\n"
+            "       1       0        1  a.py\n"
+            "\n"
+            "Calls by file:\n"
+            "a.py\n"
+            "  claude   placement\n"
+            "  skipped  class-shape\n"
+        )
+        assert result.returncode == 0
+
+    def test_pattern_rule_error_is_printed_and_exits_1(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == (
+            f"{make_diagnostic()}\nJudge calls: 0 (0 cached, 0 to Claude), 0 skipped by triggers\n"
+        )
+        assert result.stderr == ""
+        assert result.returncode == 1
+
+
+class TestConfigCommand:
+    def test_prints_the_default_without_a_config(self, repo):
+        result = subprocess.run(
+            [CODEGUARD, "config", "review_time_limit_minutes"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == "5\n"
+        assert result.returncode == 0
+
+    def test_prints_the_configured_setting(self, repo):
+        repo.write(".codeguard/config.yaml", "review_time_limit_minutes: 10\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "config", "review_time_limit_minutes"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == "10\n"
+        assert result.returncode == 0
+
+
+class TestReviewWithVersionedPackages:
+    def test_unlocked_range_exits_2(self, repo, released_package):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        repo.write("a.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-1] == (
+            "codeguard.config.config_error.ConfigError: .codeguard/lock.yaml has no ref for "
+            f"{released_package.file_url} <2,>=1. Run codeguard update."
+        )
+        assert result.returncode == 2
+
+    def test_locked_range_reviews_with_the_locked_rules(
+        self, repo, released_package, make_diagnostic
+    ):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        subprocess.run([CODEGUARD, "update"], cwd=repo.root, check=True)
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
+    def test_latest_reviews_without_a_lock(self, repo, released_package, make_diagnostic):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--latest"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
+
+class TestEvalCommand:
+    def test_invalid_case_below_the_confidence_threshold_is_reported_and_exits_1(
+        self, tmp_path, tmp_path_factory
+    ):
+        package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
+        write_package(package)
+        package.write(
+            "python/rule-evals/responsibility-placement-eval.yml",
+            "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
+            "      x = 1\n",
+        )
+        violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "note": "Move it."}
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        claude = bin_dir / "claude"
+        claude.write_text(fake_claude_script([{**violation, "confidence": 0.4}]))
+        claude.chmod(0o755)
+
+        result = subprocess.run(
+            [CODEGUARD, "eval"],
+            cwd=package.root,
+            capture_output=True,
+            text=True,
+            env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
+        )
+
+        assert result.stderr == (
+            "python/rule-evals/responsibility-placement-eval.yml invalid case 1: "
+            "responsibility-placement expected a violation with confidence 0.90, got:\n"
+            "  line 1 (0.40): Move it.\n"
+        )
+        assert result.returncode == 1
+
+
 class TestTestCommand:
+    def test_ast_grep_outside_the_package_range_exits_2(self, tmp_path):
+        package = GitRepo.init(tmp_path.resolve())
+        write_package(package)
+        package.write(
+            "codeguard-package.yaml", "name: example\nrulesets: [python]\nast-grep: '<0.45'\n"
+        )
+
+        result = subprocess.run(
+            [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-2:] == [
+            "codeguard.config.config_error.ConfigError: "
+            f"{package.root}/codeguard-package.yaml is invalid:",
+            f"  example supports ast-grep <0.45, not {BUNDLED_AST_GREP}",
+        ]
+        assert result.returncode == 2
+
+    def test_unexpected_ruleset_entry_exits_2(self, tmp_path):
+        package = GitRepo.init(tmp_path.resolve())
+        write_package(package)
+        package.write("python/rule-tests/triggers/no-print-test.yml", "id: no-print\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
+        )
+
+        _, traceback = result.stderr.split(TRACEBACK_HEADING)
+        assert traceback.splitlines()[-2:] == [
+            f"codeguard.config.config_error.ConfigError: {package.root}/python is invalid:",
+            "  unexpected rule-tests/triggers",
+        ]
+        assert result.returncode == 2
+
+    def test_package_repo_runs_each_ruleset_tests(self, tmp_path):
+        package = GitRepo.init(tmp_path.resolve())
+        write_package(package)
+        package.write(
+            "python/rule-tests/no-print-test.yml",
+            "id: no-print\nvalid:\n  - logging.info(1)\n",
+        )
+
+        result = subprocess.run(
+            [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
+        assert result.returncode == 0
+
     def test_passing_rule_tests_exit_0(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
 
-        result = subprocess.run(
-            [CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True
-        )
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
         assert result.stderr == ""
@@ -159,12 +590,10 @@ class TestTestCommand:
         subprocess.run([CODEGUARD, "test", "--update-all"], cwd=repo.root, check=True)
         repo.write(NO_PRINT_TEST, "id: no-print\ninvalid:\n  - print(2)\n")
 
-        result = subprocess.run(
-            [CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True
-        )
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stderr == (
-            ".codeguard/rule-tests/pattern/__snapshots__/no-print-snapshot.yml: stale snapshot "
+            ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml: stale snapshot "
             "entries for no-print. Run codeguard test --update-all.\n"
         )
         assert result.returncode == 1
@@ -182,20 +611,76 @@ class TestTestCommand:
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
         repo.write(".codeguard/bindings/broken.yaml", "path: [a.py]\n")
 
-        result = subprocess.run(
-            [CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True
-        )
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
-        assert result.stderr == ""
+        assert result.stderr == (
+            f"warning: triggers not checked: {repo.root}/.codeguard is invalid:\n"
+            "  bindings.broken.yaml.skill: Field required\n"
+            "  bindings.broken.yaml.paths: Field required\n"
+            "  bindings.broken.yaml.path: Extra inputs are not permitted\n"
+        )
         assert result.returncode == 0
+
+    def test_broad_triggers_are_a_warning(self, repo, make_skill):
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [any, fixture]\n',
+        )
+
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
+
+        assert result.stderr == (
+            "warning: placement: broad triggers any; "
+            "a gate on the code its violations need skips more files\n"
+        )
+        assert result.returncode == 0
+
+    def test_gate_tests_run_with_the_pattern_tests(self, repo):
+        repo.write(
+            ".codeguard/gates/enum-value.yml",
+            "id: enum-value\nlanguage: python\nrule:\n  pattern: $X.value\n",
+        )
+        repo.write(
+            ".codeguard/rule-tests/enum-value-test.yml",
+            "id: enum-value\nvalid:\n  - status.name\ninvalid:\n  - status.value\n",
+        )
+
+        result = subprocess.run(
+            [CODEGUARD, "test", "--update-all"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert (repo.root / ".codeguard/rule-tests/__snapshots__/enum-value-snapshot.yml").is_file()
+        assert result.returncode == 0
+
+    def test_eval_case_whose_change_misses_the_triggers_exits_1(self, repo, make_skill):
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+        repo.write(".claude/skills/placement/SKILL.md", make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yaml",
+            'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [comment]\n',
+        )
+        repo.write(
+            ".codeguard/rule-evals/placement-eval.yml",
+            "id: placement\ninvalid:\n  - after: |\n      count = 1\n",
+        )
+
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
+
+        assert result.stderr == (
+            ".codeguard/rule-evals/placement-eval.yml invalid case 1: placement "
+            "triggers comment miss the change, which touches code, module-statement, "
+            "number-literal\n"
+        )
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
+        assert result.returncode == 1
 
     def test_failing_rule_tests_exit_1(self, repo):
         repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - print(1)\n")
 
-        result = subprocess.run(
-            [CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True
-        )
+        result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stdout == (
             "Running 1 tests\n"

@@ -2,17 +2,29 @@ import pytest
 from pydantic import ValidationError
 
 from codeguard.review import JudgeRequest, Severity, Verdict
+from codeguard.review.judge import INSTRUCTIONS
 
 THRESHOLD = 0.9
 
 
 class TestJudgeRequest:
-    def test_prompt_is_skill_text_then_file_path(self, make_skill):
+    def test_prompt_is_the_skill_text(self, make_skill):
+        skill = make_skill()
+
+        assert JudgeRequest(skill, "a.py").prompt == skill.text
+
+    def test_instructions_end_with_the_numbered_file(self, make_skill):
         request = JudgeRequest(make_skill(), "a.py")
 
-        assert request.prompt == (
-            "# Responsibility placement\n\nA method lives on the type whose data it reads.\n\n"
-            "a.py\n"
+        assert request.instructions("x = 1\nprint(x)\n") == (
+            f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n     2\tprint(x)\n</file>\n'
+        )
+
+    def test_instructions_end_a_file_without_a_final_newline(self, make_skill):
+        request = JudgeRequest(make_skill(), "a.py")
+
+        assert request.instructions("x = 1") == (
+            f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n</file>\n'
         )
 
 

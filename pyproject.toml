@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.1.0"
+version = "0.3.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }
@@ -9,6 +9,8 @@ requires-python = ">=3.13"
 dependencies = [
     "ast-grep-cli>=0.45.3",
     "diskcache>=5.6.3",
+    "logfire>=5.2.0",
+    "packaging>=26.3",
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
 ]
@@ -25,6 +27,44 @@ testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = ["--import-mode=importlib"]
 
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+extend-exclude = ["evals/fixtures"]
+
+[tool.ruff.lint]
+select = [
+    "E",
+    "F",
+    "W",
+    "I",
+    "B",
+    "SIM",
+    "UP",
+    "C4",
+    "C90",
+    "PGH003",
+    "PLR0913",
+    "PLR0915",
+    "PLC0415",
+    "T20",
+    "TID251",
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["codeguard.config.RulesetConfig"]
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."
+
+[tool.basedpyright]
+include = ["src"]
+typeCheckingMode = "standard"
+reportExplicitAny = "error"
+reportMissingTypeArgument = "error"
+reportUnnecessaryIsInstance = "error"
+reportUnnecessaryComparison = "error"
+
 [tool.importlinter]
 root_packages = ["codeguard"]
 
@@ -36,16 +76,22 @@ exhaustive = true
 layers = [
     "cli",
     "rules",
-    "ast_grep | claude",
-    "review | rule_tests",
-    "config | working_tree",
+    "claude_provider | judge_evals",
+    "pattern_rules",
+    "rule_tests",
+    "review | packages",
+    "syntax",
+    "ast_grep",
+    "config | working_tree | file_lock",
 ]
 
 [dependency-groups]
 dev = [
+    "basedpyright>=1.40.2",
     "factory-boy>=3.3.3",
     "import-linter>=2.15",
     "pydantic-evals>=2.57.0",
     "pytest>=9.1.1",
     "pytest-factoryboy>=2.8.1",
+    "ruff>=0.17.1",
 ]

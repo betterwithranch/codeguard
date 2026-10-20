@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 from diskcache import Cache
-from factories.skill import MakeBinding, MakeSkill
 from factories.diagnostic import MakeDiagnostic, MakeViolation
+from factories.skill import MakeBinding, MakeSkill
 from git_repo import GitRepo
 from pytest_factoryboy import register
 
@@ -12,6 +12,17 @@ register(MakeDiagnostic)
 register(MakeViolation)
 register(MakeSkill)
 register(MakeBinding)
+
+
+@pytest.fixture(autouse=True)
+def no_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("LOGFIRE_TOKEN", raising=False)
+    monkeypatch.setenv("LOGFIRE_IGNORE_NO_CONFIG", "1")
+
+
+@pytest.fixture(autouse=True)
+def committed_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("CODEGUARD_CONFIG", raising=False)
 
 
 @pytest.fixture

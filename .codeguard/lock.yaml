@@ -1,0 +1,4 @@
+packages:
+- git: https://github.com/betterwithranch/codeguard-rules.git
+  version: <1,>=0.4
+  ref: v0.4.0

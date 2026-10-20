@@ -77,8 +77,250 @@ project edits. A release that breaks the rule format starts `v1`.
 
 ### Rules
 
-Rules live in the project, under `.codeguard/`. The plugin's `writing-rules` skill
+A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
 guides an agent through writing a rule and its tests.
+
+A rule is one of two kinds:
+
+- A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
+- A **judge rule** is a skill that Claude reads each changed file against.
+
+Write a pattern rule whenever ast-grep can check the convention: it runs in
+milliseconds, costs nothing, and gives the same answer every time. A judge rule costs a
+Claude call for every changed file it matches. Use one only when the convention needs
+judgment, such as whether a name matches what the code does.
+
+A project can also opt into rulesets from rule packages:
+
+```yaml
+# .codeguard/config.yaml
+packages:
+  - kind: versioned
+    git: https://github.com/betterwithranch/codeguard-rules.git
+    version: ">=0.2,<1"
+    rulesets:
+      python:
+        exclude: [no-del-param]
+        rules:
+          names-match-behavior:
+            paths: ["src/**/*.py"]
+            severity: warning
+```
+
+- Only the listed rulesets run.
+- `include` lists the only rules that run, pattern and judged; rules the package adds
+  later stay off. `exclude` turns rules off. Set one or the other.
+- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`, and a judge
+  rule's `model`. `exclude_paths: []` brings back the files its binding leaves out.
+- `severity` on the ruleset sets every rule in it, including rules the package adds
+  later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
+  so `severity: warning` trials a package: its findings print without blocking. A
+  failed judge call takes its rule's severity too.
+- An unknown ruleset or rule id is an error.
+- `kind: path` with `path: ../my-rules` in place of `git` uses a local package, for
+  working on one. To use it without editing the committed config, put that config in a
+  gitignored file such as `codeguard.local.yaml` and set
+  `CODEGUARD_CONFIG=codeguard.local.yaml`. The path is relative to the repository root.
+
+Diagnostics name a packaged rule by package, ruleset and id:
+`betterwithranch/python/no-del-param`.
+
+A git package takes a `version` range (`kind: versioned`) or a `ref` (`kind: git`):
+
+- `version` follows the newest tag in the range. `codeguard update` writes that tag to
+  `.codeguard/lock.yaml`; commit it. Local reviews use the locked tag until the next
+  update. CI reviews (`codeguard review --latest`, which the action runs) use the newest
+  tag in the range and ignore the lock.
+- `ref` pins a tag or commit everywhere. `codeguard update` leaves it alone.
+
+codeguard fetches each tag once into `~/.cache/codeguard/packages` and reuses it, so a
+`ref` must not be a branch.
+
+A project runs one ast-grep version for all its rules: codeguard's own, or the version
+`.codeguard/config.yaml` sets, which runs through `uv tool run`:
+
+```yaml
+ast-grep: 0.45.3
+```
+
+codeguard fails when that version is outside a package's `ast-grep` range.
+
+For a private package in CI, pass a token that can read it:
+
+```yaml
+      - uses: betterwithranch/codeguard@v0
+        with:
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
+```
+
+## Write a rule package
+
+A package is a git repo with a `codeguard-package.yaml` at its root:
+
+```yaml
+name: betterwithranch
+rulesets: [python]
+ast-grep: ">=0.45,<0.46"   # the ast-grep versions its pattern rules work with
+codeguard: ">=0.2"         # the codeguard versions that can load it
+```
+
+Each ruleset is a directory with the same layout as a project's `.codeguard/`:
+
+```
+python/
+  rules/pattern/<id>.yml     # ast-grep rules
+  gates/<id>.yml             # ast-grep rules that gate judge rules
+  rule-tests/<id>-test.yml   # tests for both, with __snapshots__/
+  skills/<id>/SKILL.md       # judge rules
+  bindings/<id>.yaml         # skill and default paths
+  rule-evals/<id>-eval.yml   # judge rule evals
+```
+
+Pattern rule tests in `rule-tests/pattern/`, the old layout, still run. codeguard
+rejects anything else in a ruleset directory, and in `.codeguard/` anything
+else but `config.yaml` and `lock.yaml`, so a rule moves between a project and a package unchanged.
+
+A binding's `skill` path starts at the package root (`skill: python/skills/<id>`). A
+judge rule's id is its skill's directory name. Rule and gate ids are unique within a
+ruleset.
+
+A binding applies a rule to the files that match `paths` and none of `exclude_paths`. A
+judge rule's binding names its `skill`:
+
+```yaml
+skill: python/skills/names-match-behavior
+paths: ["**/*.py"]
+exclude_paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+```
+
+A pattern rule's binding names its `rule`. A pattern rule without one runs on every file
+in its language:
+
+```yaml
+rule: no-comments-in-tests
+paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+```
+
+Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a project can
+change it. The exception is a file name that is the convention itself, like
+`all-only-in-init` skipping `__init__.py`.
+
+A judge rule's binding lists `triggers`: the code its violations need. A binding without
+`triggers` gets `[any]`, so packages written before triggers still load. The judge
+skips a changed file whose changed lines fall inside none of it. Gate on where a
+violation appears, not on the rule's topic:
+
+```yaml
+skill: python/skills/mock-only-at-boundary
+paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
+triggers: [mock-use]
+```
+
+A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
+`<ruleset>/gates/<id>.yml`, tested like a pattern rule by `rule-tests/<id>-test.yml`
+(`invalid` cases are code the gate matches):
+
+```yaml
+id: mock-use
+language: python
+rule:
+  kind: call
+  has: {field: function, regex: "(^|\\.)(Mock|MagicMock|patch)$"}
+```
+
+A file touches a trigger when a changed line falls inside a node it matches. A new file
+touches every trigger it matches. A rule that needs every change says `triggers: [any]`;
+`codeguard test` warns on `any`, `code`, `function-body` and `function-signature`. The
+built-in kinds are `comment`, `docstring`, `import`,
+`function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
+`class-header`, `class-attribute`, `module-statement`, `annotation`, `call`,
+`control-flow`, `return-yield`, `collection-literal`, `string-literal`,
+`number-literal`, `attribute-access`, `subscript`, `conditional-expression`,
+`membership-test`, `assert` and `raise`, plus three from the diff:
+`definition-added-or-removed` (a def or class name added or removed), `code` (any line
+that is not only a comment or docstring) and `any`. The syntax table in
+`src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
+
+A judge rule's eval, `rule-evals/<id>-eval.yml`, lists edits. Each is a `before` (left
+out for a new file), an `after` and a `file` (default `module.py`), which must match the
+binding's paths:
+
+```yaml
+id: one-concept-per-module
+invalid:                         # the triggers fire and the judge reports a violation
+  - before: |
+      class Order:
+          pass
+    after: |
+      class Order:
+          pass
+
+
+      class Invoice:
+          pass
+valid:                           # the judge reports no violation
+  - after: |
+      class Order:
+          pass
+skipped:                         # the triggers don't fire, so the judge never sees it
+  - before: |
+      class Order:
+          total = 1
+    after: |
+      class Order:
+          total = 2
+```
+
+`codeguard test` checks the triggers on every case, with no model call. It commits each
+`before` to a scratch repository, writes each `after`, and classifies the diff the way a
+review does. An `invalid` case fails when the triggers miss the change, and a `skipped`
+case fails when they fire. The message lists the kinds the change touches. Narrow a gate
+until a `skipped` case passes, and keep every `invalid` case passing.
+
+`codeguard eval` judges the file after each `invalid` and `valid` edit with the
+binding's model. An `invalid` case needs a violation at the confidence threshold, on a
+line with one of the rule's `triggers`; the message lists the kinds on that line. A
+`valid` case needs no violation. Verdicts are cached like reviews, so only changed cases
+and skills call Claude again.
+
+`codeguard eval` also checks each judge rule:
+
+- It needs an eval with at least one `invalid` case.
+- A rule review judges the skill with its triggers and the ruleset's gates. It fails when
+  the skill judges code no trigger matches, a trigger is broader than the skill needs, or
+  a bullet is checkable by ast-grep or a type checker setting. The review is cached like
+  any verdict.
+
+The eval also judges each case with its names renamed, without comments, and with its
+imports reordered, and each must keep its expected result. A rule whose verdict depends
+on one of these lists it in its binding:
+
+```yaml
+skill: python/skills/naming
+paths: ["**/*.py"]
+disable_skips: [renames]   # also: comments, imports
+```
+
+Variants exist for Python files. Other languages get the original case only.
+
+`codeguard eval --repeat 3` judges each case three times. Runs after the first skip the
+cache, so an unstable verdict shows up as a failing run.
+
+### Which test to write
+
+A project tests the rules in its `.codeguard/` the same way a package does.
+
+| You add or change | Write | It checks | Run | Calls Claude |
+|---|---|---|---|---|
+| A pattern rule or gate | `rule-tests/<id>-test.yml` | the rule matches its `invalid` cases and none of its `valid` ones | `codeguard test` | no |
+| A judge rule's skill or `triggers` | `rule-evals/<id>-eval.yml` | the triggers fire on each `invalid` edit and on no `skipped` edit | `codeguard test` | no |
+| | | the judge finds a violation after each `invalid` edit and none after a `valid` one | `codeguard eval` | yes |
+
+Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
+releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
+[betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules) is
+an example.
 
 ## Setup
 
@@ -101,7 +343,8 @@ In Codex, trust codeguard's hooks in `/hooks`.
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
 directory: the uncommitted and untracked files, whoever changed them and however. An
-error blocks the stop, and the agent sees the diagnostics. It runs the `codeguard` the
+error blocks the stop, and the agent sees the diagnostics. If the agent stops again with
+the same errors, the stop goes through, so the agent can ask you about them. It runs the `codeguard` the
 installer put on your PATH, the same one you run from the command line.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
@@ -112,6 +355,15 @@ it in `.codeguard/config.yaml`:
 confidence_threshold: 0.8
 ```
 
+A review stops judging after 5 minutes. Each rule and file it didn't judge gets a "not
+checked" diagnostic at the rule's severity, so an unchecked `error` rule fails the review.
+The GitHub Action stops the review 2 minutes after the limit, in case it hangs. Change the
+limit in `.codeguard/config.yaml`:
+
+```yaml
+review_time_limit_minutes: 10
+```
+
 Each binding judges with `claude-sonnet-5-5` unless it sets `model`:
 
 ```yaml
@@ -119,6 +371,20 @@ skill: .claude/skills/responsibility-placement
 paths: ["app/**/*.py"]
 model: claude-haiku-5-5
 ```
+
+## Telemetry
+
+Set `LOGFIRE_TOKEN` to a Logfire write token and codeguard sends a trace of each run.
+Without it, codeguard sends nothing. Set it where the agent runs: your shell profile, or
+`env` in `~/.claude/settings.json`.
+
+- `claude judges {rule} on {file}`: one span per Claude call, with `model`, `num_turns`,
+  `duration_ms`, `cost_usd`, `input_tokens`, `output_tokens`, `cache_read_input_tokens`,
+  `cache_creation_input_tokens` and `thinking_tokens`.
+- `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
+- `review {repository}`: `files`, `diagnostics` and `errors`.
+
+In CI, pass the token as the action's `logfire-token` input.
 
 ## CLI
 
@@ -128,8 +394,12 @@ From the project:
 codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
-codeguard test                # rule tests
-codeguard test --update-all   # rule tests, regenerating snapshots
+codeguard review --latest     # newest tag in each package range, not the lock
+codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
+codeguard test                # pattern rule and gate tests, and judge rule eval triggers
+codeguard test --update-all   # the same, regenerating snapshots
+codeguard eval                # judge rule evals and the rule review; calls Claude
+codeguard update              # lock each package range to its newest tag
 ```
 
 ## Working on codeguard

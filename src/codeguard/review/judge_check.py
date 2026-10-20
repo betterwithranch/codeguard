@@ -4,7 +4,8 @@ from dataclasses import dataclass
 
 from codeguard.review.binding import Binding
 from codeguard.review.diagnostic import Diagnostic
-from codeguard.review.judge import Judge, JudgeRequest
+from codeguard.review.judge import Judge, JudgeError, JudgeRequest
+from codeguard.working_tree import AllLines, ChangedLines
 
 
 @dataclass(frozen=True)
@@ -12,9 +13,14 @@ class JudgeCheck:
     binding: Binding
     judge: Judge
     confidence_threshold: float
+    scope: ChangedLines | AllLines
 
     def check(self, files: Sequence[str]) -> list[Diagnostic]:
-        matched = self.binding.files(files)
+        matched = [
+            file
+            for file in self.binding.files(files)
+            if self.binding.is_triggered(self.scope, file)
+        ]
         if not matched:
             return []
         with ThreadPoolExecutor(max_workers=len(matched)) as executor:
@@ -22,5 +28,17 @@ class JudgeCheck:
             return [diagnostic for diagnostics in found for diagnostic in diagnostics]
 
     def _diagnostics(self, file: str) -> tuple[Diagnostic, ...]:
-        verdict = self.judge.judge(JudgeRequest(self.binding.skill, file))
+        try:
+            verdict = self.judge.judge(JudgeRequest(self.binding.skill, file))
+        except JudgeError as error:
+            return (
+                Diagnostic(
+                    rule=self.binding.rule,
+                    file=file,
+                    line=None,
+                    message="The judge call failed, so this rule was not checked.",
+                    severity=self.binding.severity,
+                    note=str(error),
+                ),
+            )
         return verdict.diagnostics_for(self.binding, file, self.confidence_threshold)

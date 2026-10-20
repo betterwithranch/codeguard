@@ -51,7 +51,7 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({2, 4})})
+        assert changed == ChangedLines({"a.py": frozenset({2, 4})}, base=git_repo.head())
 
     def test_untracked_file_has_every_line_changed(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -59,17 +59,32 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({1, 2})})
+        assert changed == ChangedLines({"a.py": frozenset({1, 2})}, base=git_repo.head())
 
-    def test_file_with_only_removed_lines_is_not_changed(self, tmp_path):
+    def test_removed_lines_are_a_deletion_point_after_the_line_before_them(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a.py", "a = 1\nb = 1\n")
+        git_repo.write("a.py", "a = 1\nb = 1\nc = 1\n")
         git_repo.commit("Add a")
-        git_repo.write("a.py", "a = 1\n")
+        git_repo.write("a.py", "a = 1\nc = 1\n")
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed.files == ()
+        assert changed == ChangedLines(
+            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+        )
+
+    def test_base_contents_are_the_files_that_exist_in_the_base(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 2\n")
+        git_repo.write("new.py", "b = 1\n")
+
+        contents = WorkingTree(root=git_repo.root).base_contents(
+            git_repo.head(), ["a.py", "new.py"]
+        )
+
+        assert contents == {"a.py": b"a = 1\n"}
 
     def test_all_lines_has_tracked_and_untracked_files(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -93,3 +108,30 @@ class TestChangedLines:
 
     def test_does_not_cover_an_unchanged_file(self):
         assert not ChangedLines({"a.py": frozenset({2})}).covers("b.py", 2)
+
+    def test_covers_the_whole_of_a_changed_file(self):
+        assert ChangedLines({"a.py": frozenset({2})}).covers("a.py", None)
+
+    def test_does_not_cover_the_whole_of_an_unchanged_file(self):
+        assert not ChangedLines({"a.py": frozenset({2})}).covers("b.py", None)
+
+    def test_covers_a_range_that_contains_a_changed_line(self):
+        assert ChangedLines({"a.py": frozenset({3})}).covers("a.py", 2, end_line=4)
+
+    def test_does_not_cover_a_range_without_a_changed_line(self):
+        assert not ChangedLines({"a.py": frozenset({5})}).covers("a.py", 2, end_line=4)
+
+    def test_covers_a_range_that_contains_a_deletion_point(self):
+        changed = ChangedLines(lines={}, deletions={"a.py": frozenset({3})})
+
+        assert changed.covers("a.py", 2, end_line=4)
+
+    def test_covers_a_line_without_a_range_on_the_first_line_of_an_enclosing_node(self):
+        changed = ChangedLines({"a.py": frozenset({3})}).with_node_starts({"a.py": frozenset({1})})
+
+        assert changed.covers("a.py", 1)
+
+    def test_does_not_cover_a_range_on_the_first_line_of_an_enclosing_node(self):
+        changed = ChangedLines({"a.py": frozenset({5})}).with_node_starts({"a.py": frozenset({1})})
+
+        assert not changed.covers("a.py", 1, end_line=1)

@@ -16,13 +16,15 @@ class JudgeRequest:
     skill: Skill
     file: str
 
-    @property
-    def instructions(self) -> str:
-        return INSTRUCTIONS
+    def instructions(self, content: str) -> str:
+        numbered = "".join(
+            f"{number:>6}\t{line}\n" for number, line in enumerate(content.splitlines(), start=1)
+        )
+        return f'{INSTRUCTIONS}\n<file path="{self.file}">\n{numbered}</file>\n'
 
     @property
     def prompt(self) -> str:
-        return f"{self.skill.text.rstrip()}\n\n{self.file}\n"
+        return self.skill.text
 
 
 class Violation(BaseModel):
@@ -50,7 +52,7 @@ class Verdict(BaseModel):
     ) -> tuple[Diagnostic, ...]:
         return tuple(
             Diagnostic(
-                rule=binding.skill.name,
+                rule=binding.rule,
                 file=violation.file,
                 line=violation.line,
                 message=violation.message,
@@ -60,6 +62,10 @@ class Verdict(BaseModel):
             for violation in self.violations
             if violation.file == file
         )
+
+
+class JudgeError(Exception):
+    pass
 
 
 class Judge(Protocol):
