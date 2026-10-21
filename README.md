@@ -317,6 +317,9 @@ and skills call Claude again.
 
 `codeguard eval` also fails a judge rule with no eval that has an `invalid` case.
 
+A case whose judge call fails, such as a quota error that outlasts the provider's retries,
+fails too, so a passing eval means every case was judged. The other cases still run.
+
 The eval also judges each case with its names renamed, without comments, and with its
 imports reordered, and each must keep its expected result. A rule whose verdict depends
 on one of these lists it in its binding:

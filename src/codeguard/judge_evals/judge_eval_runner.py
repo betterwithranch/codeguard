@@ -166,7 +166,7 @@ class JudgeEvalRunner:
             problem = case_run.problem(self.confidence_threshold)
         except JudgeError as error:
             return RuleTestResult(
-                warnings=(f"{self._where(case_run)}: {rule} not judged: {error}",)
+                problems=(f"{self._where(case_run)}: {rule} not judged: {error}",)
             )
         if problem is None:
             return RuleTestResult()

@@ -176,14 +176,14 @@ class TestJudgeEvalRunner:
 
         assert judges.created == []
 
-    def test_judge_error_warns_without_failing_the_eval(self, repo):
+    def test_judge_error_fails_the_case(self, repo):
         repo.write(EVAL_FILE, f"id: enum-usage\ninvalid:\n{STATUS_CASE}")
         judges = RecordingJudges(FailingJudge())
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert result == RuleTestResult(
-            warnings=(
+            problems=(
                 f"{EVAL_FILE} invalid case 1: enum-usage not judged: "
                 "gemini failed with 502: upstream request failed",
             )

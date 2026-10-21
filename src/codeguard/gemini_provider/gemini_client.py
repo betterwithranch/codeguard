@@ -4,7 +4,8 @@ from functools import cached_property
 from google import genai
 from google.genai import models, types
 
-_RETRIES = types.HttpRetryOptions(attempts=5)
+# Backoff runs 1s doubling to about 2 minutes, past a per-minute quota reset after a 429.
+_RETRIES = types.HttpRetryOptions(attempts=8)
 
 
 def gemini_client(project: str | None = None, location: str | None = None) -> genai.Client:
