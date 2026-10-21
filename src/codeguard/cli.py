@@ -185,7 +185,7 @@ def _scope(working_tree: WorkingTree, args: argparse.Namespace) -> ChangedLines 
 def _test(args: argparse.Namespace) -> int:
     tests = Rules(_working_tree(args.package)).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
-    result.write(sys.stderr)
+    result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
 
 

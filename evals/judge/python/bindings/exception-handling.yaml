@@ -1,5 +1,3 @@
 skill: python/skills/exception-handling
 paths: ["**/*.py"]
 triggers: [control-flow]
-provider: claude-cli
-model: claude-sonnet-5-5

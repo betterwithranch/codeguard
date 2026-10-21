@@ -740,7 +740,10 @@ class TestTestCommand:
             [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
         )
 
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
+            "warning: responsibility-placement: broad triggers any; "
+            "a gate on the code its violations need skips more files\n"
+        )
         assert result.returncode == 0
 
     def test_passing_rule_tests_exit_0(self, repo):
@@ -762,7 +765,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
+        assert result.stdout.endswith(
             ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml: stale snapshot "
             "entries for no-print. Run codeguard test --update-all.\n"
         )
@@ -783,8 +786,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
-        assert result.stderr == (
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
             f"warning: triggers not checked: {repo.root}/.codeguard is invalid:\n"
             "  bindings.broken.yaml.skill: Field required\n"
             "  bindings.broken.yaml.paths: Field required\n"
@@ -802,7 +804,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
             "warning: placement: broad triggers any; "
             "a gate on the code its violations need skips more files\n"
         )
@@ -840,12 +842,11 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
             ".codeguard/rule-evals/placement.yaml assigns a count: placement "
             "triggers comment miss the change, which touches code, module-statement, "
             "number-literal\n"
         )
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
         assert result.returncode == 1
 
     def test_failing_rule_tests_exit_1(self, repo):

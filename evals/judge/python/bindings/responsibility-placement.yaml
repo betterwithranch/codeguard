@@ -1,5 +1,3 @@
 skill: python/skills/responsibility-placement
 paths: ["**/*.py"]
 triggers: [attribute-access]
-provider: claude-cli
-model: claude-sonnet-5-5

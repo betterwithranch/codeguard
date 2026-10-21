@@ -248,15 +248,22 @@ binding and pass its rule eval again.
 
 #### The binding
 
-A judge rule's binding names its `skill`, from the package root, and the `provider` and
-`model` that judge it:
+A judge rule's binding names its `skill`, from the package root, and where and when it
+runs:
 
 ```yaml
 skill: python/skills/mock-only-at-boundary
 paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
 triggers: [mock-use]
-provider: claude-cli              # default: claude-cli; or gemini
-model: claude-sonnet-5-5          # default: claude-sonnet-5-5; gemini needs one
+```
+
+`provider` and `model` are optional. A binding that leaves them out is judged with
+`claude-sonnet-5-5` through the `claude` CLI. Set them only to judge the rule with
+something else:
+
+```yaml
+provider: gemini                  # default: claude-cli
+model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
 ```
 
 A judge rule's id is its skill's directory name.
@@ -473,9 +480,9 @@ limit in `.codeguard/config.yaml`:
 review_time_limit_minutes: 10
 ```
 
-Each judge rule is judged with the provider and model its binding names, the same ones
-its rule eval passed on; see [Judge rules](#judge-rules). The default is
-`claude-sonnet-5-5` through the `claude` CLI.
+Each judge rule is judged with its binding's provider and model, the same ones its rule
+eval passed on; see [Judge rules](#judge-rules). A binding that sets neither is judged
+with `claude-sonnet-5-5` through the `claude` CLI.
 
 ### Judge with Gemini on Google Cloud
 
