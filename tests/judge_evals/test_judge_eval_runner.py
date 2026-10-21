@@ -292,7 +292,7 @@ class TestJudgeEvalRunner:
             JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert str(error.value) == (
-            f"{repo.root / EVAL_FILE} is invalid:\n  passes a string has no expected_output"
+            f"{repo.root / EVAL_FILE} is invalid:\n  cases.0.expected_output: Field required"
         )
 
     def test_case_without_a_name_is_invalid(self, repo):
@@ -306,7 +306,10 @@ class TestJudgeEvalRunner:
         with pytest.raises(ConfigError) as error:
             JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert str(error.value) == f"{repo.root / EVAL_FILE} is invalid:\n  case 1 has no name"
+        assert (
+            str(error.value)
+            == f"{repo.root / EVAL_FILE} is invalid:\n  cases.0.name: Field required"
+        )
 
     def test_cases_with_the_same_name_are_invalid(self, repo):
         repo.write(
@@ -317,8 +320,24 @@ class TestJudgeEvalRunner:
         with pytest.raises(ConfigError) as error:
             JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert str(error.value).startswith(f"{repo.root / EVAL_FILE} is invalid:\n  ")
-        assert "passes a string" in str(error.value)
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n"
+            "  cases: Value error, cases share a name: passes a string"
+        )
+
+    def test_evaluators_are_invalid(self, repo):
+        repo.write(
+            EVAL_FILE,
+            dataset(case("passes a string", "valid")) + "evaluators:\n  - EqualsExpected\n",
+        )
+        judges = RecordingJudges(RecordingJudge())
+
+        with pytest.raises(ConfigError) as error:
+            JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n  evaluators: Extra inputs are not permitted"
+        )
 
     def test_eval_file_named_yml_is_an_error(self, repo):
         repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "cases: []\n")
@@ -328,7 +347,7 @@ class TestJudgeEvalRunner:
             JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert str(error.value) == (
-            "rule evals are <rule id>.yaml datasets; rename or convert:\n"
+            "rule evals are <rule id>.yaml files; rename or convert:\n"
             f"  {repo.root}/.codeguard/rule-evals/enum-usage-eval.yml"
         )
 

@@ -206,7 +206,7 @@ python/
   rule-tests/<id>-test.yml   # tests for both, with __snapshots__/
   skills/<id>/SKILL.md       # judge rules
   bindings/<id>.yaml         # skill and default paths
-  rule-evals/<id>.yaml       # judge rule evals, with rule-eval-schema.json
+  rule-evals/<id>.yaml       # judge rule evals
 ```
 
 Pattern rule tests in `rule-tests/pattern/`, the old layout, still run. codeguard
@@ -274,14 +274,13 @@ built-in kinds are `comment`, `docstring`, `import`,
 that is not only a comment or docstring) and `any`. The syntax table in
 `src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
 
-A judge rule's eval, `rule-evals/<id>.yaml`, is a
-[pydantic-evals](https://ai.pydantic.dev/evals/) dataset, named after the rule. Each
-case has a `name`, an edit as its `inputs` and the review's `expected_output`. The edit
+A judge rule's eval, `rule-evals/<id>.yaml`, is a list of cases named after the rule;
+the file holds only YAML. Each case has a unique `name`, an edit as its `inputs` and the
+review's `expected_output`, and nothing else. The edit
 is a `before` (left out for a new file), an `after` and a `file` (default `module.py`),
 which must match the binding's paths:
 
 ```yaml
-# yaml-language-server: $schema=rule-eval-schema.json
 cases:
   - name: adds a second class
     inputs:
@@ -317,8 +316,9 @@ cases:
 ```
 
 `uncertain` is the fourth outcome: the judge reports a violation below the confidence
-threshold. `codeguard test --update-all` writes `rule-eval-schema.json` next to the
-datasets, so an editor validates them, and `codeguard test` fails when it is out of date.
+threshold. `expected_output` can also list the exact `violations`, each with a `line`,
+`confidence`, `message` and `kinds`; a case that leaves them out compares only the
+outcome.
 
 `codeguard test` checks the triggers on every case, with no model call. It commits each
 `before` to a scratch repository, writes each `after`, and classifies the diff the way a
@@ -327,13 +327,15 @@ change, since a review would never judge it, and a `skipped` case fails when the
 The message lists the kinds the change touches. Narrow a gate until a `skipped` case
 passes, and keep every other case passing.
 
-`codeguard eval` runs each dataset as one experiment against the binding's model. The
+`codeguard eval` runs each rule's cases as one
+[pydantic-evals](https://ai.pydantic.dev/evals/) experiment against the binding's model.
+codeguard supplies the task and the evaluators; an eval file can't add its own. The
 task reviews the edit the way `codeguard review` does: the paths, then the triggers,
 then the judge, then the confidence threshold, so a `skipped` case calls no model. Its
 output is the outcome and the violations. Two evaluators check every case:
 
 - `PartialEqualsExpected` compares the fields `expected_output` sets with the output.
-- `ViolationsOnTriggers` fails an `invalid` outcome whose violations are all on lines
+- `ViolationsOnTriggers` fails a case expected and judged `invalid` whose violations are all on lines
   with none of the rule's `triggers`; the message lists the kinds on those lines.
 
 The eval passes when every assertion in every experiment passes. It prints each report

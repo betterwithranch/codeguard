@@ -294,7 +294,7 @@ requires-dist = [
     { name = "logfire", specifier = ">=5.2.0" },
     { name = "packaging", specifier = ">=26.3" },
     { name = "pydantic", specifier = ">=2.13.5" },
-    { name = "pydantic-evals", specifier = ">=2.57.0" },
+    { name = "pydantic-evals", specifier = "~=2.57.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 

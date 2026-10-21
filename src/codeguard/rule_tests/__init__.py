@@ -5,9 +5,9 @@ from codeguard.rule_tests.rule_eval import (
     JudgedViolation,
     Outcome,
     RuleEval,
+    RuleEvalCase,
     rule_evals,
 )
-from codeguard.rule_tests.rule_eval_schema import SCHEMA_FILE, RuleEvalSchema
 from codeguard.rule_tests.rule_test_result import RuleTestResult
 from codeguard.rule_tests.rule_tests import RuleTests
 from codeguard.rule_tests.scratch_repo import ScratchRepo
@@ -20,9 +20,8 @@ __all__ = [
     "EditReview",
     "JudgedViolation",
     "Outcome",
-    "SCHEMA_FILE",
     "RuleEval",
-    "RuleEvalSchema",
+    "RuleEvalCase",
     "RuleTestResult",
     "RuleTests",
     "ScratchRepo",

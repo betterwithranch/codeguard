@@ -12,7 +12,6 @@ from rules_package import write_package
 
 from codeguard.file_lock import exclusive_lock
 from codeguard.review import Severity
-from codeguard.rule_tests import RuleEvalSchema
 
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
 BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
@@ -838,7 +837,6 @@ class TestTestCommand:
             "cases:\n  - name: assigns a count\n    inputs:\n      after: |\n        count = 1\n"
             "    expected_output:\n      outcome: invalid\n",
         )
-        RuleEvalSchema(repo.root, repo.root / ".codeguard").update_snapshots()
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 

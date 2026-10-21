@@ -2,14 +2,17 @@ import asyncio
 from dataclasses import dataclass
 from pathlib import Path
 
+from pydantic_evals import Case, Dataset
+
 from codeguard.ast_grep import AstGrep
 from codeguard.config import JudgeConfig, RulesetLoader
 from codeguard.judge_evals.edit_evaluators import PartialEqualsExpected, ViolationsOnTriggers
 from codeguard.judge_evals.edit_review_task import EditReviewTask
+from codeguard.judge_evals.installed_evals import check_installed_evals
 from codeguard.judge_evals.judge_eval_result import JudgeEvalResult, RuleEvalReport
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings
-from codeguard.rule_tests import RuleEval, RuleTestResult, rule_evals
+from codeguard.rule_tests import EditCase, EditReview, RuleEval, RuleTestResult, rule_evals
 from codeguard.syntax import SyntaxScanner
 
 
@@ -27,6 +30,7 @@ class JudgeEvalRunner:
         evals = rule_evals(self.ruleset.root)
         if not evals:
             return JudgeEvalResult()
+        check_installed_evals()
         ruleset = self.ruleset.load()
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
         unknown = tuple(
@@ -49,11 +53,18 @@ class JudgeEvalRunner:
         )
 
     async def _evaluate(
-        self, dataset: RuleEval, binding: Binding, scanner: SyntaxScanner
+        self, rule_eval: RuleEval, binding: Binding, scanner: SyntaxScanner
     ) -> RuleEvalReport:
-        dataset.add_evaluator(PartialEqualsExpected())
-        dataset.add_evaluator(
-            ViolationsOnTriggers(tuple(sorted(binding.triggers)), self.confidence_threshold)
+        dataset = Dataset[EditCase, EditReview, None](
+            name=rule_eval.name,
+            cases=[
+                Case(name=case.name, inputs=case.inputs, expected_output=case.expected_output)
+                for case in rule_eval.cases
+            ],
+            evaluators=[
+                PartialEqualsExpected(),
+                ViolationsOnTriggers(tuple(sorted(binding.triggers)), self.confidence_threshold),
+            ],
         )
         model = binding.model
         task = EditReviewTask(binding, self.judges, self.confidence_threshold, scanner)

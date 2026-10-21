@@ -197,5 +197,5 @@ class TestInvalidEvalFiles:
             TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
         assert str(error.value) == (
-            f"{repo.root / EVAL_FILE} is invalid:\n  passes a string has no expected_output"
+            f"{repo.root / EVAL_FILE} is invalid:\n  cases.0.expected_output: Field required"
         )

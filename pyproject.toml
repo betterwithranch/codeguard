@@ -13,7 +13,7 @@ dependencies = [
     "logfire>=5.2.0",
     "packaging>=26.3",
     "pydantic>=2.13.5",
-    "pydantic-evals>=2.57.0",
+    "pydantic-evals~=2.57.0",
     "pyyaml>=6.0.3",
 ]
 
@@ -68,6 +68,7 @@ reportUnnecessaryComparison = "error"
 
 [tool.importlinter]
 root_packages = ["codeguard"]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "codeguard packages depend one way"
@@ -85,6 +86,27 @@ layers = [
     "ast_grep",
     "config | working_tree | file_lock",
 ]
+
+[[tool.importlinter.contracts]]
+name = "only judge_evals runs pydantic-evals"
+type = "forbidden"
+source_modules = [
+    "codeguard.cli",
+    "codeguard.rules",
+    "codeguard.claude_provider",
+    "codeguard.gemini_provider",
+    "codeguard.pattern_rules",
+    "codeguard.rule_tests",
+    "codeguard.review",
+    "codeguard.packages",
+    "codeguard.syntax",
+    "codeguard.ast_grep",
+    "codeguard.config",
+    "codeguard.working_tree",
+    "codeguard.file_lock",
+]
+forbidden_modules = ["pydantic_evals"]
+allow_indirect_imports = true
 
 [dependency-groups]
 dev = [

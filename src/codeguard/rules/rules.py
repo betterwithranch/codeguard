@@ -16,7 +16,7 @@ from codeguard.review import (
     Review,
     Reviewer,
 )
-from codeguard.rule_tests import BroadTriggers, RuleEvalSchema, RuleTests, TriggerTestRunner
+from codeguard.rule_tests import BroadTriggers, RuleTests, TriggerTestRunner
 from codeguard.rules.judges import Judges
 from codeguard.rules.ruleset_resolver import RulesetResolver
 from codeguard.syntax import ChangeClassifier
@@ -88,12 +88,8 @@ class Rules:
         loaders = self._resolver.own_rulesets
         return RuleTests(
             snapshot_runners=[
-                runner
+                PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep))
                 for loader in loaders
-                for runner in (
-                    PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep)),
-                    RuleEvalSchema(root, loader.root),
-                )
             ],
             runners=[
                 runner

@@ -3,12 +3,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from pydantic_evals import Case
-
 from codeguard.ast_grep import AstGrep
 from codeguard.config import ChangeKind, ConfigError, Ruleset, RulesetLoader
 from codeguard.review import Binding, Bindings
-from codeguard.rule_tests.rule_eval import EditCase, EditReview, Outcome, rule_evals
+from codeguard.rule_tests.rule_eval import Outcome, RuleEvalCase, rule_evals
 from codeguard.rule_tests.rule_test_result import RuleTestResult
 from codeguard.rule_tests.scratch_repo import ScratchRepo
 from codeguard.syntax import ChangeClassifier
@@ -18,7 +16,7 @@ from codeguard.working_tree import ChangedLines, WorkingTree
 @dataclass(frozen=True)
 class _CaseCheck:
     binding: Binding
-    case: Case[EditCase, EditReview, None]
+    case: RuleEvalCase
     name: str
     path: str
 
@@ -31,8 +29,6 @@ class _CaseCheck:
         kinds = changed.kinds_of(self.path)
         if kinds is None:
             return f"{self.name}: the case changes no code in {file}"
-        if expected is None:
-            return None
         should_fire = expected.outcome is not Outcome.SKIPPED
         if self.binding.is_triggered(changed, self.path) == should_fire:
             return None

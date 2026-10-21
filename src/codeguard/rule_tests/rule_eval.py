@@ -1,8 +1,8 @@
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, ValidationError
-from pydantic_evals import Dataset
+import yaml
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
 
 from codeguard.config import JUDGE_EVAL_DIR, ConfigError
 
@@ -48,7 +48,28 @@ class EditReview(BaseModel):
         )
 
 
-type RuleEval = Dataset[EditCase, EditReview, None]
+class RuleEvalCase(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    inputs: EditCase
+    expected_output: EditReview
+
+
+class RuleEval(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    name: str
+    cases: tuple[RuleEvalCase, ...]
+
+    @field_validator("cases")
+    @classmethod
+    def names_are_unique(cls, cases: tuple[RuleEvalCase, ...]) -> tuple[RuleEvalCase, ...]:
+        names = [case.name for case in cases]
+        repeated = sorted({name for name in names if names.count(name) > 1})
+        if repeated:
+            raise ValueError(f"cases share a name: {', '.join(repeated)}")
+        return cases
 
 
 def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
@@ -56,7 +77,7 @@ def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
     misnamed = sorted(directory.glob(_MISNAMED_GLOB))
     if misnamed:
         raise ConfigError(
-            "rule evals are <rule id>.yaml datasets; rename or convert:"
+            "rule evals are <rule id>.yaml files; rename or convert:"
             + "".join(f"\n  {file}" for file in misnamed)
         )
     return [_load(file) for file in sorted(directory.glob(EVAL_FILE_GLOB))]
@@ -64,19 +85,12 @@ def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
 
 def _load(file: Path) -> tuple[Path, RuleEval]:
     try:
-        dataset = Dataset[EditCase, EditReview, None].from_text(
-            file.read_text(), default_name=file.stem
-        )
+        data = yaml.safe_load(file.read_text())
+    except yaml.YAMLError as error:
+        raise ConfigError(f"{file} is invalid:\n  {error}") from error
+    if isinstance(data, dict):
+        data = {"name": file.stem, **data}
+    try:
+        return file, RuleEval.model_validate(data)
     except ValidationError as error:
         raise ConfigError.invalid(file, error) from error
-    except (ValueError, ExceptionGroup) as error:
-        raise ConfigError(f"{file} is invalid:\n  {error}") from error
-    problems = [
-        f"{case.name or f'case {number}'} has no {field}"
-        for number, case in enumerate(dataset.cases, start=1)
-        for field, value in (("name", case.name), ("expected_output", case.expected_output))
-        if value is None
-    ]
-    if problems:
-        raise ConfigError(f"{file} is invalid:" + "".join(f"\n  {problem}" for problem in problems))
-    return file, dataset
