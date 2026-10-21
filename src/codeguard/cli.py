@@ -95,7 +95,7 @@ def main() -> int:
         "--repeat",
         type=_positive_int,
         default=1,
-        help="Judge each case this many times. More than once skips the cache. Default: 1.",
+        help="Judge each case this many times. Default: 1.",
     )
     eval_command.set_defaults(run=_eval)
 

@@ -12,8 +12,9 @@ class RuleEvaluation:
         rules = self.rules
         root = rules.working_tree.root
         config = rules.config
-        # A repeat has to call the model again to show whether the verdict is stable.
-        judge = rules.judges.cached if repeat == 1 else rules.judges.uncached
+        # An eval tests the rule, not the code, so each run calls the model: a cached
+        # verdict says nothing about the rule as it is now.
+        judge = rules.judges.uncached
         return JudgeEvalResult.merge(
             result
             for loader in rules.resolver.own_rulesets

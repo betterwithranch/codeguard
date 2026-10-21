@@ -362,18 +362,18 @@ ignore.
 #### Test a judge rule
 
 1. `codeguard test` checks the triggers on every case, with no model call. It commits
-   each `before` and `unchanged` file to a scratch repository, writes each `after`, and classifies the diff
-   the way a review does. Fix the triggers until it passes.
+   each `before` and `unchanged` file to a scratch repository, writes each `after`, and
+   classifies the diff the way a review does. Fix the triggers until it passes.
 2. `codeguard eval` reviews every case with the binding's model, the way
    `codeguard review` would. Fix the skill, or the case, until it passes.
-3. `codeguard eval --repeat 3` reviews each case three times, skipping the cache, so an
-   unstable verdict shows up as a failing run, named like `adds a second class [2/3]`.
-   A rule is ready when every case passes all three runs.
+3. `codeguard eval --repeat 3` reviews each case three times, so an unstable verdict
+   shows up as a failing run, named like `adds a second class [2/3]`. A rule is ready
+   when every case passes all three runs.
 
 Both take a package directory, so `codeguard eval path/to/package` evaluates a package
-outside the current repository. Verdicts are cached like reviews, so a plain
-`codeguard eval` only calls the model for changed cases and skills. With a Logfire
-token each rule's run is also in Logfire.
+outside the current repository. An eval tests the rule, not the code, so it never uses
+the verdict cache: every run calls the model. With a Logfire token each rule's run is
+also in Logfire.
 
 #### What makes a case fail
 

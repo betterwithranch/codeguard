@@ -755,6 +755,28 @@ class TestEvalCommand:
         assert result.returncode == 1
 
 
+    def test_each_run_calls_the_model_again(self, tmp_path, tmp_path_factory):
+        package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
+        write_package(package)
+        package.write(
+            "python/rule-evals/responsibility-placement.yaml",
+            "cases:\n  - name: assigns in the invoice\n    inputs:\n      file: invoice.py\n"
+            "      after: |\n        x = 1\n    expected_output:\n      outcome: invalid\n",
+        )
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        calls = tmp_path / "calls"
+        claude = bin_dir / "claude"
+        violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "confidence": 0.95}
+        claude.write_text(fake_claude_script([violation], before=f"echo called >> {calls}\n"))
+        claude.chmod(0o755)
+        env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        for _ in range(2):
+            subprocess.run([CODEGUARD, "eval"], cwd=package.root, check=True, env=env)
+
+        assert calls.read_text() == "called\ncalled\n"
+
 class TestTestCommand:
     def test_ast_grep_outside_the_package_range_exits_2(self, tmp_path):
         package = GitRepo.init(tmp_path.resolve())
