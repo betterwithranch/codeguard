@@ -3,7 +3,6 @@ from functools import cached_property
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Config, ConfigLoader
-from codeguard.judge_evals import EvalCoverage, JudgeEvalResult, JudgeEvalRunner
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
     Bindings,
@@ -51,8 +50,7 @@ class Rules:
         root = self.working_tree.root
         return CheckStep(
             checks=tuple(
-                PatternRuleCheck(root, ruleset, self._ast_grep)
-                for ruleset in self._resolver.rulesets
+                PatternRuleCheck(root, ruleset, self.ast_grep) for ruleset in self.resolver.rulesets
             )
         )
 
@@ -60,7 +58,7 @@ class Rules:
         if isinstance(scope, AllLines):
             return scope
         classifier = ChangeClassifier.for_rulesets(
-            self._ast_grep, self._resolver.rulesets, self.working_tree
+            self.ast_grep, self.resolver.rulesets, self.working_tree
         )
         return classifier.classify(scope)
 
@@ -72,12 +70,12 @@ class Rules:
                 PlannedCall(
                     rule=binding.rule,
                     file=file,
-                    cached=self._judges.cached(root, binding.model).has(
+                    cached=self.judges.cached(root, binding.model).has(
                         JudgeRequest(binding.skill, file)
                     ),
                     triggered=binding.is_triggered(classified, file),
                 )
-                for binding in Bindings.from_rulesets(self._resolver.rulesets)
+                for binding in Bindings.from_rulesets(self.resolver.rulesets)
                 for file in binding.files(classified.files)
             )
         )
@@ -85,10 +83,10 @@ class Rules:
     @property
     def tests(self) -> RuleTests:
         root = self.working_tree.root
-        loaders = self._resolver.own_rulesets
+        loaders = self.resolver.own_rulesets
         return RuleTests(
             snapshot_runners=[
-                PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep))
+                PatternRuleTestRunner(Layout(root, loader.root, self.ast_grep))
                 for loader in loaders
             ],
             runners=[
@@ -96,43 +94,25 @@ class Rules:
                 for loader in loaders
                 for runner in (
                     BroadTriggers(loader),
-                    TriggerTestRunner(root, loader, self._ast_grep),
+                    TriggerTestRunner(root, loader, self.ast_grep),
                 )
             ],
         )
 
-    def evaluate(self, repeat: int = 1) -> JudgeEvalResult:
-        root = self.working_tree.root
-        threshold = self.config.confidence_threshold
-        judges = self._judges
-        # A repeat has to call the model again to show whether the verdict is stable.
-        judge = judges.cached if repeat == 1 else judges.uncached
-        return JudgeEvalResult.merge(
-            JudgeEvalResult.merge(
-                (
-                    JudgeEvalRunner(
-                        root, loader, judge, threshold, repeat, self.config.judge, self._ast_grep
-                    ).run(),
-                    JudgeEvalResult(checks=EvalCoverage(loader).run()),
-                )
-            )
-            for loader in self._resolver.own_rulesets
-        )
-
     @cached_property
-    def _ast_grep(self) -> AstGrep:
+    def ast_grep(self) -> AstGrep:
         ast_grep = AstGrep(self.config.ast_grep)
         ast_grep.check_supported()
         return ast_grep
 
     @cached_property
-    def _resolver(self) -> RulesetResolver:
+    def resolver(self) -> RulesetResolver:
         return RulesetResolver(
-            self.working_tree.root, self.config, self._ast_grep, latest=self.latest
+            self.working_tree.root, self.config, self.ast_grep, latest=self.latest
         )
 
     @cached_property
-    def _judges(self) -> Judges:
+    def judges(self) -> Judges:
         return Judges(self.config.judge)
 
     def _judge_checks(
@@ -141,8 +121,6 @@ class Rules:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         return tuple(
-            JudgeCheck(
-                binding, self._judges.cached(root, binding.model, deadline), threshold, scope
-            )
-            for binding in Bindings.from_rulesets(self._resolver.rulesets)
+            JudgeCheck(binding, self.judges.cached(root, binding.model, deadline), threshold, scope)
+            for binding in Bindings.from_rulesets(self.resolver.rulesets)
         )

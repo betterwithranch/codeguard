@@ -8,7 +8,6 @@ from codeguard.ast_grep import AstGrep
 from codeguard.config import JudgeConfig, RulesetLoader
 from codeguard.judge_evals.edit_evaluators import PartialEqualsExpected, ViolationsOnTriggers
 from codeguard.judge_evals.edit_review_task import EditReviewTask
-from codeguard.judge_evals.installed_evals import check_installed_evals
 from codeguard.judge_evals.judge_eval_result import JudgeEvalResult, RuleEvalReport
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings
@@ -30,7 +29,6 @@ class JudgeEvalRunner:
         evals = rule_evals(self.ruleset.root)
         if not evals:
             return JudgeEvalResult()
-        check_installed_evals()
         ruleset = self.ruleset.load()
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
         unknown = tuple(

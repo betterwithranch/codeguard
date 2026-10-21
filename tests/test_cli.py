@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import sysconfig
 from importlib import metadata
 from pathlib import Path
@@ -658,6 +659,20 @@ class TestReviewWithVersionedPackages:
 
 
 class TestEvalCommand:
+    def test_other_commands_do_not_load_pydantic_evals(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys, codeguard.cli; print('pydantic_evals' in sys.modules)",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        assert result.stdout == "False\n"
+
     @pytest.mark.parametrize("from_package", [True, False], ids=["in-package", "package-path"])
     def test_invalid_case_below_the_confidence_threshold_is_reported_and_exits_1(
         self, tmp_path, tmp_path_factory, from_package

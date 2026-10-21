@@ -10,7 +10,7 @@ import logfire
 from codeguard.config import ConfigLoader
 from codeguard.file_lock import exclusive_lock
 from codeguard.packages import PackageUpdate
-from codeguard.rules import Rules
+from codeguard.rules import Rules, check_installed_evals
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _EXIT_PASSED = 0
@@ -190,7 +190,11 @@ def _test(args: argparse.Namespace) -> int:
 
 
 def _eval(args: argparse.Namespace) -> int:
-    result = Rules(_working_tree(args.package)).evaluate(args.repeat)
+    check_installed_evals()
+    # pydantic-evals takes about 0.4s to import, so only codeguard eval loads it.
+    from codeguard.rules.rule_evaluation import RuleEvaluation  # noqa: PLC0415
+
+    result = RuleEvaluation(Rules(_working_tree(args.package))).run(args.repeat)
     result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
 
