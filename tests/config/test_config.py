@@ -52,6 +52,24 @@ class TestBindingsConfig:
 
         assert messages(error) == [f"Value error, {tmp_path}/placement has no SKILL.md"]
 
+    def test_retired_disable_skips_is_ignored(self, tmp_path):
+        skill = write_skill(tmp_path)
+
+        bindings = BindingsConfig.model_validate(
+            {
+                "placement.yaml": {
+                    "skill": skill,
+                    "paths": ["**"],
+                    "triggers": ["any"],
+                    "disable_skips": ["renames"],
+                }
+            }
+        )
+
+        assert bindings.root["placement.yaml"] == BindingConfig(
+            triggers=frozenset({"any"}), skill=skill, paths=("**",)
+        )
+
     def test_skill_bound_twice_is_an_error(self, tmp_path):
         skill = write_skill(tmp_path)
         binding = {"skill": skill, "paths": ["**"], "triggers": ["any"]}
