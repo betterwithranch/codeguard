@@ -72,16 +72,32 @@ The action reviews the files changed since the merge base with the PR's base bra
 then runs the rule tests. The judge needs the token; create it with `claude setup-token`
 and store it as a repository secret.
 
-A judge call that couldn't complete fails the review. To merge a PR anyway, add the
-`codeguard-allow-judge-errors` label to it: the action then passes
-`--judge-errors-as-warnings`, and rule violations still fail. A re-run reads the labels
-the PR had when the run started, so add `labeled` to the trigger to review again when
-the label is added:
+The review uses the package tags in `.codeguard/lock.yaml`, the same as a local review,
+so run `codeguard update` and commit the lock. For now, a package range the lock
+doesn't have uses the newest tag in the range; a later release will require the lock.
+
+A judge call that couldn't complete fails the review. To merge the PR anyway, add the
+`codeguard-allow-judge-errors` label to it. The action then passes
+`--judge-errors-as-warnings` to the review, so those calls print as warnings, and rule
+violations still fail. The label doesn't cover the `eval` input's `codeguard eval`,
+which still fails on them.
+
+Re-running the job doesn't pick up the label: a re-run reuses the event that started
+the workflow, with the PR's labels at that time. For adding the label to start a new
+review, and removing it to start a strict one, trigger on `labeled` and `unlabeled` for
+that label only. Without the `if`, every label added to a PR re-runs the whole review and
+its judge calls.
 
 ```yaml
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  codeguard:
+    if: >-
+      (github.event.action != 'labeled' && github.event.action != 'unlabeled')
+      || github.event.label.name == 'codeguard-allow-judge-errors'
 ```
 
 `v0` moves to each 0.x release, so the plugin and the action update together with no
@@ -141,7 +157,9 @@ A git package takes a `version` range (`kind: versioned`) or a `ref` (`kind: git
 
 - `version` follows the newest tag in the range. `codeguard update` writes that tag to
   `.codeguard/lock.yaml`; commit it. Local and CI reviews use the locked tag until the
-  next update, so a commit gets the same rules everywhere. `codeguard review --latest`
+  next update, so a commit gets the same rules everywhere. A range the lock doesn't have
+  uses the newest tag in the range, until a later release requires the lock.
+  `codeguard review --latest`
   uses the newest tag in the range and ignores the lock, for trying a new version
   locally.
 - `ref` pins a tag or commit everywhere. `codeguard update` leaves it alone.

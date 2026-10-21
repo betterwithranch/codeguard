@@ -80,13 +80,12 @@ class TestVersionedPackages:
 
         assert [ruleset.name for ruleset in rulesets] == ["renamed/python"]
 
-    def test_unlocked_range_is_an_error(self, repo, released, fetch, no_lock):
-        with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([versioned(released)])
-
-        assert str(error.value) == (
-            f".codeguard/lock.yaml has no ref for {released.file_url} <2,>=1. Run codeguard update."
+    def test_unlocked_range_fetches_the_latest_tag(self, repo, released, fetch, no_lock):
+        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets(
+            [versioned(released)]
         )
+
+        assert [ruleset.name for ruleset in rulesets] == ["renamed/python"]
 
     def test_range_without_a_matching_tag_is_an_error(self, repo, package, fetch):
         with pytest.raises(ConfigError) as error:

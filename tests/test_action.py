@@ -10,12 +10,15 @@ ALLOW_JUDGE_ERRORS_LABEL = "codeguard-allow-judge-errors"
 EXPRESSION = re.compile(r"\$\{\{\s*(.*?)\s*\}\}")
 FAKE_UV = (
     "#!/bin/sh\n"
-    'if [ "$5 $6" = "codeguard config" ]; then echo 5; else printf "%s\\n" "$@" > "$UV_ARGS"; fi\n'
+    'case " $* " in\n'
+    '  *" codeguard config "*) echo 5 ;;\n'
+    '  *) printf "%s\\n" "$@" > "$UV_ARGS" ;;\n'
+    "esac\n"
 )
 
 
 class TestReviewStep:
-    def test_reviews_with_the_lock(self, tmp_path):
+    def test_review_command_has_no_latest(self, tmp_path):
         arguments = run_review_step(tmp_path, labels=[])
 
         assert arguments == ["review", "--base", "origin/main"]
