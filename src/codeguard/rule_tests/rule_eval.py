@@ -1,8 +1,9 @@
 from enum import StrEnum
 from pathlib import Path
+from typing import Self
 
 import yaml
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator
+from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
 from codeguard.config import JUDGE_EVAL_DIR, ConfigError
 
@@ -24,6 +25,12 @@ class EditCase(BaseModel):
     before: str | None = None
     after: str
     unchanged: dict[str, str] = {}
+
+    @model_validator(mode="after")
+    def file_is_not_unchanged(self) -> Self:
+        if self.file in self.unchanged:
+            raise ValueError(f"unchanged lists the edited file {self.file}")
+        return self
 
     def edits(self, prefix: str = "") -> dict[str, "EditCase"]:
         unchanged = {

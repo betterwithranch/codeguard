@@ -65,6 +65,15 @@ class ListingJudges:
         return RecordingJudge()
 
 
+@dataclass
+class StatusJudges:
+    statuses: list[str]
+
+    def __call__(self, root: Path, model: JudgeModel) -> Judge:
+        self.statuses.append(git(root, "status", "--porcelain", "--untracked-files=all"))
+        return RecordingJudge()
+
+
 def git(directory: Path, *args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=directory, check=True, capture_output=True, text=True
@@ -144,6 +153,28 @@ class TestJudgeEvalRunner:
             ["cancelling.py"],
             ["shipping/__init__.py", "shipping/ship.py"],
         ]
+
+    def test_unchanged_files_are_committed_and_left_out_of_the_change(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: passes a string\n"
+            "    inputs:\n"
+            "      file: shipping/ship.py\n"
+            "      before: |\n"
+            "        ship(status=Status.SHIPPED)\n"
+            "      after: |\n"
+            "        ship(status='shipped')\n"
+            "      unchanged:\n"
+            "        shipping/__init__.py: |\n"
+            "          from shipping.status import Status\n"
+            "    expected_output: {outcome: invalid}\n",
+        )
+        judges = StatusJudges([])
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert judges.statuses == [" M shipping/ship.py\n"]
 
     def test_judges_only_the_function_an_edit_changes(self, repo):
         repo.write(

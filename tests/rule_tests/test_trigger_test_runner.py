@@ -199,3 +199,23 @@ class TestInvalidEvalFiles:
         assert str(error.value) == (
             f"{repo.root / EVAL_FILE} is invalid:\n  cases.0.expected_output: Field required"
         )
+
+    def test_case_whose_unchanged_files_list_its_own_file_fails_the_run(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: reads the value\n"
+            "    inputs:\n"
+            "      after: label = status.value\n"
+            "      unchanged:\n"
+            "        module.py: label = status.name\n"
+            "    expected_output: {outcome: valid}\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n"
+            "  cases.0.inputs: Value error, unchanged lists the edited file module.py"
+        )

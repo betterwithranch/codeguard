@@ -307,7 +307,7 @@ that is not only a comment or docstring) and `any`. The syntax table in
   `after` is the file after it, and `file` is its path (default `module.py`), which
   must match the binding's paths. `unchanged` maps the path of each other file the
   edit needs, such as a package's `__init__.py`, to its text; the judge can read them,
-  but they aren't part of the change.
+  but they aren't part of the change, and can't include `file`.
 - `expected_output`: the review's `outcome`, one of:
   - `invalid`: the triggers fire and the judge reports a violation;
   - `valid`: the triggers fire and the judge reports none;
