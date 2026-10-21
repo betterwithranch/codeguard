@@ -145,7 +145,17 @@ class TestGeminiJudge:
 
         assert judgement.read_files == ("logger.py",)
 
-    def test_file_gemini_could_not_read_is_not_a_read_file(self, tmp_path, make_judge_request):
+    def test_missing_file_gemini_tried_to_read_is_a_read_file(self, tmp_path, make_judge_request):
+        models = ScriptedClient.answering(
+            response(call("read_file", path="orders/__init__.py")),
+            response(call("submit_verdict", violations=[])),
+        )
+
+        judgement = judge_with(tmp_path, models).judge(make_judge_request())
+
+        assert judgement.read_files == ("orders/__init__.py",)
+
+    def test_file_outside_the_root_is_not_a_read_file(self, tmp_path, make_judge_request):
         models = ScriptedClient.answering(
             response(call("read_file", path="../outside.py")),
             response(call("submit_verdict", violations=[])),

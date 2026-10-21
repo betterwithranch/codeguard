@@ -80,8 +80,9 @@ class FileTools:
             return f"Error: {error}"
 
     def read_file(self, path: str, offset: int = 1) -> str:
-        lines = self._inside(path).read_text(errors="replace").splitlines()
+        file = self._inside(path)
         self.read_files.append(path)
+        lines = file.read_text(errors="replace").splitlines()
         start = max(offset, 1)
         return "".join(
             f"{number:>6}\t{line}\n"

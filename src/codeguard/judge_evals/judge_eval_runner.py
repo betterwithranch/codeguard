@@ -1,16 +1,16 @@
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
+from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import ChangeKind, RulesetLoader
+from codeguard.config import ChangeKind, Ruleset, RulesetLoader
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings, JudgeError, JudgeRequest, Verdict
 from codeguard.rule_tests import EditRepo, JudgeEval, NumberedCase, Outcome, RuleTestResult
 from codeguard.syntax import SyntaxScanner
-from codeguard.working_tree import ChangedLines
 
 
 @dataclass(frozen=True)
@@ -76,18 +76,22 @@ class JudgeEvalRunner:
                 problems.append(f"{where}: no judge rule {judge_eval.id}")
                 continue
             cases.extend(
-                _Case(binding, case, f"{where} {case.name}", judge_eval.id)
+                _Case(binding, case, f"{where} {case.name}")
                 for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID)
             )
-        with EditRepo.of({case.path: case.numbered.edit for case in cases}) as repo:
-            changed = repo.classified(self.ast_grep, ruleset)
-            judged = self._judged(
-                [
-                    case_run
-                    for case in cases
-                    for case_run in case.runs(repo.root, changed, self.runs, scanner)
-                ]
-            )
+        with ExitStack() as stack:
+            case_runs = [
+                case_run
+                for case in cases
+                for case_run in case.runs(
+                    stack.enter_context(EditRepo.of({case.file: case.numbered.edit})),
+                    self.ast_grep,
+                    ruleset,
+                    self.runs,
+                    scanner,
+                )
+            ]
+            judged = self._judged(case_runs)
         return RuleTestResult.merge([RuleTestResult(problems=tuple(problems)), judged])
 
     def _judged(self, case_runs: list[_CaseRun]) -> RuleTestResult:
@@ -120,36 +124,22 @@ class _Case:
     binding: Binding
     numbered: NumberedCase
     name: str
-    rule: str
 
     @property
-    def directory(self) -> str:
-        return f"{self.rule}/{self.numbered.directory}"
-
-    @property
-    def path(self) -> str:
-        return f"{self.directory}/{self.numbered.edit.file}"
+    def file(self) -> str:
+        return self.numbered.edit.file
 
     def runs(
         self,
-        root: Path,
-        changed: ChangedLines,
+        repo: EditRepo,
+        ast_grep: AstGrep,
+        ruleset: Ruleset,
         judges: Sequence[JudgeFactory],
         scanner: SyntaxScanner,
     ) -> list[_CaseRun]:
-        judged = JudgeCase(
-            file=self.numbered.edit.file, violates=self.numbered.outcome == Outcome.INVALID
-        )
+        judged = JudgeCase(file=self.file, violates=self.numbered.outcome == Outcome.INVALID)
+        lines = repo.classified(ast_grep, ruleset).judged_lines(self.file)
         return [
-            _CaseRun(
-                self.binding,
-                judged,
-                self.name,
-                root / self.directory,
-                changed.judged_lines(self.path),
-                factory,
-                run,
-                scanner,
-            )
+            _CaseRun(self.binding, judged, self.name, repo.root, lines, factory, run, scanner)
             for run, factory in enumerate(judges, start=1)
         ]

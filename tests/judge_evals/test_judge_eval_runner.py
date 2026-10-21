@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -40,6 +41,22 @@ class ReadingJudges:
         return RecordingJudge()
 
 
+@dataclass
+class ListingJudges:
+    listed: list[list[str]]
+
+    def __call__(self, root: Path, model: str) -> Judge:
+        top = git(root, "rev-parse", "--show-toplevel").strip()
+        self.listed.append(git(Path(top), "ls-files", "--cached", "--others").split())
+        return RecordingJudge()
+
+
+def git(directory: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=directory, check=True, capture_output=True, text=True
+    ).stdout
+
+
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
     def test_judges_the_file_after_each_invalid_and_valid_edit(self, repo):
@@ -69,6 +86,25 @@ class TestJudgeEvalRunner:
             ("claude-haiku-5-5", "ship(status='shipped')\n"),
             ("claude-haiku-5-5", "ship(status=Status.SHIPPED)\n"),
         ]
+
+    def test_each_case_is_judged_in_a_repository_holding_only_its_file(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "id: enum-usage\n"
+            "invalid:\n"
+            "  - file: shipping.py\n"
+            "    after: |\n"
+            "      ship(status='shipped')\n"
+            "valid:\n"
+            "  - file: cancelling.py\n"
+            "    after: |\n"
+            "      cancel(status=Status.CANCELLED)\n",
+        )
+        judges = ListingJudges([])
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+
+        assert sorted(judges.listed) == [["cancelling.py"], ["shipping.py"]]
 
     def test_judges_only_the_function_an_edit_changes(self, repo):
         repo.write(
