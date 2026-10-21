@@ -277,6 +277,31 @@ class TestRulesetLoader:
             f"{repo.root}/.codeguard is invalid:\n  gates.no-print: a pattern rule has this id"
         )
 
+    def test_dead_code_rule_with_a_pattern_rule_id_is_an_error(self, repo):
+        repo.write(
+            ".codeguard/rules/dead-code/no-print.yml",
+            "id: no-print\nlanguage: python\nseverity: error\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n  dead-code.no-print: a pattern rule has this id"
+        )
+
+    def test_dead_code_rule_for_a_language_without_a_tool_is_an_error(self, repo):
+        rule = repo.root / ".codeguard/rules/dead-code/no-dead-code.yml"
+        repo.write(
+            ".codeguard/rules/dead-code/no-dead-code.yml",
+            "id: no-dead-code\nlanguage: ruby\nseverity: error\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == f"{rule} is invalid:\n  language: Input should be 'python'"
+
     def test_project_without_bindings_has_none(self, repo):
         ruleset = RulesetLoader.local(repo.root).load()
 

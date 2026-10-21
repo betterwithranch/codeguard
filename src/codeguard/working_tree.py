@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Self
 
 _HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
+_REGULAR_FILE_MODES = frozenset({"100644", "100755"})
+_SKIP_WORKTREE = "S"
 
 
 @dataclass(frozen=True)
@@ -86,20 +88,20 @@ class WorkingTree:
     def base_contents(self, base: str, files: Sequence[str]) -> dict[str, bytes]:
         if not files:
             return {}
-        return self._blobs(
-            base, self._git_paths("ls-tree", "-r", "--name-only", base, "--", *files)
-        )
+        return self._blobs(base, self._regular_files(base, "--", *files) & set(files))
 
     def committed_files(self, ref: str, suffix: str) -> dict[str, bytes]:
-        listed = self._git_paths("ls-tree", "-r", "--name-only", ref)
-        return self._blobs(ref, {file for file in listed if file.endswith(suffix)})
+        return self._blobs(
+            ref, {file for file in self._regular_files(ref) if file.endswith(suffix)}
+        )
 
     def current_files(self, suffix: str) -> dict[str, bytes]:
-        return {
+        on_disk = {
             file: (self.root / file).read_bytes()
             for file in self.all_lines().files
-            if file.endswith(suffix)
+            if file.endswith(suffix) and not (self.root / file).is_symlink()
         }
+        return {**on_disk, **self._blobs("", self._skip_worktree_files(suffix))}
 
     def all_lines(self) -> AllLines:
         listed = self._git_paths("ls-files", "--cached", "--others", "--exclude-standard")
@@ -118,7 +120,25 @@ class WorkingTree:
     def _git(self, *args: str) -> str:
         return _run_git(self.root, *args)
 
+    def _regular_files(self, ref: str, *pathspec: str) -> set[str]:
+        entries = (
+            entry.split("\t", 1) for entry in self._git_paths("ls-tree", "-r", ref, *pathspec)
+        )
+        return {path for meta, path in entries if meta.split(" ")[0] in _REGULAR_FILE_MODES}
+
+    def _skip_worktree_files(self, suffix: str) -> set[str]:
+        entries = (entry.split("\t", 1) for entry in self._git_paths("ls-files", "-t", "-s"))
+        return {
+            path
+            for meta, path in entries
+            if meta.startswith(f"{_SKIP_WORKTREE} ")
+            and meta.split(" ")[1] in _REGULAR_FILE_MODES
+            and path.endswith(suffix)
+        }
+
     def _blobs(self, ref: str, files: set[str]) -> dict[str, bytes]:
+        if not files:
+            return {}
         ordered = sorted(files)
         batch = subprocess.run(
             ["git", "cat-file", "--batch"],

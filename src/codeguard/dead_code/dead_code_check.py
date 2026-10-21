@@ -1,4 +1,4 @@
-from collections.abc import Sequence
+from collections.abc import Mapping, Sequence
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass
 from multiprocessing import get_context
@@ -16,18 +16,22 @@ class DeadCodeCheck:
     base: str
 
     def check(self, files: Sequence[str]) -> list[Diagnostic]:
-        return [
-            diagnostic
-            for rule in self.ruleset.dead_code_rules()
-            for diagnostic in self._diagnostics(rule)
-        ]
-
-    def _diagnostics(self, rule: DeadCodeRule) -> list[Diagnostic]:
-        engine = VultureEngine(rule.whitelist)
-        before = self.working_tree.committed_files(self.base, engine.suffix)
-        after = self.working_tree.current_files(engine.suffix)
+        rules = self.ruleset.dead_code_rules()
+        if not rules:
+            return []
+        before = self.working_tree.committed_files(self.base, VultureEngine.suffix)
+        after = self.working_tree.current_files(VultureEngine.suffix)
         if before == after:
             return []
+        after = _unparsed_as_before(VultureEngine(), before, after)
+        return [
+            diagnostic for rule in rules for diagnostic in self._diagnostics(rule, before, after)
+        ]
+
+    def _diagnostics(
+        self, rule: DeadCodeRule, before: Mapping[str, bytes], after: Mapping[str, bytes]
+    ) -> list[Diagnostic]:
+        engine = VultureEngine(rule.whitelist)
         with ProcessPoolExecutor(max_workers=2, mp_context=get_context("spawn")) as executor:
             base_usage, usage = executor.map(engine.usage, (before, after))
         scope = self.ruleset.dead_code_scope(rule.id)
@@ -36,3 +40,15 @@ class DeadCodeCheck:
             for definition in usage.newly_unused(base_usage)
             if scope.matches(definition.key.file)
         ]
+
+
+def _unparsed_as_before(
+    engine: VultureEngine, before: Mapping[str, bytes], after: Mapping[str, bytes]
+) -> dict[str, bytes]:
+    parsed = {
+        file: content
+        for file, content in after.items()
+        if before.get(file) == content or engine.parses(content)
+    }
+    unparsed = {file: before[file] for file in after.keys() - parsed.keys() if file in before}
+    return {**parsed, **unparsed}

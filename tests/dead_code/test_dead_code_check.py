@@ -1,6 +1,6 @@
 import pytest
 
-from codeguard.config import ConfigError, RuleOverride, Ruleset, RulesetConfig
+from codeguard.config import RuleOverride, Ruleset, RulesetConfig
 from codeguard.dead_code import DeadCodeCheck
 from codeguard.review import Severity
 from codeguard.working_tree import WorkingTree
@@ -103,15 +103,20 @@ class TestDeadCodeCheck:
 
         assert check.check([]) == [make_diagnostic(dead_code=True)]
 
-    def test_rule_for_a_language_without_a_tool_is_a_config_error(self, library):
-        rule = library.root / ".codeguard/rules/dead-code/no-dead-code.yml"
-        rule.write_text("id: no-dead-code\nlanguage: ruby\nseverity: error\n")
+    def test_using_file_that_no_longer_parses_reports_nothing(self, library):
         check = DeadCodeCheck(WorkingTree(library.root), local(library), library.head())
+        library.write("app.py", "from lib import helper\n\nhelper(\n")
 
-        with pytest.raises(ConfigError) as error:
-            check.check(["app.py"])
+        assert check.check(["app.py"]) == []
 
-        assert str(error.value) == f"{rule} is invalid:\n  language: Input should be 'python'"
+    def test_symlink_target_is_not_read_as_a_use(self, library):
+        library.write("impl.py", "def app():\n    return 1\n")
+        (library.root / "alias.py").symlink_to("app.py")
+        library.commit("Alias the app")
+        check = DeadCodeCheck(WorkingTree(library.root), local(library), library.head())
+        library.write("lib.py", "def helper():\n    return 2\n")
+
+        assert check.check(["lib.py"]) == []
 
 
 def local(repo, selection: RulesetConfig = RulesetConfig()) -> Ruleset:

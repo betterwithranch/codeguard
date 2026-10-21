@@ -53,14 +53,20 @@ class Ruleset:
             if document
         )
 
+    def dead_code_rule_ids(self) -> frozenset[str]:
+        return frozenset(rule.id for rule in self._all_dead_code_rules())
+
     def dead_code_rules(self) -> tuple[DeadCodeRule, ...]:
         return tuple(
             rule.model_copy(
                 update={"severity": self.selection.severity_for(rule.id, rule.severity)}
             )
-            for rule in DeadCodeRule.load_all(self.root / DEAD_CODE_RULE_DIR)
+            for rule in self._all_dead_code_rules()
             if not self.selection.excludes(rule.id)
         )
+
+    def _all_dead_code_rules(self) -> tuple[DeadCodeRule, ...]:
+        return DeadCodeRule.load_all(self.root / DEAD_CODE_RULE_DIR)
 
     def dead_code_scope(self, rule: str) -> PathScope:
         return self.selection.apply_scope(rule, PathScope())
