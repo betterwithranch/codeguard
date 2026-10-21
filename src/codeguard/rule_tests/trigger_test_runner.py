@@ -1,17 +1,14 @@
-import subprocess
-import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Self
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import ChangeKind, ConfigError, Ruleset, RulesetLoader
 from codeguard.review import Binding, Bindings
+from codeguard.rule_tests.edit_repo import EditRepo
 from codeguard.rule_tests.judge_eval import JudgeEval, NumberedCase, Outcome
 from codeguard.rule_tests.rule_test_result import RuleTestResult
-from codeguard.syntax import ChangeClassifier
-from codeguard.working_tree import ChangedLines, WorkingTree
+from codeguard.working_tree import ChangedLines
 
 
 @dataclass(frozen=True)
@@ -77,58 +74,8 @@ class TriggerTestRunner:
         return RuleTestResult(problems=(*unknown, *failed))
 
 
-@dataclass(frozen=True)
-class _ScratchRepo:
-    root: Path
-
-    @classmethod
-    def init(cls, root: Path) -> Self:
-        repo = cls(root)
-        repo._git("init")
-        return repo
-
-    def write(self, files: Mapping[str, str]) -> None:
-        for path, text in files.items():
-            file = self.root / path
-            file.parent.mkdir(parents=True, exist_ok=True)
-            file.write_text(text)
-
-    def commit(self) -> None:
-        self._git("add", "--all")
-        self._git("commit", "--allow-empty", "--message", "Before")
-
-    def _git(self, *args: str) -> None:
-        subprocess.run(
-            [
-                "git",
-                "-c",
-                "user.name=codeguard",
-                "-c",
-                "user.email=codeguard@localhost",
-                "-c",
-                "commit.gpgsign=false",
-                *args,
-            ],
-            cwd=self.root,
-            check=True,
-            capture_output=True,
-        )
-
-
 def _classify_changes(
     checks: Sequence[_CaseCheck], ast_grep: AstGrep, ruleset: Ruleset
 ) -> ChangedLines:
-    with tempfile.TemporaryDirectory() as directory:
-        repo = _ScratchRepo.init(Path(directory))
-        repo.write(
-            {
-                check.path: check.case.edit.before
-                for check in checks
-                if check.case.edit.before is not None
-            }
-        )
-        repo.commit()
-        repo.write({check.path: check.case.edit.after for check in checks})
-        working_tree = WorkingTree(repo.root)
-        classifier = ChangeClassifier.for_rulesets(ast_grep, [ruleset], working_tree)
-        return classifier.classify(working_tree.changed_lines("HEAD"))
+    with EditRepo.of({check.path: check.case.edit for check in checks}) as repo:
+        return repo.classified(ast_grep, ruleset)

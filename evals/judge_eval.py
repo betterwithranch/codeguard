@@ -17,12 +17,14 @@ _FIXTURES = Path(__file__).parent / "fixtures"
 _MAX_CONCURRENCY = 4
 _PROCESSES = Semaphore(_MAX_CONCURRENCY)
 _MODELS = ("claude-haiku-5-5", "claude-sonnet-5-5")
+_SCHEDULE = frozenset(range(29, 32))
 
 
 @dataclass(frozen=True)
 class JudgeCase:
     skill: str
     file: str
+    changed: frozenset[int] | None = None
 
 
 _DATASET = Dataset[JudgeCase, bool, None](
@@ -48,6 +50,26 @@ _DATASET = Dataset[JudgeCase, bool, None](
             inputs=JudgeCase("exception-handling", "payments/refund.py"),
             expected_output=False,
         ),
+        Case(
+            name="method passes a default the type declares, earlier in its file",
+            inputs=JudgeCase("defaults-on-the-type", "exports/scheduler.py", _SCHEDULE),
+            expected_output=True,
+        ),
+        Case(
+            name="method passes on a value the type requires, earlier in its file",
+            inputs=JudgeCase("defaults-on-the-type", "jobs/scheduler.py", _SCHEDULE),
+            expected_output=False,
+        ),
+        Case(
+            name="imports a module of a package whose root exports the name",
+            inputs=JudgeCase("package-public-interface", "reports/summary.py"),
+            expected_output=True,
+        ),
+        Case(
+            name="imports a module because the package root imports this one",
+            inputs=JudgeCase("package-public-interface", "statements/summary.py"),
+            expected_output=False,
+        ),
     ],
     evaluators=[EqualsExpected()],
 )
@@ -55,7 +77,7 @@ _DATASET = Dataset[JudgeCase, bool, None](
 
 def violates(judge: Judge, case: JudgeCase) -> bool:
     skill = Skill.from_file(case.skill, _FIXTURES / "skills" / case.skill / SKILL_FILE)
-    verdict = judge.judge(JudgeRequest(skill, case.file))
+    verdict = judge.judge(JudgeRequest.of_change(skill, _FIXTURES, case.file, case.changed)).verdict
     return any(violation.file == case.file for violation in verdict.violations)
 
 

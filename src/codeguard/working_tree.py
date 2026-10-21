@@ -14,6 +14,7 @@ class ChangedLines:
     deletions: Mapping[str, frozenset[int]] = field(default_factory=dict)
     node_starts: Mapping[str, frozenset[int]] = field(default_factory=dict)
     kinds: Mapping[str, frozenset[str]] = field(default_factory=dict)
+    judged: Mapping[str, frozenset[int]] = field(default_factory=dict)
     base: str | None = None
 
     @property
@@ -28,6 +29,12 @@ class ChangedLines:
 
     def with_kinds(self, kinds: Mapping[str, frozenset[str]]) -> Self:
         return replace(self, kinds=kinds)
+
+    def with_judged_lines(self, judged: Mapping[str, frozenset[int]]) -> Self:
+        return replace(self, judged=judged)
+
+    def judged_lines(self, file: str) -> frozenset[int] | None:
+        return self.judged.get(file, self.points(file))
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
@@ -50,6 +57,9 @@ class AllLines:
         return True
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
+        return None
+
+    def judged_lines(self, file: str) -> frozenset[int] | None:
         return None
 
 
