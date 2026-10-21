@@ -41,7 +41,7 @@ class ClaudeJudge:
             file=request.file,
             model=self.model,
         ) as span:
-            instructions = request.instructions((self.root / request.file).read_text())
+            instructions = request.instructions
             with self.warmup.after_first_call((self.model, instructions)), self.processes:
                 process = self._run(instructions, request.prompt)
             span.set_attribute("returncode", process.returncode)

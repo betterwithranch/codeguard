@@ -77,7 +77,9 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
 
         assert judges.judge.received == [
-            JudgeRequest(Skill(name="enum-usage", text=ENUM_SKILL), "module.py")
+            JudgeRequest(
+                Skill(name="enum-usage", text=ENUM_SKILL), "module.py", "ship(status='shipped')\n"
+            )
         ]
 
     def test_confident_violation_passes_an_invalid_case(self, repo, make_violation):
@@ -205,19 +207,18 @@ class TestJudgeEvalRunner:
 @dataclass(frozen=True)
 class FlagsText:
     text: str
-    root: Path
 
     identity = "flags-text"
 
     def judge(self, request: JudgeRequest) -> Verdict:
-        if self.text not in (self.root / request.file).read_text():
+        if self.text not in request.content:
             return Verdict(violations=())
         violation = MakeViolation(file=request.file, message="Rename it.")
         return Verdict(violations=(violation,))
 
 
 def flagging(text: str) -> JudgeFactory:
-    return lambda root, model: FlagsText(text, root)
+    return lambda root, model: FlagsText(text)
 
 
 def run_variants(repo, runs, disable_skips="[]") -> RuleTestResult:

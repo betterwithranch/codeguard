@@ -1,7 +1,6 @@
 import hashlib
 import json
 from dataclasses import dataclass
-from pathlib import Path
 
 import logfire
 from diskcache import Cache
@@ -15,7 +14,6 @@ _CACHE_VERSION = "\0".join((INSTRUCTIONS, json.dumps(Verdict.model_json_schema()
 class CachedJudge:
     wrapped: Judge
     store: Cache
-    root: Path
     version: str = _CACHE_VERSION
 
     @property
@@ -41,8 +39,13 @@ class CachedJudge:
         return self._key(request) in self.store
 
     def _key(self, request: JudgeRequest) -> str:
-        text = (self.root / request.file).read_text()
-        parts = (self.version, self.identity, request.skill.text, request.file, _digest(text))
+        parts = (
+            self.version,
+            self.identity,
+            request.skill.text,
+            request.file,
+            _digest(request.content),
+        )
         return _digest("\0".join(parts))
 
 

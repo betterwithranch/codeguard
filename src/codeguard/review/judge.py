@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import ClassVar, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,10 +15,17 @@ INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
 class JudgeRequest:
     skill: Skill
     file: str
+    content: str
 
-    def instructions(self, content: str) -> str:
+    @classmethod
+    def read(cls, skill: Skill, root: Path, file: str) -> Self:
+        return cls(skill, file, (root / file).read_text())
+
+    @property
+    def instructions(self) -> str:
         numbered = "".join(
-            f"{number:>6}\t{line}\n" for number, line in enumerate(content.splitlines(), start=1)
+            f"{number:>6}\t{line}\n"
+            for number, line in enumerate(self.content.splitlines(), start=1)
         )
         return f'{INSTRUCTIONS}\n<file path="{self.file}">\n{numbered}</file>\n'
 

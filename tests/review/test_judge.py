@@ -8,22 +8,29 @@ THRESHOLD = 0.9
 
 
 class TestJudgeRequest:
-    def test_prompt_is_the_skill_text(self, make_skill):
+    def test_prompt_is_the_skill_text(self, make_skill, make_judge_request):
         skill = make_skill()
 
-        assert JudgeRequest(skill, "a.py").prompt == skill.text
+        assert make_judge_request(skill=skill).prompt == skill.text
 
-    def test_instructions_end_with_the_numbered_file(self, make_skill):
-        request = JudgeRequest(make_skill(), "a.py")
+    def test_read_carries_the_file_content(self, tmp_path, make_skill):
+        (tmp_path / "a.py").write_text("print(1)\n")
 
-        assert request.instructions("x = 1\nprint(x)\n") == (
+        request = JudgeRequest.read(make_skill(), tmp_path, "a.py")
+
+        assert request == JudgeRequest(make_skill(), "a.py", "print(1)\n")
+
+    def test_instructions_end_with_the_numbered_file(self, make_judge_request):
+        request = make_judge_request(content="x = 1\nprint(x)\n")
+
+        assert request.instructions == (
             f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n     2\tprint(x)\n</file>\n'
         )
 
-    def test_instructions_end_a_file_without_a_final_newline(self, make_skill):
-        request = JudgeRequest(make_skill(), "a.py")
+    def test_instructions_end_a_file_without_a_final_newline(self, make_judge_request):
+        request = make_judge_request(content="x = 1")
 
-        assert request.instructions("x = 1") == (
+        assert request.instructions == (
             f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n</file>\n'
         )
 
