@@ -521,17 +521,29 @@ uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
 uv run evals/judge_eval.py --gemini gemini-3.1-pro-preview  # a Gemini model instead of Claude
 ```
 
-Run the CLI from this clone. `--editable` links the tool to the source, so edits
-apply on the next run; reinstall only after changing dependencies:
+Run the CLI from this clone with its locked dependencies, and put it on your PATH so the
+hooks find it. Edits apply on the next run; run `uv sync` again after changing
+dependencies. (`uv tool install --editable .` ignores `uv.lock`, so it can install an
+ast-grep that a rules package doesn't support.)
 
 ```sh
-uv tool install --editable .
+uv sync --frozen
+ln -sf "$PWD/.venv/bin/codeguard" ~/.local/bin/codeguard
 ```
 
-Point a project's hooks at this clone.
+Point the hooks at this clone. Claude Code reads a directory marketplace from the folder,
+so edits to the plugin take effect at the next session start or `/reload-plugins`.
 
-- Claude Code: in the project's `.claude/settings.local.json`, declare the marketplace
-  as a directory. It replaces the GitHub entry by name, for you only.
+- Claude Code, every project: add this clone as the `codeguard` marketplace in your user
+  settings and install the plugin there. Use this for a session over several
+  repositories, whose working directory is outside them, where no project's settings
+  apply.
+  ```sh
+  claude plugin marketplace add /path/to/codeguard
+  claude plugin install codeguard@codeguard --scope user
+  ```
+- Claude Code, one project: in the project's `.claude/settings.local.json`, declare the
+  marketplace as a directory. It replaces the GitHub entry by name, for you only.
   ```json
   {
     "extraKnownMarketplaces": {
@@ -541,8 +553,6 @@ Point a project's hooks at this clone.
     }
   }
   ```
-  Python edits apply on the next hook run. Edits to `hooks.json` or `plugin.json`
-  need `/reload-plugins`.
 - Codex:
   ```sh
   codex plugin marketplace add /path/to/codeguard
