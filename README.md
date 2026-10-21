@@ -476,10 +476,7 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
   `thinking_tokens`, summed over its turns.
 - `judge {rule} on {file}`: one span per rule and file, with `cache_hit`, `violations`,
   `loaded_files` (the files the verdict depends on) and `changed_files` (the loaded files
-  that changed since the cached verdict, which is why it was judged again). A judgement
-  made again for changed files also has `new_violations`: how many of its violations are
-  on lines the cached verdict didn't flag. The Claude or Gemini span inside it has that
-  judgement's time and tokens.
+  that changed since the cached verdict, which is why it was judged again).
 - `review {repository}`: `files`, `diagnostics`, `errors`, and `host` (the caller passed
   with `--host`, such as `claude-code` or `codex`).
 

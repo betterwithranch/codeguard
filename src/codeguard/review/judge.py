@@ -55,14 +55,6 @@ class Verdict(BaseModel):
 
     violations: tuple[Violation, ...]
 
-    def new_since(self, previous: Self) -> tuple[Violation, ...]:
-        flagged = {(violation.file, violation.line) for violation in previous.violations}
-        return tuple(
-            violation
-            for violation in self.violations
-            if (violation.file, violation.line) not in flagged
-        )
-
     def diagnostics_for(
         self, binding: Binding, file: str, threshold: float
     ) -> tuple[Diagnostic, ...]:
