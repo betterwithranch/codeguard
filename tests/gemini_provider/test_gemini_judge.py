@@ -310,15 +310,15 @@ class TestGeminiJudge:
         )
 
         assert models.requests[0][2].http_options == types.HttpOptions(
-            timeout=90_000, retry_options=types.HttpRetryOptions(attempts=12)
+            timeout=90_000, retry_options=types.HttpRetryOptions(attempts=5)
         )
 
     def test_retries_only_while_the_backoff_fits_before_the_deadline(self, tmp_path, make_skill):
         models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-        deadline = Deadline(minutes=1, started=time.monotonic() - 30)
+        deadline = Deadline(minutes=1, started=time.monotonic() - 52)
 
         judge_with(tmp_path, models, deadline=deadline).judge(JudgeRequest(make_skill(), "a.py"))
 
         http_options = models.requests[0][2].http_options
         assert http_options
-        assert http_options.retry_options == types.HttpRetryOptions(attempts=5)
+        assert http_options.retry_options == types.HttpRetryOptions(attempts=3)

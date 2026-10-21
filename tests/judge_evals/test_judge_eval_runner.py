@@ -220,66 +220,6 @@ def flagging(text: str) -> JudgeFactory:
     return lambda root, model: FlagsText(text, root)
 
 
-def run_variants(repo, runs, disable_skips="[]") -> RuleTestResult:
-    repo.write(
-        ".codeguard/bindings/enum-usage.yaml",
-        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
-        f"disable_skips: {disable_skips}\n",
-    )
-    repo.write(
-        EVAL_FILE,
-        "id: enum-usage\n"
-        "valid:\n"
-        "  - file: status.py\n"
-        "    after: |\n"
-        "      # shipped\n"
-        "      status = 'shipped'\n"
-        "      ship(status)\n",
-    )
-    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), runs, 0.9).run()
-
-
-@pytest.mark.usefixtures("enum_rule")
-class TestVariants:
-    def test_judges_each_variant_of_a_case(self, repo):
-        judges = ReadingJudges([])
-
-        run_variants(repo, (judges,))
-
-        assert sorted(text for _, text in judges.judged) == [
-            "\nstatus = 'shipped'\nship(status)\n",
-            "# shipped\nname_1 = 'shipped'\nship(name_1)\n",
-            "# shipped\nstatus = 'shipped'\nship(status)\n",
-        ]
-
-    def test_variant_with_another_verdict_fails_and_names_the_skip(self, repo):
-        result = run_variants(repo, (flagging("name_1"),))
-
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} valid case 1 with its names renamed: "
-                "enum-usage expected no violation, got:\n"
-                "  line 1 (1.00): Rename it.\n"
-                "  If enum-usage judges names, add renames to disable_skips in its binding.",
-            ),
-        )
-
-    def test_failing_case_reports_only_its_own_failure(self, repo):
-        result = run_variants(repo, (flagging("ship"),))
-
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} valid case 1: enum-usage expected no violation, got:\n"
-                "  line 1 (1.00): Rename it.",
-            ),
-        )
-
-    def test_disabled_skip_has_no_variant(self, repo):
-        result = run_variants(repo, (flagging("name_1"),), disable_skips="[renames]")
-
-        assert result == RuleTestResult()
-
-
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
     def test_each_run_uses_its_own_judges(self, repo):

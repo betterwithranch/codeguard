@@ -1,3 +1,5 @@
+import os
+
 import pytest
 from packaging.specifiers import SpecifierSet
 from packaging.version import Version
@@ -8,11 +10,12 @@ from codeguard.config import (
     BindingsConfig,
     Config,
     GitPackageConfig,
+    JudgeConfig,
+    JudgeProvider,
     PathPackageConfig,
     RuleOverride,
     RulesetConfig,
     Severity,
-    Skip,
     VersionedPackageConfig,
 )
 
@@ -283,27 +286,19 @@ class TestRulesetConfig:
             triggers=frozenset({"any"}), skill=skill, paths=("app/**",), severity=Severity.WARNING
         )
 
-    def test_ruleset_severity_keeps_disable_skips(self, tmp_path):
-        skill = write_skill(tmp_path)
-        bindings = BindingsConfig.model_validate(
-            {
-                "placement.yaml": {
-                    "skill": skill,
-                    "paths": ["**"],
-                    "triggers": ["any"],
-                    "disable_skips": ["renames"],
-                }
-            }
+
+class TestJudgeConfig:
+    def test_claude_runs_a_call_per_cpu_at_once(self):
+        assert JudgeConfig().concurrency == os.process_cpu_count()
+
+    def test_gemini_runs_two_calls_at_once(self):
+        config = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
+
+        assert config.concurrency == 2
+
+    def test_calls_at_once_sets_the_concurrency(self):
+        config = JudgeConfig(
+            provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview", calls_at_once=1
         )
 
-        binding = RulesetConfig(severity=Severity.WARNING).apply(
-            "placement", bindings.root["placement.yaml"]
-        )
-
-        assert binding == BindingConfig(
-            triggers=frozenset({"any"}),
-            skill=skill,
-            paths=("**",),
-            severity=Severity.WARNING,
-            disable_skips=frozenset({Skip.RENAMES}),
-        )
+        assert config.concurrency == 1

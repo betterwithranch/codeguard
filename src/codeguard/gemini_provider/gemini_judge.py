@@ -25,7 +25,7 @@ from codeguard.review import (
 _PROVIDER = "gemini"
 _MAX_TURNS = 25
 _REQUEST_LIMIT_SECONDS = 120
-_MAX_ATTEMPTS = 12
+_MAX_ATTEMPTS = 5
 _SUBMIT_VERDICT = types.FunctionDeclaration(
     name="submit_verdict",
     description="Report the violations in the file under review. Call it once, last.",
@@ -149,10 +149,9 @@ class GeminiJudge:
 
 
 def _retries(seconds: float | None) -> types.HttpRetryOptions:
-    # The SDK backs off 1s doubling to 60s, plus up to 1s of jitter. With a deadline, retries
-    # stop once the backoff would pass it; without one, as in an eval, they run about 6 minutes
-    # so a 429 from exhausted shared capacity has time to clear.
-    sleeps = accumulate(min(2**retry, 60) + 1 for retry in range(_MAX_ATTEMPTS - 1))
+    # The SDK backs off 1s doubling, plus up to 1s of jitter: about 15s over 5 attempts. With
+    # a deadline, retries stop once the backoff would pass it.
+    sleeps = accumulate(2**retry + 1 for retry in range(_MAX_ATTEMPTS - 1))
     retries = sum(1 for slept in sleeps if seconds is None or slept <= seconds)
     return types.HttpRetryOptions(attempts=1 + retries)
 

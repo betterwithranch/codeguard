@@ -1,4 +1,3 @@
-from enum import StrEnum
 from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, ValidationInfo, field_validator
@@ -9,12 +8,6 @@ from codeguard.config.severity import Severity
 SKILL_FILE = "SKILL.md"
 
 
-class Skip(StrEnum):
-    RENAMES = "renames"
-    COMMENTS = "comments"
-    IMPORTS = "imports"
-
-
 class BindingConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -23,7 +16,6 @@ class BindingConfig(BaseModel):
     exclude_paths: tuple[str, ...] = ()
     severity: Severity = Severity.ERROR
     model: str = "claude-sonnet-5-5"
-    disable_skips: frozenset[Skip] = frozenset()
     triggers: frozenset[str] = Field(frozenset({ChangeKind.ANY}), min_length=1)
 
     @field_validator("skill", mode="before")
