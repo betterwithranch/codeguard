@@ -103,6 +103,23 @@ jobs:
 `v0` moves to each 0.x release, so the plugin and the action update together with no
 project edits. A release that breaks the rule format starts `v1`.
 
+### Run formatters first
+
+Format code before codeguard reviews it. A formatter that runs after the review changes
+code that was never reviewed, and it changes the file, so the next review can't reuse
+the cached verdict: it calls the model again and can reach a different verdict.
+
+- In Claude Code, format each file when it's edited, in a `PostToolUse` hook on `Edit`
+  and `Write`, not in a `Stop` hook: hooks on the same event run in parallel, so a
+  formatter there can run after codeguard's review.
+- In CI, run the format check before the codeguard step.
+- Format an unformatted codebase in a commit of its own. Reformatted lines are changed
+  lines, so formatting inside a feature change sends every one of them to the judge.
+
+codeguard ignores added and removed blank lines, which change nothing in any language.
+Other whitespace can change meaning, such as indentation in Python, so codeguard
+leaves it to the formatter.
+
 ### Rules
 
 A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
