@@ -1,10 +1,13 @@
 import json
+from collections.abc import Iterator
 from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from codeguard.review import JudgeNoVerdict, Verdict
+
+_SEARCHES = frozenset({"Grep", "Glob"})
 
 
 class ModelUsage(BaseModel):
@@ -29,15 +32,20 @@ class ToolUse(BaseModel):
 
     name: str
     input: dict[str, object]
+    result: object = None
 
-    def read_file(self, root: Path) -> str | None:
-        path = self.input.get("file_path")
-        if self.name != "Read" or not isinstance(path, str):
-            return None
-        resolved = (root / path).resolve()
-        if resolved.is_relative_to(root.resolve()):
-            return str(resolved.relative_to(root.resolve()))
-        return path
+    def loaded_files(self, root: Path) -> list[str]:
+        if self.name == "Read":
+            path = self.input.get("file_path")
+            files = [path] if isinstance(path, str) else []
+        elif self.name in _SEARCHES and isinstance(self.result, dict):
+            files = [
+                *_strings(self.result.get("filenames")),
+                *_files_in_lines(root, self.result.get("content")),
+            ]
+        else:
+            files = []
+        return [_relative(root, file) for file in files]
 
 
 class ClaudeResult(BaseModel):
@@ -65,12 +73,19 @@ class ClaudeResult(BaseModel):
             for message in messages
             if message["type"] == "rate_limit_event"
         ]
+        tool_results = {
+            content["tool_use_id"]: message.get("tool_use_result")
+            for message in messages
+            if message["type"] == "user"
+            for content in _contents(message)
+            if content.get("type") == "tool_result"
+        }
         tool_uses = [
-            content
+            {**content, "result": tool_results.get(content.get("id"))}
             for message in messages
             if message["type"] == "assistant"
-            for content in message["message"]["content"]
-            if content["type"] == "tool_use"
+            for content in _contents(message)
+            if content.get("type") == "tool_use"
         ]
         return cls.model_validate(
             {
@@ -80,8 +95,10 @@ class ClaudeResult(BaseModel):
             }
         )
 
-    def read_files(self, root: Path) -> tuple[str, ...]:
-        return tuple(file for use in self.tool_uses if (file := use.read_file(root)) is not None)
+    def loaded_files(self, root: Path) -> tuple[str, ...]:
+        return tuple(
+            dict.fromkeys(file for use in self.tool_uses for file in use.loaded_files(root))
+        )
 
     @property
     def telemetry(self) -> dict[str, object]:
@@ -106,3 +123,30 @@ class ClaudeResult(BaseModel):
                 for window, usage in self.usage_windows.items()
             },
         }
+
+
+def _contents(message: dict[str, object]) -> list[dict[str, object]]:
+    body = message.get("message")
+    content = body.get("content") if isinstance(body, dict) else None
+    return [part for part in content if isinstance(part, dict)] if isinstance(content, list) else []
+
+
+def _strings(values: object) -> list[str]:
+    return [value for value in values if isinstance(value, str)] if isinstance(values, list) else []
+
+
+def _files_in_lines(root: Path, content: object) -> Iterator[str]:
+    if not isinstance(content, str):
+        return
+    for line in content.splitlines():
+        prefixes = (line[:end] for end, char in enumerate(line) if char in ":-")
+        file = next((prefix for prefix in prefixes if (root / prefix).is_file()), None)
+        if file is not None:
+            yield file
+
+
+def _relative(root: Path, path: str) -> str:
+    resolved = (root / path).resolve()
+    if resolved.is_relative_to(root.resolve()):
+        return str(resolved.relative_to(root.resolve()))
+    return path

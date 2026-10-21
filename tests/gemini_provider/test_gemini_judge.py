@@ -131,21 +131,26 @@ class TestGeminiJudge:
 
         assert judgement == Judgement(Verdict.model_validate({"violations": [VIOLATION]}))
 
-    def test_read_files_are_the_files_gemini_read(self, tmp_path, make_judge_request):
+    def test_loaded_files_are_the_files_gemini_read_grepped_and_globbed(
+        self, tmp_path, make_judge_request
+    ):
+        (tmp_path / "logger.py").write_text("def info(message): ...\n")
+        (tmp_path / "audit.py").write_text("from logger import info\n")
+        (tmp_path / "config.toml").write_text("level = 'info'\n")
         models = ScriptedClient.answering(
             response(
                 call("read_file", path="logger.py"),
                 call("grep", pattern="info", glob="**/*.py"),
-                call("glob", pattern="*.py"),
+                call("glob", pattern="*.toml"),
             ),
             response(call("submit_verdict", violations=[])),
         )
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
-        assert judgement.read_files == ("logger.py",)
+        assert judgement.loaded_files == ("logger.py", "audit.py", "config.toml")
 
-    def test_missing_file_gemini_tried_to_read_is_a_read_file(self, tmp_path, make_judge_request):
+    def test_missing_file_gemini_tried_to_read_is_a_loaded_file(self, tmp_path, make_judge_request):
         models = ScriptedClient.answering(
             response(call("read_file", path="orders/__init__.py")),
             response(call("submit_verdict", violations=[])),
@@ -153,9 +158,9 @@ class TestGeminiJudge:
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
-        assert judgement.read_files == ("orders/__init__.py",)
+        assert judgement.loaded_files == ("orders/__init__.py",)
 
-    def test_file_outside_the_root_is_not_a_read_file(self, tmp_path, make_judge_request):
+    def test_file_outside_the_root_is_not_a_loaded_file(self, tmp_path, make_judge_request):
         models = ScriptedClient.answering(
             response(call("read_file", path="../outside.py")),
             response(call("submit_verdict", violations=[])),
@@ -163,7 +168,7 @@ class TestGeminiJudge:
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
-        assert judgement.read_files == ()
+        assert judgement.loaded_files == ()
 
     def test_sends_the_instructions_and_the_skill(self, tmp_path, make_skill, make_judge_request):
         models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))

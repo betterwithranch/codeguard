@@ -376,7 +376,9 @@ The judge gets the code the change touched: each changed function, method or cla
 each changed line outside them, with the file's line numbers. A new file, and every file
 with `--all`, is sent whole. The judge reads the rest of the file, or any other file in
 the repository, with its read-only tools. A verdict is cached until the changed code, the
-rest of the file, the rule, the model, or a file the judge read changes.
+rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
+is one the judge read, or one its searches returned: a file a grep matched or a glob
+listed. A file a search would only start returning later doesn't count.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
 threshold is reported as a warning, with its confidence, and doesn't block. The
@@ -472,7 +474,9 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
 - `gemini judges {rule} on {file}`: one span per Gemini judgement, with `model`,
   `num_turns`, `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
   `thinking_tokens`, summed over its turns.
-- `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
+- `judge {rule} on {file}`: one span per rule and file, with `cache_hit`, `violations`,
+  `loaded_files` (the files the verdict depends on) and `changed_files` (the loaded files
+  that changed since the cached verdict, which is why it was judged again).
 - `review {repository}`: `files`, `diagnostics`, `errors`, and `host` (the caller passed
   with `--host`, such as `claude-code` or `codex`).
 

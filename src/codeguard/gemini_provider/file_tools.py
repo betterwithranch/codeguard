@@ -1,3 +1,4 @@
+import itertools
 import re
 import subprocess
 from collections.abc import Callable, Iterator, Mapping
@@ -13,7 +14,7 @@ _MAX_RESULTS = 200
 @dataclass(frozen=True)
 class FileTools:
     root: Path
-    read_files: list[str] = field(default_factory=list)
+    loaded_files: list[str] = field(default_factory=list)
 
     @property
     def declarations(self) -> list[types.FunctionDeclaration]:
@@ -81,7 +82,7 @@ class FileTools:
 
     def read_file(self, path: str, offset: int = 1) -> str:
         file = self._inside(path)
-        self.read_files.append(path)
+        self.loaded_files.append(path)
         lines = file.read_text(errors="replace").splitlines()
         start = max(offset, 1)
         return "".join(
@@ -92,15 +93,26 @@ class FileTools:
     def grep(self, pattern: str, glob: str = "**/*") -> str:
         expression = re.compile(pattern)
         matches = (
-            f"{relative}:{number}:{line}"
+            (relative, f"{relative}:{number}:{line}")
             for relative, file in self._files(glob)
             for number, line in enumerate(_text_lines(file), start=1)
             if expression.search(line)
         )
-        return _limited(matches) or "No matches."
+        return self._shown(matches) or "No matches."
 
     def glob(self, pattern: str) -> str:
-        return _limited(relative for relative, _ in self._files(pattern)) or "No files."
+        return (
+            self._shown((relative, relative) for relative, _ in self._files(pattern)) or "No files."
+        )
+
+    def _shown(self, lines: Iterator[tuple[str, str]]) -> str:
+        kept = list(itertools.islice(lines, _MAX_RESULTS + 1))
+        shown = kept[:_MAX_RESULTS]
+        self.loaded_files.extend(dict.fromkeys(file for file, _ in shown))
+        text = "\n".join(line for _, line in shown)
+        if len(kept) > _MAX_RESULTS:
+            return f"{text}\n(stopped at {_MAX_RESULTS} results)"
+        return text
 
     def _inside(self, path: str) -> Path:
         root = self.root.resolve()
@@ -140,10 +152,3 @@ def _text_lines(file: Path) -> list[str]:
         return file.read_text().splitlines()
     except (OSError, UnicodeDecodeError):
         return []
-
-
-def _limited(lines: Iterator[str]) -> str:
-    kept = [line for _, line in zip(range(_MAX_RESULTS + 1), lines, strict=False)]
-    if len(kept) > _MAX_RESULTS:
-        return "\n".join([*kept[:_MAX_RESULTS], f"(stopped at {_MAX_RESULTS} results)"])
-    return "\n".join(kept)

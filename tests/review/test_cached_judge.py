@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from recording_judge import RecordingJudge
 from spans import finished_span_attributes
@@ -50,7 +52,7 @@ class TestCachedJudge:
         self, orders, store, total_change, make_violation
     ):
         verdict = Verdict(violations=(make_violation(file="orders/order_service.py"),))
-        wrapped = RecordingJudge(verdict, read_files=("orders/pricing.py",))
+        wrapped = RecordingJudge(verdict, loaded_files=("orders/pricing.py",))
         judge = cached(orders, store, wrapped)
         request = total_change
         judge.judge(request)
@@ -105,8 +107,8 @@ class TestCachedJudge:
 
         assert wrapped.received == [request, request]
 
-    def test_changed_file_the_judge_read_is_judged_again(self, orders, store, total_change):
-        wrapped = RecordingJudge(read_files=("orders/pricing.py",))
+    def test_changed_file_the_judge_loaded_is_judged_again(self, orders, store, total_change):
+        wrapped = RecordingJudge(loaded_files=("orders/pricing.py",))
         judge = cached(orders, store, wrapped)
         request = total_change
         judge.judge(request)
@@ -116,10 +118,10 @@ class TestCachedJudge:
 
         assert wrapped.received == [request, request]
 
-    def test_file_the_judge_read_that_was_missing_and_now_exists_is_judged_again(
+    def test_file_the_judge_loaded_that_was_missing_and_now_exists_is_judged_again(
         self, orders, store, total_change
     ):
-        wrapped = RecordingJudge(read_files=("orders/discounts.py",))
+        wrapped = RecordingJudge(loaded_files=("orders/discounts.py",))
         judge = cached(orders, store, wrapped)
         request = total_change
         judge.judge(request)
@@ -129,10 +131,10 @@ class TestCachedJudge:
 
         assert wrapped.received == [request, request]
 
-    def test_changed_file_the_judge_did_not_read_keeps_the_verdict(
+    def test_changed_file_the_judge_did_not_load_keeps_the_verdict(
         self, orders, store, total_change
     ):
-        wrapped = RecordingJudge(read_files=("orders/pricing.py",))
+        wrapped = RecordingJudge(loaded_files=("orders/pricing.py",))
         judge = cached(orders, store, wrapped)
         request = total_change
         judge.judge(request)
@@ -142,8 +144,8 @@ class TestCachedJudge:
 
         assert wrapped.received == [request]
 
-    def test_read_outside_the_repo_is_judged_every_time(self, orders, store, total_change):
-        wrapped = RecordingJudge(read_files=("/etc/hostname",))
+    def test_file_loaded_outside_the_repo_is_judged_every_time(self, orders, store, total_change):
+        wrapped = RecordingJudge(loaded_files=("/etc/hostname",))
         judge = cached(orders, store, wrapped)
         request = total_change
         judge.judge(request)
@@ -187,15 +189,39 @@ class TestCachedJudge:
     def test_each_lookup_records_whether_the_cache_had_the_verdict(
         self, orders, store, total_change, make_violation, capfire
     ):
-        wrapped = RecordingJudge(Verdict(violations=(make_violation(),)))
+        wrapped = RecordingJudge(
+            Verdict(violations=(make_violation(),)), loaded_files=("orders/pricing.py",)
+        )
         judge = cached(orders, store, wrapped)
         request = total_change
 
         judge.judge(request)
         judge.judge(request)
 
-        lookup = {"rule": request.skill.name, "file": request.file, "violations": 1}
+        lookup = {
+            "rule": request.skill.name,
+            "file": request.file,
+            "violations": 1,
+            "changed_files": "[]",
+            "loaded_files": '["orders/pricing.py"]',
+        }
         assert finished_span_attributes(capfire, "judge {rule} on {file}") == [
             {**lookup, "cache_hit": False},
             {**lookup, "cache_hit": True},
         ]
+
+    def test_lookup_records_the_loaded_files_that_changed(
+        self, orders, store, total_change, capfire
+    ):
+        wrapped = RecordingJudge(loaded_files=("orders/pricing.py", "orders/receipt.py"))
+        judge = cached(orders, store, wrapped)
+        judge.judge(total_change)
+        orders.write("orders/pricing.py", "DISCOUNT = 10\n")
+
+        judge.judge(total_change)
+
+        [_, rejudged] = finished_span_attributes(capfire, "judge {rule} on {file}")
+        assert (rejudged["cache_hit"], json.loads(rejudged["changed_files"])) == (
+            False,
+            ["orders/pricing.py"],
+        )

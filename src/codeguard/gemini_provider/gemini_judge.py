@@ -89,7 +89,10 @@ class GeminiJudge:
                 arguments = call.args or {}
                 if call.name == _SUBMIT_VERDICT.name:
                     try:
-                        return Judgement(Verdict.model_validate(arguments), tuple(tools.read_files))
+                        return Judgement(
+                            Verdict.model_validate(arguments),
+                            tuple(dict.fromkeys(tools.loaded_files)),
+                        )
                     except ValidationError as error:
                         replies.append(_reply(call, f"Error: the verdict is invalid.\n{error}"))
                         continue

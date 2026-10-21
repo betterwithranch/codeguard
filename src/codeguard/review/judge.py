@@ -77,7 +77,7 @@ class Verdict(BaseModel):
 @dataclass(frozen=True)
 class Judgement:
     verdict: Verdict
-    read_files: tuple[str, ...] = ()
+    loaded_files: tuple[str, ...] = ()
 
 
 class JudgeError(Exception):

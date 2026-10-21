@@ -59,6 +59,16 @@ class TestFileTools:
     def test_unexpected_argument_is_an_error(self, tools):
         assert tools.call("glob", {"pattern": "*", "limit": 1}).startswith("Error: ")
 
+    def test_grep_records_the_files_it_matched(self, tools):
+        tools.call("grep", {"pattern": "Order"})
+
+        assert tools.loaded_files == ["orders/invoice.py", "orders/order.py"]
+
+    def test_glob_records_the_files_it_listed(self, tools):
+        tools.call("glob", {"pattern": "orders/invoice.py"})
+
+        assert tools.loaded_files == ["orders/invoice.py"]
+
     def test_grep_skips_files_git_ignores(self, tmp_path):
         subprocess.run(["git", "init", "-q"], cwd=tmp_path, check=True)
         (tmp_path / ".gitignore").write_text("node_modules/\n")

@@ -7,7 +7,7 @@ from pathlib import Path
 from threading import Semaphore
 
 import pytest
-from claude_output import MODEL_USAGE, claude_result, fake_claude_script, tool_use
+from claude_output import MODEL_USAGE, claude_result, fake_claude_script, tool_result, tool_use
 from spans import finished_span_attributes
 
 from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
@@ -239,25 +239,64 @@ class TestClaudeJudge:
             Verdict(violations=(make_violation(message="Move it.", confidence=0.4),))
         )
 
-    def test_read_files_are_the_files_claude_read(self, tmp_path, processes, make_judge_request):
-        script = fake_claude_script(
-            [],
-            tool_uses=(
-                tool_use("Read", file_path=str(tmp_path / "orders/pricing.py")),
-                tool_use("Grep", pattern="DISCOUNT", path=str(tmp_path), glob="*.py"),
-                tool_use("Glob", pattern="orders/**/*.py"),
-                tool_use("Read", file_path="/etc/hostname"),
-                tool_use("StructuredOutput", violations=[]),
-            ),
+    def test_loaded_files_are_the_files_claude_read(self, tmp_path, processes, make_judge_request):
+        judge = judge_answering(
+            tmp_path,
+            processes,
+            tool_use("Read", file_path=str(tmp_path / "orders/pricing.py")),
+            tool_use("Read", file_path="/etc/hostname"),
+            tool_use("StructuredOutput", violations=[]),
         )
-        executable = tmp_path / "claude"
-        executable.write_text(script)
-        executable.chmod(0o755)
-        judge = ClaudeJudge(tmp_path, MODEL, processes, str(executable))
 
         judgement = judge.judge(make_judge_request())
 
-        assert judgement.read_files == ("orders/pricing.py", "/etc/hostname")
+        assert judgement.loaded_files == ("orders/pricing.py", "/etc/hostname")
+
+    def test_loaded_files_include_the_files_grep_and_glob_found(
+        self, tmp_path, processes, make_judge_request
+    ):
+        judge = judge_answering(
+            tmp_path,
+            processes,
+            tool_use("Grep", "toolu_grep", pattern="DISCOUNT"),
+            tool_result("toolu_grep", mode="files_with_matches", filenames=["orders/pricing.py"]),
+            tool_use("Glob", "toolu_glob", pattern="orders/*.py"),
+            tool_result("toolu_glob", filenames=["orders/pricing.py", "orders/receipt.py"]),
+        )
+
+        judgement = judge.judge(make_judge_request())
+
+        assert judgement.loaded_files == ("orders/pricing.py", "orders/receipt.py")
+
+    def test_loaded_files_include_the_files_in_grep_content_and_counts(
+        self, tmp_path, processes, make_judge_request
+    ):
+        (tmp_path / "orders").mkdir()
+        (tmp_path / "orders" / "pricing.py").write_text("DISCOUNT = 5\n")
+        (tmp_path / "orders" / "order-service.py").write_text("total = 1 - DISCOUNT\n")
+        (tmp_path / "orders" / "receipt.py").write_text("print(DISCOUNT)\n")
+        judge = judge_answering(
+            tmp_path,
+            processes,
+            tool_use("Grep", "toolu_content", pattern="DISCOUNT", output_mode="content"),
+            tool_result(
+                "toolu_content",
+                mode="content",
+                filenames=[],
+                content="orders/pricing.py:1:DISCOUNT = 5\n"
+                "orders/order-service.py-1-total = 1 - DISCOUNT\n--",
+            ),
+            tool_use("Grep", "toolu_count", pattern="DISCOUNT", output_mode="count"),
+            tool_result("toolu_count", mode="count", filenames=[], content="orders/receipt.py:1"),
+        )
+
+        judgement = judge.judge(make_judge_request())
+
+        assert judgement.loaded_files == (
+            "orders/pricing.py",
+            "orders/order-service.py",
+            "orders/receipt.py",
+        )
 
     def test_claude_runs_the_given_model(
         self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
@@ -318,3 +357,10 @@ class TestClaudeJudge:
         opus = ClaudeJudge(tmp_path, model="claude-opus-5-5", processes=processes)
 
         assert sonnet.identity != opus.identity
+
+
+def judge_answering(tmp_path, processes, *messages: dict) -> ClaudeJudge:
+    executable = tmp_path / "claude"
+    executable.write_text(fake_claude_script([], messages=messages))
+    executable.chmod(0o755)
+    return ClaudeJudge(tmp_path, MODEL, processes, str(executable))

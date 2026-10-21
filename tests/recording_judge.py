@@ -8,12 +8,12 @@ from codeguard.review import JudgeError, Judgement, JudgeRequest, Verdict
 class RecordingJudge:
     verdict: Verdict = Verdict(violations=())
     identity: str = "recording"
-    read_files: tuple[str, ...] = ()
+    loaded_files: tuple[str, ...] = ()
     received: list[JudgeRequest] = field(default_factory=list)
 
     def judge(self, request: JudgeRequest) -> Judgement:
         self.received.append(request)
-        return Judgement(self.verdict, self.read_files)
+        return Judgement(self.verdict, self.loaded_files)
 
 
 @dataclass(frozen=True)
