@@ -358,7 +358,10 @@ In Codex, trust codeguard's hooks in `/hooks`.
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
-directory: the uncommitted and untracked files, whoever changed them and however. It runs
+directory: the uncommitted and untracked files, whoever changed them and however. When the
+working directory isn't in a repository, as in a session over several repositories, it
+reviews each repository directly inside it, and each finding's file starts with its
+repository's directory. It runs
 the `codeguard` the installer put on your PATH, the same one you run from the command
 line, through `uv`. Claude Code and Codex get the same behaviour.
 

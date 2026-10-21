@@ -9,6 +9,7 @@ class GitRepo:
 
     @classmethod
     def init(cls, root: Path) -> Self:
+        root.mkdir(parents=True, exist_ok=True)
         repo = cls(root)
         repo.git("init", "--initial-branch=main")
         repo.git("commit", "--allow-empty", "--message", "Initial commit")
