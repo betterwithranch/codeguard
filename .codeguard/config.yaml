@@ -41,3 +41,14 @@ packages:
           no-manual-kwargs-check: *evals-are-tests
           no-normalized-asserts: *evals-are-tests
           no-pop-from-kwargs: *evals-are-tests
+          enum-usage: &evals-are-not-production
+            exclude_paths:
+              - "**/test_*.py"
+              - "**/*_test.py"
+              - "**/tests/**/*.py"
+              - "**/conftest.py"
+              - "evals/**"
+          no-append-in-every-branch: *evals-are-not-production
+          no-bucket-module-names: *evals-are-not-production
+          no-dict-round-trip-between-models: *evals-are-not-production
+          typed-dispatch-registries: *evals-are-not-production
