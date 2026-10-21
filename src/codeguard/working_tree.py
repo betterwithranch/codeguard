@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Self
 
 _HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
+# ASCII whitespace, the same set git treats as blank.
+_BLANK = " \t\r\f\v"
 
 
 @dataclass(frozen=True)
@@ -73,7 +75,7 @@ class WorkingTree:
 
     def changed_lines(self, base: str) -> ChangedLines:
         merge_base = self._git("merge-base", base, "HEAD").strip()
-        diff = self._git(
+        diff = self._git_text(
             "-c",
             "core.quotePath=false",
             "diff",
@@ -109,7 +111,7 @@ class WorkingTree:
         return self.root / self._git("rev-parse", "--git-path", name).strip()
 
     def _code_lines(self, file: str) -> frozenset[int]:
-        lines = (self.root / file).read_bytes().splitlines()
+        lines = _rows((self.root / file).read_bytes())
         return frozenset(number for number, text in enumerate(lines, 1) if _holds_code(text))
 
     def _git_paths(self, command: str, *args: str) -> set[str]:
@@ -117,6 +119,10 @@ class WorkingTree:
 
     def _git(self, *args: str) -> str:
         return _run_git(self.root, *args)
+
+    def _git_text(self, *args: str) -> str:
+        # Decoded without newline translation, so only "\n" ends a row, as it does for git.
+        return self._git_bytes(*args).decode(errors="surrogateescape")
 
     def _git_bytes(self, *args: str) -> bytes:
         return subprocess.run(
@@ -128,11 +134,10 @@ def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, fro
     added: dict[str, set[int]] = {}
     deletions: dict[str, set[int]] = {}
     for hunk in _hunks(diff):
-        points = hunk.points
-        added.setdefault(hunk.file, set()).update(points)
+        added.setdefault(hunk.file, set()).update(hunk.points)
         deletions.setdefault(hunk.file, set())
-        if not points and any(_holds_code(text) for text in hunk.removed):
-            deletions[hunk.file].add(max(hunk.start - 1 if hunk.added else hunk.start, 1))
+        if not hunk.points and hunk.removes_code:
+            deletions[hunk.file].add(max(hunk.start - 1 if hunk.added_rows else hunk.start, 1))
     return _frozen(added), _frozen(deletions)
 
 
@@ -140,36 +145,47 @@ def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, fro
 class _Hunk:
     file: str
     start: int
-    removed: list[str] = field(default_factory=list)
-    added: list[str] = field(default_factory=list)
+    points: set[int] = field(default_factory=set)
+    added_rows: int = 0
+    removes_code: bool = False
 
-    @property
-    def points(self) -> set[int]:
+    def add(self, text: str) -> None:
         # A blank line changes nothing in any language, so only lines holding code count.
-        return {self.start + offset for offset, text in enumerate(self.added) if _holds_code(text)}
+        if _holds_code(text):
+            self.points.add(self.start + self.added_rows)
+        self.added_rows += 1
+
+    def remove(self, text: str) -> None:
+        self.removes_code = self.removes_code or _holds_code(text)
 
 
 def _hunks(diff: str) -> list[_Hunk]:
     hunks: list[_Hunk] = []
     file = ""
     in_header = False
-    for row in diff.splitlines():
+    for row in _rows(diff):
         if row.startswith("diff --git "):
             in_header = True
         elif in_header and row.startswith("+++ "):
-            file = row.removeprefix("+++ ")
+            # git ends the name with a tab when it holds a space.
+            file = row.removeprefix("+++ ").removesuffix("\t")
         elif match := _HUNK.match(row):
             in_header = False
             hunks.append(_Hunk(file, int(match[1])))
         elif not in_header and hunks and row.startswith("-"):
-            hunks[-1].removed.append(row[1:])
+            hunks[-1].remove(row[1:])
         elif not in_header and hunks and row.startswith("+"):
-            hunks[-1].added.append(row[1:])
+            hunks[-1].add(row[1:])
     return hunks
 
 
-def _holds_code(text: str | bytes) -> bool:
-    return bool(text.strip())
+def _rows(text: str | bytes) -> list[str]:
+    decoded = text if isinstance(text, str) else text.decode(errors="surrogateescape")
+    return decoded.split("\n")
+
+
+def _holds_code(text: str) -> bool:
+    return bool(text.strip(_BLANK))
 
 
 def _frozen(points: dict[str, set[int]]) -> dict[str, frozenset[int]]:

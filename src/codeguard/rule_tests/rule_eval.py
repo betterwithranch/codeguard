@@ -30,8 +30,10 @@ class EditCase(BaseModel):
     def paths_are_inside_the_repository(self) -> Self:
         for path in (self.file, *self.unchanged):
             posix = PurePosixPath(path)
-            if posix.is_absolute() or ".." in posix.parts or str(posix) != path:
+            if posix.is_absolute() or ".." in posix.parts or str(posix) != path or not posix.parts:
                 raise ValueError(f"{path} is not a normalized relative path")
+            if ".git" in posix.parts:
+                raise ValueError(f"{path} is inside .git")
         return self
 
     @model_validator(mode="after")

@@ -304,11 +304,11 @@ rule:
 
 A file touches a trigger when a changed line falls inside a node it matches. A new file
 touches every trigger it matches. A blank line is never a changed line, in any language:
-adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic, so
-the blank line before a new method doesn't make its class part of the change. A rule that needs every change says `triggers: [any]`;
-`codeguard test` warns on `any`, `code`, `function-body` and `function-signature`. The
-built-in kinds are `comment`, `docstring`, `import`,
-`function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
+adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic,
+so the blank line before a new method doesn't make its class part of the change. A rule
+that needs every change says `triggers: [any]`; `codeguard test` warns on `any`, `code`,
+`function-body` and `function-signature`. The built-in kinds are `comment`, `docstring`,
+`import`, `function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
 `class-header`, `class-attribute`, `module-statement`, `annotation`, `call`,
 `control-flow`, `return-yield`, `collection-literal`, `string-literal`,
 `number-literal`, `attribute-access`, `subscript`, `conditional-expression`,
@@ -327,7 +327,7 @@ that is not only a comment or docstring) and `any`. The syntax table in
   must match the binding's paths. `unchanged` maps the path of each other file the
   edit needs, such as a package's `__init__.py`, to its text; the judge can read them,
   but they aren't part of the change, and can't include `file`. Every path is relative
-  to the repository root, with no `..` or `./`.
+  to the repository root, with no `..` or `./`, and outside `.git`.
 - `expected_output`: the review's `outcome`, one of:
   - `invalid`: the triggers fire and the judge reports a violation;
   - `valid`: the triggers fire and the judge reports none;
@@ -479,8 +479,9 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   goes through.
 
 The judge gets the code the change touched: each changed function, method or class, and
-each changed line outside them, with the file's line numbers. A new file, and every file
-with `--all`, is sent whole. The judge reads the rest of the file, or any other file in
+each changed line outside them, with the file's line numbers. A new file is sent whole
+but for its blank lines outside a function or class; every file with `--all` is sent
+whole. The judge reads the rest of the file, or any other file in
 the repository, with its read-only tools. A verdict is cached until the changed code, the
 rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
 is one the judge read, or one its searches returned: a file a grep matched or a glob
