@@ -103,16 +103,25 @@ class TestTriggerTestRunner:
 
         assert result == RuleTestResult()
 
-    def test_valid_case_passes_whether_or_not_the_triggers_fire(self, repo):
-        write_eval(
-            repo,
-            case("reads the value", "valid", "label = status.value\n"),
-            case("changes a count", "valid", "count = 2\n", before="count = 1\n"),
-        )
+    def test_valid_case_whose_change_touches_a_gate_passes(self, repo):
+        write_eval(repo, case("reads the value", "valid", "label = status.value\n"))
 
         result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
         assert result == RuleTestResult()
+
+    def test_valid_case_whose_change_misses_the_triggers_fails(self, repo):
+        write_eval(repo, case("changes a count", "valid", "count = 2\n", before="count = 1\n"))
+
+        result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert result == RuleTestResult(
+            problems=(
+                f"{EVAL_FILE} changes a count: enum-usage "
+                "triggers definition-added-or-removed, gate:enum-value miss the change, which "
+                "touches code, module-statement, number-literal",
+            ),
+        )
 
     def test_invalid_case_whose_removed_function_touches_definition_added_or_removed_passes(
         self, repo

@@ -14,8 +14,6 @@ from codeguard.rule_tests.scratch_repo import ScratchRepo
 from codeguard.syntax import ChangeClassifier
 from codeguard.working_tree import ChangedLines, WorkingTree
 
-_JUDGED = frozenset({Outcome.INVALID, Outcome.UNCERTAIN})
-
 
 @dataclass(frozen=True)
 class _CaseCheck:
@@ -33,9 +31,9 @@ class _CaseCheck:
         kinds = changed.kinds_of(self.path)
         if kinds is None:
             return f"{self.name}: the case changes no code in {file}"
-        if expected is None or expected.outcome is Outcome.VALID:
+        if expected is None:
             return None
-        should_fire = expected.outcome in _JUDGED
+        should_fire = expected.outcome is not Outcome.SKIPPED
         if self.binding.is_triggered(changed, self.path) == should_fire:
             return None
         touched = ", ".join(sorted(kinds - {ChangeKind.ANY}))

@@ -321,10 +321,10 @@ datasets, so an editor validates them, and `codeguard test` fails when it is out
 
 `codeguard test` checks the triggers on every case, with no model call. It commits each
 `before` to a scratch repository, writes each `after`, and classifies the diff the way a
-review does. An `invalid` or `uncertain` case fails when the triggers miss the change,
-and a `skipped` case fails when they fire. The message lists the kinds the change
-touches. Narrow a gate until a `skipped` case passes, and keep every `invalid` case
-passing.
+review does. An `invalid`, `uncertain` or `valid` case fails when the triggers miss the
+change, since a review would never judge it, and a `skipped` case fails when they fire.
+The message lists the kinds the change touches. Narrow a gate until a `skipped` case
+passes, and keep every other case passing.
 
 `codeguard eval` runs each dataset as one experiment against the binding's model. The
 task reviews the edit the way `codeguard review` does: the paths, then the triggers,
@@ -359,7 +359,7 @@ A project tests the rules in its `.codeguard/` the same way a package does.
 | You add or change | Write | It checks | Run | Calls Claude |
 |---|---|---|---|---|
 | A pattern rule or gate | `rule-tests/<id>-test.yml` | the rule matches its `invalid` cases and none of its `valid` ones | `codeguard test` | no |
-| A judge rule's skill or `triggers` | `rule-evals/<id>.yaml` | the triggers fire on each `invalid` edit and on no `skipped` edit | `codeguard test` | no |
+| A judge rule's skill or `triggers` | `rule-evals/<id>.yaml` | the triggers fire on each edit but the `skipped` ones | `codeguard test` | no |
 | | | each edit's review has its expected outcome | `codeguard eval` | yes |
 
 Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
