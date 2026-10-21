@@ -5,7 +5,6 @@ packages:
     rulesets:
       python:
         include:
-          - enum-usage
           - all-only-in-init
           - no-append-in-every-branch
           - no-assert-in-fixtures

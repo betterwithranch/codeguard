@@ -9,7 +9,6 @@ from codeguard.config import (
     PathScope,
     Ruleset,
     Severity,
-    Skip,
 )
 from codeguard.review.skill import Skill
 from codeguard.working_tree import AllLines, ChangedLines
@@ -23,7 +22,6 @@ class Binding:
     severity: Severity
     model: str
     triggers: frozenset[str]
-    disable_skips: frozenset[Skip] = frozenset()
     exclude_paths: tuple[str, ...] = ()
 
     @classmethod
@@ -35,13 +33,8 @@ class Binding:
             severity=binding.severity,
             model=binding.model,
             triggers=binding.triggers,
-            disable_skips=binding.disable_skips,
             exclude_paths=binding.exclude_paths,
         )
-
-    @property
-    def skips(self) -> tuple[Skip, ...]:
-        return tuple(skip for skip in Skip if skip not in self.disable_skips)
 
     def files(self, changed: Sequence[str]) -> list[str]:
         return [file for file in changed if self._matches(file)]

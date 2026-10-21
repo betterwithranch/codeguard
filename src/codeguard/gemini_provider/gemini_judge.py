@@ -2,6 +2,7 @@ import time
 from collections.abc import Iterator, Sequence
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
+from itertools import accumulate
 from pathlib import Path
 from typing import Protocol
 
@@ -24,6 +25,7 @@ from codeguard.review import (
 _PROVIDER = "gemini"
 _MAX_TURNS = 25
 _REQUEST_LIMIT_SECONDS = 120
+_MAX_ATTEMPTS = 5
 _SUBMIT_VERDICT = types.FunctionDeclaration(
     name="submit_verdict",
     description="Report the violations in the file under review. Call it once, last.",
@@ -98,8 +100,10 @@ class GeminiJudge:
         self, instructions: str, contents: list[types.Content], tools: FileTools
     ) -> types.GenerateContentResponse:
         limit = self.request_limit_seconds
+        remaining = None
         if self.deadline is not None:
-            limit = min(limit, self.deadline.remaining_seconds())
+            remaining = self.deadline.remaining_seconds()
+            limit = min(limit, remaining)
             if limit <= 0:
                 raise self.deadline.reached()
         config = types.GenerateContentConfig(
@@ -114,7 +118,9 @@ class GeminiJudge:
             # Streamed thought summaries keep bytes flowing while the model thinks, so proxies
             # that drop a response slow to start don't cut long calls off.
             thinking_config=types.ThinkingConfig(include_thoughts=True),
-            http_options=types.HttpOptions(timeout=int(limit * 1000)),
+            http_options=types.HttpOptions(
+                timeout=int(limit * 1000), retry_options=_retries(remaining)
+            ),
         )
         try:
             return _merged(list(self._stream(contents, config, time.monotonic() + limit)))
@@ -140,6 +146,14 @@ class GeminiJudge:
         if self.deadline is not None and self.deadline.remaining_seconds() <= 0:
             return self.deadline.reached()
         return JudgeTimeout(f"{self.model} took over {self.request_limit_seconds:g}s to answer.")
+
+
+def _retries(seconds: float | None) -> types.HttpRetryOptions:
+    # The SDK backs off 1s doubling, plus up to 1s of jitter: about 15s over 5 attempts. With
+    # a deadline, retries stop once the backoff would pass it.
+    sleeps = accumulate(2**retry + 1 for retry in range(_MAX_ATTEMPTS - 1))
+    retries = sum(1 for slept in sleeps if seconds is None or slept <= seconds)
+    return types.HttpRetryOptions(attempts=1 + retries)
 
 
 def _merged(chunks: Sequence[types.GenerateContentResponse]) -> types.GenerateContentResponse:

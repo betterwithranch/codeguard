@@ -1,4 +1,4 @@
-from codeguard.config.binding_config import SKILL_FILE, BindingConfig, Skip
+from codeguard.config.binding_config import SKILL_FILE, BindingConfig
 from codeguard.config.bindings_config import BindingsConfig
 from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config import Config
@@ -65,7 +65,6 @@ __all__ = [
     "RulesetLoader",
     "RulesetStructure",
     "Severity",
-    "Skip",
     "VersionRange",
     "VersionedPackageConfig",
 ]

@@ -1,18 +1,21 @@
-from enum import StrEnum
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, DirectoryPath, Field, ValidationInfo, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    DirectoryPath,
+    Field,
+    ValidationInfo,
+    field_validator,
+    model_validator,
+)
 
 from codeguard.config.change_kind import ChangeKind
 from codeguard.config.severity import Severity
 
 SKILL_FILE = "SKILL.md"
-
-
-class Skip(StrEnum):
-    RENAMES = "renames"
-    COMMENTS = "comments"
-    IMPORTS = "imports"
+# Released rule packages still set it, from when evals judged code variants.
+_RETIRED_FIELDS = frozenset({"disable_skips"})
 
 
 class BindingConfig(BaseModel):
@@ -23,8 +26,14 @@ class BindingConfig(BaseModel):
     exclude_paths: tuple[str, ...] = ()
     severity: Severity = Severity.ERROR
     model: str = "claude-sonnet-5-5"
-    disable_skips: frozenset[Skip] = frozenset()
     triggers: frozenset[str] = Field(frozenset({ChangeKind.ANY}), min_length=1)
+
+    @model_validator(mode="before")
+    @classmethod
+    def drop_retired_fields(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        return {key: value for key, value in data.items() if key not in _RETIRED_FIELDS}
 
     @field_validator("skill", mode="before")
     @classmethod

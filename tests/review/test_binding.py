@@ -1,13 +1,9 @@
-import pytest
-from pydantic import ValidationError
-
 from codeguard.config import (
     BindingConfig,
     BindingsConfig,
     RuleOverride,
     Ruleset,
     RulesetConfig,
-    Skip,
 )
 from codeguard.review import Binding, Bindings, Severity, Skill
 
@@ -78,27 +74,6 @@ class TestBinding:
         binding = Binding.from_config(SKILL_NAME, config)
 
         assert binding == make_binding(model="claude-haiku-5-5")
-
-    def test_skips_every_change_kind_by_default(self, make_binding):
-        assert make_binding().skips == (Skip.RENAMES, Skip.COMMENTS, Skip.IMPORTS)
-
-    def test_disabled_skips_are_left_out(self, tmp_path, make_skill):
-        skill = write_skill(tmp_path, make_skill().text)
-        config = BindingConfig.model_validate(
-            {"skill": skill, "paths": ["**"], "triggers": ["any"], "disable_skips": ["renames"]}
-        )
-
-        binding = Binding.from_config(SKILL_NAME, config)
-
-        assert binding.skips == (Skip.COMMENTS, Skip.IMPORTS)
-
-    def test_unknown_skip_is_rejected(self, tmp_path, make_skill):
-        skill = write_skill(tmp_path, make_skill().text)
-
-        with pytest.raises(ValidationError, match="disable_skips"):
-            BindingConfig.model_validate(
-                {"skill": skill, "paths": ["**"], "triggers": ["any"], "disable_skips": ["names"]}
-            )
 
 
 class TestBindings:

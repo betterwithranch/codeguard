@@ -1,4 +1,3 @@
-import os
 from dataclasses import dataclass, field
 from pathlib import Path
 from threading import Semaphore
@@ -17,7 +16,7 @@ _JUDGEMENT_CACHE_DIR = Path.home() / ".cache" / "codeguard" / "judgements"
 class Judges:
     config: JudgeConfig = JudgeConfig()
     store: Cache = field(default_factory=lambda: Cache(_JUDGEMENT_CACHE_DIR))
-    processes: Semaphore = field(default_factory=lambda: Semaphore(os.process_cpu_count() or 1))
+    processes: Semaphore = field(default_factory=lambda: Semaphore(JudgeConfig().concurrency))
     warmup: PromptCacheWarmup = field(default_factory=PromptCacheWarmup)
 
     def cached(self, root: Path, model: str, deadline: Deadline | None = None) -> CachedJudge:

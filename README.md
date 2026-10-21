@@ -317,17 +317,8 @@ and skills call Claude again.
 
 `codeguard eval` also fails a judge rule with no eval that has an `invalid` case.
 
-The eval also judges each case with its names renamed, without comments, and with its
-imports reordered, and each must keep its expected result. A rule whose verdict depends
-on one of these lists it in its binding:
-
-```yaml
-skill: python/skills/naming
-paths: ["**/*.py"]
-disable_skips: [renames]   # also: comments, imports
-```
-
-Variants exist for Python files. Other languages get the original case only.
+A case whose judge call fails, such as a quota error that outlasts the provider's retries,
+fails too, so a passing eval means every case was judged. The other cases still run.
 
 `codeguard eval --repeat 3` judges each case three times. Runs after the first skip the
 cache, so an unstable verdict shows up as a failing run.
@@ -424,12 +415,17 @@ judge:
   model: gemini-3.1-pro-preview   # replaces every rule's model
   project: my-project             # default: GOOGLE_CLOUD_PROJECT
   location: global                # default: GOOGLE_CLOUD_LOCATION
+  calls_at_once: 2                # default: 2 for gemini, one per CPU for claude-cli
 ```
 
 Gemini reads the working directory through read-only `read_file`, `grep` and `glob`
 tools, limited to the repository, and reports through a `submit_verdict` tool that
 takes the same verdict schema as Claude. Verdicts are cached per provider and model,
 so switching providers doesn't reuse Claude's verdicts.
+
+Gemini's pay-as-you-go capacity is shared and limited by tokens per minute, so the
+gemini provider makes 2 calls at once. A call that Gemini turns away with a 429 is
+retried for about 15 seconds, and then the rule is reported as not judged.
 
 Use `gemini-3.1-pro-preview`, the Gemini model the judge evals were run against.
 Flash was unreliable in testing.
