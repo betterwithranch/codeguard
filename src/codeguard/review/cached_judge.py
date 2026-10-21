@@ -47,6 +47,9 @@ class CachedJudge:
             span.set_attribute("changed_files", list(changed))
             if stored is None or changed:
                 judgement = self.wrapped.judge(request)
+                if stored is not None:
+                    new = judgement.verdict.new_since(stored.verdict)
+                    span.set_attribute("new_violations", len(new))
                 stored = _StoredJudgement(
                     judgement.verdict,
                     {file: self._digest_of(file) for file in judgement.loaded_files},

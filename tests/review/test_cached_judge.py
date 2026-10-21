@@ -225,3 +225,21 @@ class TestCachedJudge:
             False,
             ["orders/pricing.py"],
         )
+
+    def test_judging_again_for_a_changed_loaded_file_records_the_violations_it_found(
+        self, orders, store, total_change, make_violation, capfire
+    ):
+        file = "orders/order_service.py"
+        before = Verdict(violations=(make_violation(file=file, line=5),))
+        after = Verdict(
+            violations=(make_violation(file=file, line=5), make_violation(file=file, line=6))
+        )
+        cached(orders, store, RecordingJudge(before, loaded_files=("orders/pricing.py",))).judge(
+            total_change
+        )
+        orders.write("orders/pricing.py", "DISCOUNT = 10\n")
+
+        cached(orders, store, RecordingJudge(after)).judge(total_change)
+
+        [first, rejudged] = finished_span_attributes(capfire, "judge {rule} on {file}")
+        assert ("new_violations" in first, rejudged["new_violations"]) == (False, 1)
