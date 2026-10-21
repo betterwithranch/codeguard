@@ -106,12 +106,16 @@ class Rules:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         judges = self._judges
-        runs = (judges.cached, *(judges.uncached for _ in range(repeat - 1)))
+        # A repeat has to call the model again to show whether the verdict is stable.
+        judge = judges.cached if repeat == 1 else judges.uncached
+        concurrency = self.config.judge.concurrency
         return RuleTestResult.merge(
             result
             for loader in self._resolver.own_rulesets
             for result in (
-                JudgeEvalRunner(root, loader, runs, threshold, self._ast_grep).run(),
+                JudgeEvalRunner(
+                    root, loader, judge, threshold, repeat, concurrency, self._ast_grep
+                ).run(),
                 EvalCoverage(loader).run(),
             )
         )

@@ -320,8 +320,10 @@ and skills call Claude again.
 A case whose judge call fails, such as a quota error that outlasts the provider's retries,
 fails too, so a passing eval means every case was judged. The other cases still run.
 
-`codeguard eval --repeat 3` judges each case three times. Runs after the first skip the
-cache, so an unstable verdict shows up as a failing run.
+`codeguard eval --repeat 3` judges each case three times, all skipping the cache, so an
+unstable verdict shows up as a failing run, named like `valid case 1 [2/3]`. The cases run
+as a [pydantic-evals](https://ai.pydantic.dev/evals/) dataset, so with a Logfire token
+each run is also an experiment in Logfire.
 
 ### Which test to write
 

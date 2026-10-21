@@ -1,41 +1,42 @@
+import asyncio
 import tempfile
-from collections.abc import Sequence
-from concurrent.futures import ThreadPoolExecutor
 from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
+
+from pydantic_evals import Case, Dataset
+from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
+from pydantic_evals.reporting import EvaluationReport
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import ChangeKind, RulesetLoader
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_factory import JudgeFactory
-from codeguard.review import Binding, Bindings, JudgeError, JudgeRequest, Verdict
+from codeguard.review import Binding, Bindings, JudgeRequest, Verdict
 from codeguard.rule_tests import JudgeEval, NumberedCase, Outcome, RuleTestResult
 from codeguard.syntax import SyntaxScanner
 
 
 @dataclass(frozen=True)
-class _CaseRun:
+class _EditInputs:
     binding: Binding
     case: JudgeCase
-    name: str
     directory: Path
-    judges: JudgeFactory
-    run: int
-    scanner: SyntaxScanner
 
-    def problem(self, confidence_threshold: float) -> str | None:
-        judge = self.judges(self.directory, self.binding.model)
-        verdict = judge.judge(JudgeRequest(self.binding.skill, self.case.file))
+    def problem(
+        self, verdict: Verdict, confidence_threshold: float, scanner: SyntaxScanner
+    ) -> str | None:
         return self.case.problem(verdict, confidence_threshold) or self._trigger_problem(
-            verdict, confidence_threshold
+            verdict, confidence_threshold, scanner
         )
 
-    def _trigger_problem(self, verdict: Verdict, confidence_threshold: float) -> str | None:
+    def _trigger_problem(
+        self, verdict: Verdict, confidence_threshold: float, scanner: SyntaxScanner
+    ) -> str | None:
         if not self.case.violates or ChangeKind.ANY in self.binding.triggers:
             return None
         lines = self.case.violation_lines(verdict, confidence_threshold)
-        parsed = self.scanner.scan_files(self.directory, [self.case.file]).get(self.case.file)
+        parsed = scanner.scan_files(self.directory, [self.case.file]).get(self.case.file)
         if not lines or parsed is None:
             return None
         kinds = [parsed.kinds_on(line) for line in lines]
@@ -49,12 +50,28 @@ class _CaseRun:
         )
 
 
+@dataclass
+class _MatchesOutcome(Evaluator[_EditInputs, Verdict, None]):
+    confidence_threshold: float
+    scanner: SyntaxScanner
+
+    def evaluate(self, ctx: EvaluatorContext[_EditInputs, Verdict, None]) -> EvaluationReason:
+        problem = ctx.inputs.problem(ctx.output, self.confidence_threshold, self.scanner)
+        return EvaluationReason(value=problem is None, reason=problem)
+
+    def build_serialization_arguments(self) -> dict[str, object]:
+        # The scanner is a tool, not a setting worth recording with the run.
+        return {"confidence_threshold": self.confidence_threshold}
+
+
 @dataclass(frozen=True)
 class JudgeEvalRunner:
     root: Path
     ruleset: RulesetLoader
-    runs: Sequence[JudgeFactory]
+    judges: JudgeFactory
     confidence_threshold: float
+    repeat: int = 1
+    concurrency: int | None = None
     ast_grep: AstGrep = AstGrep()
 
     def run(self) -> RuleTestResult:
@@ -65,59 +82,69 @@ class JudgeEvalRunner:
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
         scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         problems: list[str] = []
-        judged = RuleTestResult()
         with ExitStack() as stack:
-            case_runs: list[_CaseRun] = []
+            cases: list[Case[_EditInputs, Verdict, None]] = []
             for file, judge_eval in evals:
                 where = file.relative_to(self.root)
                 binding = bindings.get(judge_eval.id)
                 if binding is None:
                     problems.append(f"{where}: no judge rule {judge_eval.id}")
                     continue
-                for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID):
-                    name = f"{where} {case.name}"
-                    case_runs.extend(self._case_runs(binding, case, name, stack, scanner))
-            judged = self._judged(case_runs)
-        return RuleTestResult.merge([RuleTestResult(problems=tuple(problems)), judged])
+                cases.extend(
+                    _case(binding, case, f"{where} {case.name}", stack)
+                    for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID)
+                )
+            if cases:
+                problems.extend(_problems(self._evaluate(cases, scanner)))
+        return RuleTestResult(problems=tuple(problems))
 
-    def _judged(self, case_runs: list[_CaseRun]) -> RuleTestResult:
-        if not case_runs:
-            return RuleTestResult()
-        with ThreadPoolExecutor(max_workers=len(case_runs)) as executor:
-            return RuleTestResult.merge(executor.map(self._result, case_runs))
-
-    def _case_runs(
-        self,
-        binding: Binding,
-        case: NumberedCase,
-        name: str,
-        stack: ExitStack,
-        scanner: SyntaxScanner,
-    ) -> list[_CaseRun]:
-        directory = _written(stack, case)
-        judged = JudgeCase(file=case.edit.file, violates=case.outcome == Outcome.INVALID)
-        return [
-            _CaseRun(binding, judged, name, directory, judges, run, scanner)
-            for run, judges in enumerate(self.runs, start=1)
-        ]
-
-    def _result(self, case_run: _CaseRun) -> RuleTestResult:
-        rule = case_run.binding.skill.name
-        try:
-            problem = case_run.problem(self.confidence_threshold)
-        except JudgeError as error:
-            return RuleTestResult(
-                problems=(f"{self._where(case_run)}: {rule} not judged: {error}",)
+    def _evaluate(
+        self, cases: list[Case[_EditInputs, Verdict, None]], scanner: SyntaxScanner
+    ) -> EvaluationReport[_EditInputs, Verdict, None]:
+        dataset = Dataset[_EditInputs, Verdict, None](
+            name="codeguard eval",
+            cases=cases,
+            evaluators=[_MatchesOutcome(self.confidence_threshold, scanner)],
+        )
+        return asyncio.run(
+            dataset.evaluate(
+                self._judge,
+                task_name="judge",
+                repeat=self.repeat,
+                max_concurrency=self.concurrency,
+                progress=False,
             )
-        if problem is None:
-            return RuleTestResult()
-        return RuleTestResult(problems=(f"{self._where(case_run)}: {rule} {problem}",))
+        )
 
-    def _where(self, case_run: _CaseRun) -> str:
-        where = case_run.name
-        if len(self.runs) > 1:
-            where += f" (run {case_run.run} of {len(self.runs)})"
-        return where
+    def _judge(self, inputs: _EditInputs) -> Verdict:
+        judge = self.judges(inputs.directory, inputs.binding.model)
+        return judge.judge(JudgeRequest(inputs.binding.skill, inputs.case.file))
+
+
+def _case(
+    binding: Binding, case: NumberedCase, name: str, stack: ExitStack
+) -> Case[_EditInputs, Verdict, None]:
+    judged = JudgeCase(file=case.edit.file, violates=case.outcome == Outcome.INVALID)
+    return Case(name=name, inputs=_EditInputs(binding, judged, _written(stack, case)))
+
+
+def _problems(report: EvaluationReport[_EditInputs, Verdict, None]) -> list[str]:
+    failed = [
+        f"{case.name}: {case.inputs.binding.skill.name} {result.reason}"
+        for case in report.cases
+        for result in case.assertions.values()
+        if not result.value
+    ]
+    not_evaluated = [
+        f"{case.name}: {case.inputs.binding.skill.name} not evaluated: {failure.error_message}"
+        for case in report.cases
+        for failure in case.evaluator_failures
+    ]
+    not_judged = [
+        f"{failure.name}: {failure.inputs.binding.skill.name} not judged: {failure.error_message}"
+        for failure in report.failures
+    ]
+    return failed + not_evaluated + not_judged
 
 
 def _written(stack: ExitStack, case: NumberedCase) -> Path:

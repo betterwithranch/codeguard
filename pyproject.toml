@@ -13,6 +13,7 @@ dependencies = [
     "logfire>=5.2.0",
     "packaging>=26.3",
     "pydantic>=2.13.5",
+    "pydantic-evals>=2.57.0",
     "pyyaml>=6.0.3",
 ]
 
@@ -92,7 +93,6 @@ dev = [
     "basedpyright>=1.40.2",
     "factory-boy>=3.3.3",
     "import-linter>=2.15",
-    "pydantic-evals>=2.57.0",
     "pytest>=9.1.1",
     "pytest-factoryboy>=2.8.1",
     "ruff>=0.17.1",

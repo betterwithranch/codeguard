@@ -28,7 +28,7 @@ def enum_rule(repo):
 def run(repo, judge_eval: str, verdict: Verdict) -> RuleTestResult:
     repo.write(EVAL_FILE, judge_eval)
     judges = RecordingJudges(RecordingJudge(verdict))
-    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+    return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
 
 @dataclass
@@ -63,7 +63,7 @@ class TestJudgeEvalRunner:
         )
         judges = ReadingJudges([])
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert sorted(judges.judged) == [
             ("claude-haiku-5-5", "ship(status='shipped')\n"),
@@ -74,7 +74,7 @@ class TestJudgeEvalRunner:
         repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
         judges = RecordingJudges(RecordingJudge())
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert judges.judge.received == [
             JudgeRequest(Skill(name="enum-usage", text=ENUM_SKILL), "module.py")
@@ -172,7 +172,7 @@ class TestJudgeEvalRunner:
         repo.write(EVAL_FILE, f"id: enum-usage\nskipped:\n{STATUS_CASE}")
         judges = RecordingJudges(RecordingJudge())
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert judges.created == []
 
@@ -180,12 +180,12 @@ class TestJudgeEvalRunner:
         repo.write(EVAL_FILE, f"id: enum-usage\ninvalid:\n{STATUS_CASE}")
         judges = RecordingJudges(FailingJudge())
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert result == RuleTestResult(
             problems=(
                 f"{EVAL_FILE} invalid case 1: enum-usage not judged: "
-                "gemini failed with 502: upstream request failed",
+                "JudgeError: gemini failed with 502: upstream request failed",
             )
         )
 
@@ -195,7 +195,7 @@ class TestJudgeEvalRunner:
         )
         judges = RecordingJudges(RecordingJudge())
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert result == RuleTestResult(
             problems=(".codeguard/rule-evals/enum-usge-eval.yml: no judge rule enum-usge",),
@@ -222,27 +222,26 @@ def flagging(text: str) -> JudgeFactory:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
-    def test_each_run_uses_its_own_judges(self, repo):
-        first, second = RecordingJudges(RecordingJudge()), RecordingJudges(RecordingJudge())
+    def test_judges_each_case_once_per_repeat(self, repo):
         repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
+        judges = RecordingJudges(RecordingJudge())
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (first, second), 0.9).run()
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
 
-        assert first.created == second.created
-        assert [creation.model for creation in first.created] == ["claude-haiku-5-5"]
+        assert [creation.model for creation in judges.created] == ["claude-haiku-5-5"] * 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
-        runs = (RecordingJudges(RecordingJudge()), flagging("ship"))
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), runs, 0.9).run()
+        result = JudgeEvalRunner(
+            repo.root, RulesetLoader.local(repo.root), flagging("ship"), 0.9, repeat=2
+        ).run()
 
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} valid case 1 (run 2 of 2): enum-usage expected no violation, got:\n"
-                "  line 1 (1.00): Rename it.",
-            ),
-        )
+        assert sorted(result.problems) == [
+            f"{EVAL_FILE} valid case 1 [{run}/2]: enum-usage expected no violation, got:\n"
+            "  line 1 (1.00): Rename it."
+            for run in (1, 2)
+        ]
 
 
 class TestWithoutJudgeEvals:
@@ -250,6 +249,6 @@ class TestWithoutJudgeEvals:
         repo.write(".codeguard/bindings/broken.yaml", "path: [a.py]\n")
         judges = RecordingJudges(RecordingJudge())
 
-        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), (judges,), 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert result == RuleTestResult()

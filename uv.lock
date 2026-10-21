@@ -272,6 +272,7 @@ dependencies = [
     { name = "logfire" },
     { name = "packaging" },
     { name = "pydantic" },
+    { name = "pydantic-evals" },
     { name = "pyyaml" },
 ]
 
@@ -280,7 +281,6 @@ dev = [
     { name = "basedpyright" },
     { name = "factory-boy" },
     { name = "import-linter" },
-    { name = "pydantic-evals" },
     { name = "pytest" },
     { name = "pytest-factoryboy" },
     { name = "ruff" },
@@ -294,6 +294,7 @@ requires-dist = [
     { name = "logfire", specifier = ">=5.2.0" },
     { name = "packaging", specifier = ">=26.3" },
     { name = "pydantic", specifier = ">=2.13.5" },
+    { name = "pydantic-evals", specifier = ">=2.57.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
@@ -302,7 +303,6 @@ dev = [
     { name = "basedpyright", specifier = ">=1.40.2" },
     { name = "factory-boy", specifier = ">=3.3.3" },
     { name = "import-linter", specifier = ">=2.15" },
-    { name = "pydantic-evals", specifier = ">=2.57.0" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "pytest-factoryboy", specifier = ">=2.8.1" },
     { name = "ruff", specifier = ">=0.17.1" },
