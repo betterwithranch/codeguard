@@ -274,6 +274,18 @@ class TestReviewWithPackages:
 
 
 @pytest.fixture
+def dead_code_repo(repo: GitRepo) -> GitRepo:
+    repo.write(
+        ".codeguard/rules/dead-code/no-dead-code.yml",
+        "id: no-dead-code\nlanguage: python\nseverity: error\n",
+    )
+    repo.write("lib.py", "def helper():\n    return 1\n")
+    repo.write("app.py", "from lib import helper\n\nhelper()\n")
+    repo.commit("Add the library")
+    return repo
+
+
+@pytest.fixture
 def released_package(tmp_path_factory) -> GitRepo:
     package = GitRepo.init(tmp_path_factory.mktemp("released").resolve())
     write_package(package)
@@ -411,6 +423,65 @@ class TestReviewDryRun:
             f"{make_diagnostic()}\nJudge calls: 0 (0 cached, 0 to Claude), 0 skipped by triggers\n"
         )
         assert result.stderr == ""
+        assert result.returncode == 1
+
+
+class TestReviewDeadCode:
+    def test_dead_code_in_an_unchanged_file_is_reported_and_exits_1(
+        self, dead_code_repo, make_diagnostic
+    ):
+        dead_code_repo.write("app.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=dead_code_repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{make_diagnostic(dead_code=True)}\n"
+        assert result.returncode == 1
+
+    def test_same_commit_reports_the_same_dead_code_locally_and_in_ci(
+        self, dead_code_repo, make_diagnostic
+    ):
+        dead_code_repo.git("switch", "--create", "feature")
+        dead_code_repo.write("app.py", "x = 1\n")
+        local = subprocess.run(
+            [CODEGUARD, "review"], cwd=dead_code_repo.root, capture_output=True, text=True
+        )
+        dead_code_repo.commit("Stop using the helper")
+
+        ci = subprocess.run(
+            [CODEGUARD, "review", "--base", "main"],
+            cwd=dead_code_repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert ci.stdout == local.stdout == f"{make_diagnostic(dead_code=True)}\n"
+
+    def test_all_reports_no_dead_code(self, dead_code_repo):
+        dead_code_repo.write("app.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--all"], cwd=dead_code_repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == ""
+        assert result.returncode == 0
+
+    def test_dry_run_reports_dead_code(self, dead_code_repo, make_diagnostic):
+        dead_code_repo.write("app.py", "x = 1\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "review", "--dry-run"],
+            cwd=dead_code_repo.root,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == (
+            f"{make_diagnostic(dead_code=True)}\n"
+            "Judge calls: 0 (0 cached, 0 to Claude), 0 skipped by triggers\n"
+        )
         assert result.returncode == 1
 
 

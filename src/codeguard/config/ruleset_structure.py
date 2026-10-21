@@ -4,6 +4,7 @@ from pathlib import Path, PurePath
 
 from codeguard.config.ruleset import (
     BINDINGS_DIR,
+    DEAD_CODE_RULE_DIR,
     GATE_DIR,
     JUDGE_EVAL_DIR,
     LEGACY_PATTERN_TEST_DIR,
@@ -16,6 +17,7 @@ from codeguard.config.ruleset import (
 _DIRECTORIES = frozenset(
     {
         PATTERN_RULE_DIR,
+        DEAD_CODE_RULE_DIR,
         GATE_DIR,
         SNAPSHOT_DIR,
         LEGACY_PATTERN_TEST_DIR,

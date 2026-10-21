@@ -46,8 +46,8 @@ def main() -> int:
     output.add_argument(
         "--dry-run",
         action="store_true",
-        help="Run the pattern rules and list the judge calls the review would make, "
-        "without calling the judge.",
+        help="Run the pattern rules and the dead-code check, and list the judge calls the "
+        "review would make, without calling the judge.",
     )
     output.add_argument(
         "--format",
@@ -137,7 +137,7 @@ def _review(args: argparse.Namespace) -> int:
     if args.dry_run:
         rules = Rules(working_tree, latest=args.latest)
         scope = _scope(working_tree, args)
-        result = rules.check_patterns(scope)
+        result = rules.check_deterministic(scope)
         result.write(sys.stdout)
         rules.plan(scope).write(sys.stdout)
         return _EXIT_FAILED if result.blocks else _EXIT_PASSED

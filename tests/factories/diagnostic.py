@@ -23,6 +23,14 @@ class MakeDiagnostic(factory.Factory):
             end_line=None,
             confidence=1.0,
         )
+        dead_code = factory.Trait(
+            rule="no-dead-code",
+            file="lib.py",
+            message="Unused function 'helper': the change removed its last use. Delete it.",
+            note=None,
+            category=Category.DEAD_CODE,
+            end_line=None,
+        )
         judge_error = factory.Trait(
             rule=factory.LazyFunction(lambda: MakeSkill().name),
             line=None,

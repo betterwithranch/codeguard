@@ -22,8 +22,6 @@ class Reviewer:
         for step in self.steps:
             found = step.run(scope.files, diagnostics)
             diagnostics = tuple(
-                diagnostic
-                for diagnostic in found
-                if scope.covers(diagnostic.file, diagnostic.line, diagnostic.end_line)
+                diagnostic for diagnostic in found if diagnostic.reportable_in(scope)
             )
         return Review(diagnostics=diagnostics)

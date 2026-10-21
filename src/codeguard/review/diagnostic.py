@@ -6,12 +6,14 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from codeguard.config import Severity
+from codeguard.working_tree import AllLines, ChangedLines
 
 
 class Category(StrEnum):
     PATTERN = "pattern"
     JUDGED = "judged"
     JUDGE_ERROR = "judge_error"
+    DEAD_CODE = "dead_code"
 
 
 class ErrorType(StrEnum):
@@ -48,6 +50,11 @@ class Diagnostic(BaseModel):
     @property
     def blocks(self) -> bool:
         return self.severity is Severity.ERROR
+
+    def reportable_in(self, scope: ChangedLines | AllLines) -> bool:
+        return self.category is Category.DEAD_CODE or scope.covers(
+            self.file, self.line, self.end_line
+        )
 
     def as_warning(self) -> Self:
         return self.model_copy(update={"severity": Severity.WARNING})

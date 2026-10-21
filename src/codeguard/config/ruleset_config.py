@@ -69,5 +69,8 @@ class RulesetConfig(BaseModel):
             override = override.model_copy(update={"severity": self.severity})
         return override.apply(binding)
 
+    def severity_for(self, rule: str, severity: Severity) -> Severity:
+        return self.rules.get(rule, RuleOverride()).severity or self.severity or severity
+
     def apply_scope(self, rule: str, scope: PathScope) -> PathScope:
         return self.rules.get(rule, RuleOverride()).apply_scope(scope)

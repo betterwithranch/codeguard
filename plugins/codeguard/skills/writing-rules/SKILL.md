@@ -19,6 +19,9 @@ blocks the agent's Stop and fails CI.
 - Write a pattern rule whenever ast-grep can check the convention, and a judge rule
   (a skill) only when it needs judgment. A pattern rule is fast, free, and gives the
   same answer every time; a judge rule costs a Claude call per changed file.
+- Check dead code with a dead-code rule in `rules/dead-code/<id>.yml`, never a pattern
+  or judge rule: it compares the base with the change across every file. Add names used
+  only dynamically to its `whitelist`.
 - A pattern rule runs on every file in its language. Scope it with a binding,
   `bindings/<id>.yaml` with `rule`, `paths` and `exclude_paths`, never with ast-grep's
   `files` or `ignores`, so a project can change the scope. The exception is a file name
