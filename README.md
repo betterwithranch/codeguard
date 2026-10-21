@@ -111,7 +111,7 @@ guides an agent through writing a rule and its tests.
 A rule is one of two kinds:
 
 - A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
-- A **judge rule** is a skill that Claude reads each changed file against.
+- A **judge rule** is a skill that Claude judges each change to a file against.
 
 Write a pattern rule whenever ast-grep can check the convention: it runs in
 milliseconds, costs nothing, and gives the same answer every time. A judge rule costs a
@@ -371,6 +371,12 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
 - If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
   goes through.
+
+The judge gets the code the change touched: each changed function, method or class, and
+each changed line outside them, with the file's line numbers. A new file, and every file
+with `--all`, is sent whole. The judge reads the rest of the file, or any other file in
+the repository, with its read-only tools. A verdict is cached until the changed code, the
+rest of the file, the rule, the model, or a file the judge read changes.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
 threshold is reported as a warning, with its confidence, and doesn't block. The

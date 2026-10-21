@@ -7,15 +7,15 @@ from pathlib import Path
 from threading import Semaphore
 
 import pytest
-from claude_output import MODEL_USAGE, claude_result, fake_claude_script
+from claude_output import MODEL_USAGE, claude_result, fake_claude_script, tool_use
 from spans import finished_span_attributes
 
 from codeguard.claude_provider import ClaudeJudge, PromptCacheWarmup
 from codeguard.review import (
     Deadline,
+    Judgement,
     JudgeNoVerdict,
     JudgeProcessError,
-    JudgeRequest,
     JudgeTimeout,
     Verdict,
 )
@@ -123,15 +123,16 @@ class RecordingWarmup(PromptCacheWarmup):
 
 class TestClaudeJudge:
     def test_call_records_its_usage(
-        self, tmp_path, processes, fake_claude_executable, make_skill, capfire
+        self, tmp_path, processes, fake_claude_executable, capfire, make_judge_request
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
+        request = make_judge_request()
 
-        judge.judge(JudgeRequest(make_skill(), "a.py"))
+        judge.judge(request)
 
         assert finished_span_attributes(capfire, "claude judges {rule} on {file}") == [
             {
-                "rule": make_skill().name,
+                "rule": request.skill.name,
                 "file": "a.py",
                 "model": MODEL,
                 "returncode": 0,
@@ -165,12 +166,12 @@ class TestClaudeJudge:
         ]
 
     def test_failed_call_is_a_process_error_with_claude_output(
-        self, tmp_path, processes, failing_claude_executable, make_skill
+        self, tmp_path, processes, failing_claude_executable, make_judge_request
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, failing_claude_executable)
 
         with pytest.raises(JudgeProcessError) as error:
-            judge.judge(JudgeRequest(make_skill(), "a.py"))
+            judge.judge(make_judge_request())
 
         assert str(error.value) == (
             f"{failing_claude_executable} exited with 1.\n"
@@ -178,27 +179,29 @@ class TestClaudeJudge:
         )
 
     def test_call_after_the_deadline_is_a_timeout_without_running_claude(
-        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):
         judge = ClaudeJudge(
             tmp_path, MODEL, processes, fake_claude_executable, deadline=deadline_in(0)
         )
 
         with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
-            judge.judge(JudgeRequest(make_skill(), "a.py"))
+            judge.judge(make_judge_request())
         assert not arguments.exists()
 
     def test_call_running_past_the_deadline_is_a_timeout(
-        self, tmp_path, processes, hanging_claude_executable, make_skill
+        self, tmp_path, processes, hanging_claude_executable, make_judge_request
     ):
         judge = ClaudeJudge(
             tmp_path, MODEL, processes, hanging_claude_executable, deadline=deadline_in(0.5)
         )
 
         with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
-            judge.judge(JudgeRequest(make_skill(), "a.py"))
+            judge.judge(make_judge_request())
 
-    def test_result_without_structured_output_is_no_verdict(self, tmp_path, processes, make_skill):
+    def test_result_without_structured_output_is_no_verdict(
+        self, tmp_path, processes, make_judge_request
+    ):
         result = {
             key: value for key, value in claude_result([]).items() if key != "structured_output"
         }
@@ -206,34 +209,58 @@ class TestClaudeJudge:
         judge = ClaudeJudge(tmp_path, MODEL, processes, executable)
 
         with pytest.raises(JudgeNoVerdict, match="returned no verdict"):
-            judge.judge(JudgeRequest(make_skill(), "a.py"))
+            judge.judge(make_judge_request())
 
-    def test_output_without_a_result_is_no_verdict(self, tmp_path, processes, make_skill):
+    def test_output_without_a_result_is_no_verdict(self, tmp_path, processes, make_judge_request):
         executable = claude_printing(tmp_path, json.dumps({"type": "system"}))
         judge = ClaudeJudge(tmp_path, MODEL, processes, executable)
 
         with pytest.raises(JudgeNoVerdict, match="^claude printed no result"):
-            judge.judge(JudgeRequest(make_skill(), "a.py"))
+            judge.judge(make_judge_request())
 
-    def test_each_call_holds_a_process_slot(self, tmp_path, fake_claude_executable, make_skill):
+    def test_each_call_holds_a_process_slot(
+        self, tmp_path, fake_claude_executable, make_judge_request
+    ):
         processes = RecordingProcesses()
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
 
-        judge.judge(JudgeRequest(make_skill(), "a.py"))
+        judge.judge(make_judge_request())
 
         assert processes.events == ["acquired", "released"]
 
     def test_verdict_comes_from_claude_structured_output(
-        self, tmp_path, processes, fake_claude_executable, make_skill, make_violation
+        self, tmp_path, processes, fake_claude_executable, make_judge_request, make_violation
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
 
-        verdict = judge.judge(JudgeRequest(make_skill(), "a.py"))
+        judgement = judge.judge(make_judge_request())
 
-        assert verdict == Verdict(violations=(make_violation(message="Move it.", confidence=0.4),))
+        assert judgement == Judgement(
+            Verdict(violations=(make_violation(message="Move it.", confidence=0.4),))
+        )
+
+    def test_read_files_are_the_files_claude_read(self, tmp_path, processes, make_judge_request):
+        script = fake_claude_script(
+            [],
+            tool_uses=(
+                tool_use("Read", file_path=str(tmp_path / "orders/pricing.py")),
+                tool_use("Grep", pattern="DISCOUNT", path=str(tmp_path), glob="*.py"),
+                tool_use("Glob", pattern="orders/**/*.py"),
+                tool_use("Read", file_path="/etc/hostname"),
+                tool_use("StructuredOutput", violations=[]),
+            ),
+        )
+        executable = tmp_path / "claude"
+        executable.write_text(script)
+        executable.chmod(0o755)
+        judge = ClaudeJudge(tmp_path, MODEL, processes, str(executable))
+
+        judgement = judge.judge(make_judge_request())
+
+        assert judgement.read_files == ("orders/pricing.py", "/etc/hostname")
 
     def test_claude_runs_the_given_model(
-        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):
         judge = ClaudeJudge(
             tmp_path,
@@ -242,49 +269,49 @@ class TestClaudeJudge:
             executable=fake_claude_executable,
         )
 
-        judge.judge(JudgeRequest(make_skill(), "a.py"))
+        judge.judge(make_judge_request())
 
         assert "--model claude-opus-5-5" in arguments.read_text()
 
     def test_claude_has_only_read_only_tools(
-        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
 
-        judge.judge(JudgeRequest(make_skill(), "a.py"))
+        judge.judge(make_judge_request())
 
         assert "--tools Read,Grep,Glob" in arguments.read_text()
 
     def test_claude_gets_the_skill_as_the_prompt(
-        self, tmp_path, processes, prompt_recording_claude_executable, prompt, make_skill
+        self, tmp_path, processes, prompt_recording_claude_executable, prompt, make_judge_request
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, prompt_recording_claude_executable)
-        request = JudgeRequest(make_skill(), "a.py")
+        request = make_judge_request()
 
         judge.judge(request)
 
         assert prompt.read_text() == request.prompt
 
     def test_claude_gets_the_file_in_the_system_prompt(
-        self, tmp_path, processes, fake_claude_executable, arguments, make_skill
+        self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable)
-        request = JudgeRequest(make_skill(), "a.py")
+        request = make_judge_request()
 
         judge.judge(request)
 
-        assert f"--system-prompt {request.instructions('print(1)\n')}" in arguments.read_text()
+        assert f"--system-prompt {request.instructions}" in arguments.read_text()
 
     def test_calls_wait_for_the_first_call_with_their_prefix(
-        self, tmp_path, processes, fake_claude_executable, make_skill
+        self, tmp_path, processes, fake_claude_executable, make_judge_request
     ):
         warmup = RecordingWarmup()
         judge = ClaudeJudge(tmp_path, MODEL, processes, fake_claude_executable, warmup)
-        request = JudgeRequest(make_skill(), "a.py")
+        request = make_judge_request()
 
         judge.judge(request)
 
-        assert warmup.prefixes == [(MODEL, request.instructions("print(1)\n"))]
+        assert warmup.prefixes == [(MODEL, request.instructions)]
 
     def test_identity_changes_with_the_model(self, tmp_path, processes):
         sonnet = ClaudeJudge(tmp_path, model="claude-sonnet-5-5", processes=processes)

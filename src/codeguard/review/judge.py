@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 from pathlib import Path
-from typing import ClassVar, Protocol
+from typing import ClassVar, Protocol, Self
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -15,12 +15,21 @@ INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
 class JudgeRequest:
     skill: Skill
     file: str
+    changes: str
 
-    def instructions(self, content: str) -> str:
-        numbered = "".join(
-            f"{number:>6}\t{line}\n" for number, line in enumerate(content.splitlines(), start=1)
+    @classmethod
+    def of_change(cls, skill: Skill, root: Path, file: str, lines: frozenset[int] | None) -> Self:
+        raw = (root / file).read_bytes().splitlines()
+        content = [line.decode(errors="replace") for line in raw]
+        shown = range(1, len(content) + 1) if lines is None else sorted(lines)
+        changes = "".join(
+            f"{number:>6}\t{content[number - 1]}\n" for number in shown if number <= len(content)
         )
-        return f'{INSTRUCTIONS}\n<file path="{self.file}">\n{numbered}</file>\n'
+        return cls(skill, file, changes)
+
+    @property
+    def instructions(self) -> str:
+        return f'{INSTRUCTIONS}\n<changes path="{self.file}">\n{self.changes}</changes>\n'
 
     @property
     def prompt(self) -> str:
@@ -65,6 +74,12 @@ class Verdict(BaseModel):
         )
 
 
+@dataclass(frozen=True)
+class Judgement:
+    verdict: Verdict
+    read_files: tuple[str, ...] = ()
+
+
 class JudgeError(Exception):
     error_type: ClassVar[ErrorType]
 
@@ -85,4 +100,4 @@ class Judge(Protocol):
     @property
     def identity(self) -> str: ...
 
-    def judge(self, request: JudgeRequest) -> Verdict: ...
+    def judge(self, request: JudgeRequest) -> Judgement: ...

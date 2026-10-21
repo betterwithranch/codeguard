@@ -14,6 +14,12 @@ def classified_kinds(
     return classifier.classify(working_tree.changed_lines("HEAD")).kinds_of(file)
 
 
+def classified_judged_lines(git_repo: GitRepo, file: str) -> frozenset[int] | None:
+    working_tree = WorkingTree(git_repo.root)
+    classifier = ChangeClassifier(SyntaxScanner(AstGrep(), {}), working_tree)
+    return classifier.classify(working_tree.changed_lines("HEAD")).judged_lines(file)
+
+
 class TestChangeClassifier:
     def test_trailing_comment_edit_touches_every_kind_on_its_line(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -140,3 +146,45 @@ class TestChangeClassifier:
         assert ChangeKind.FIXTURE in kinds
         assert ChangeKind.HELPER_FUNCTION not in kinds
         assert ChangeKind.TEST_FUNCTION not in kinds
+
+    def test_method_edit_judges_the_method(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write(
+            "a.py",
+            "class Order:\n    def total(self):\n        return 1\n\n"
+            "    def tax(self):\n        return 0\n",
+        )
+        git_repo.commit("Add a")
+        git_repo.write(
+            "a.py",
+            "class Order:\n    def total(self):\n        return 1\n\n"
+            "    def tax(self):\n        return 2\n",
+        )
+
+        assert classified_judged_lines(git_repo, "a.py") == {5, 6}
+
+    def test_class_body_edit_outside_a_method_judges_the_class(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write(
+            "a.py", "class Order:\n    rate = 1\n\n    def tax(self):\n        return 0\n"
+        )
+        git_repo.commit("Add a")
+        git_repo.write(
+            "a.py", "class Order:\n    rate = 2\n\n    def tax(self):\n        return 0\n"
+        )
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 4, 5}
+
+    def test_module_level_edit_judges_the_changed_line(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "RATE = 1\n\n\ndef tax():\n    return 0\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "RATE = 2\n\n\ndef tax():\n    return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1}
+
+    def test_new_file_judges_every_line(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "RATE = 2\n\n\ndef tax():\n    return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 4, 5}

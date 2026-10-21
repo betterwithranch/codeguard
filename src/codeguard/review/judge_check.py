@@ -1,6 +1,7 @@
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from pathlib import Path
 
 from codeguard.review.binding import Binding
 from codeguard.review.diagnostic import Category, Diagnostic
@@ -10,6 +11,7 @@ from codeguard.working_tree import AllLines, ChangedLines
 
 @dataclass(frozen=True)
 class JudgeCheck:
+    root: Path
     binding: Binding
     judge: Judge
     confidence_threshold: float
@@ -29,7 +31,7 @@ class JudgeCheck:
 
     def _diagnostics(self, file: str) -> tuple[Diagnostic, ...]:
         try:
-            verdict = self.judge.judge(JudgeRequest(self.binding.skill, file))
+            verdict = self.judge.judge(self._request(file)).verdict
         except JudgeError as error:
             return (
                 Diagnostic(
@@ -45,3 +47,8 @@ class JudgeCheck:
                 ),
             )
         return verdict.diagnostics_for(self.binding, file, self.confidence_threshold)
+
+    def _request(self, file: str) -> JudgeRequest:
+        return JudgeRequest.of_change(
+            self.binding.skill, self.root, file, self.scope.judged_lines(file)
+        )

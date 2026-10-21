@@ -10,6 +10,7 @@ from codeguard.claude_provider.claude_result import ClaudeResult
 from codeguard.claude_provider.prompt_cache_warmup import PromptCacheWarmup
 from codeguard.review import (
     Deadline,
+    Judgement,
     JudgeNoVerdict,
     JudgeProcessError,
     JudgeRequest,
@@ -34,14 +35,14 @@ class ClaudeJudge:
     def identity(self) -> str:
         return "\0".join((_EXECUTABLE, self.model))
 
-    def judge(self, request: JudgeRequest) -> Verdict:
+    def judge(self, request: JudgeRequest) -> Judgement:
         with logfire.span(
             "claude judges {rule} on {file}",
             rule=request.skill.name,
             file=request.file,
             model=self.model,
         ) as span:
-            instructions = request.instructions((self.root / request.file).read_text())
+            instructions = request.instructions
             with self.warmup.after_first_call((self.model, instructions)), self.processes:
                 process = self._run(instructions, request.prompt)
             span.set_attribute("returncode", process.returncode)
@@ -54,7 +55,7 @@ class ClaudeJudge:
             span.set_attributes(result.telemetry)
             if result.structured_output is None:
                 raise JudgeNoVerdict(f"{self.executable} returned no verdict:\n{process.stdout}")
-            return result.structured_output
+            return Judgement(result.structured_output, result.read_files(self.root))
 
     def _run(self, instructions: str, prompt: str) -> subprocess.CompletedProcess[str]:
         if self.deadline is None:

@@ -1,7 +1,7 @@
 import re
 import subprocess
 from collections.abc import Callable, Iterator, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from google.genai import types
@@ -13,6 +13,7 @@ _MAX_RESULTS = 200
 @dataclass(frozen=True)
 class FileTools:
     root: Path
+    read_files: list[str] = field(default_factory=list)
 
     @property
     def declarations(self) -> list[types.FunctionDeclaration]:
@@ -80,6 +81,7 @@ class FileTools:
 
     def read_file(self, path: str, offset: int = 1) -> str:
         lines = self._inside(path).read_text(errors="replace").splitlines()
+        self.read_files.append(path)
         start = max(offset, 1)
         return "".join(
             f"{number:>6}\t{line}\n"

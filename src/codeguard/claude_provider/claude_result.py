@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -23,6 +24,22 @@ class UsageWindow(BaseModel):
     utilization: float
 
 
+class ToolUse(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    name: str
+    input: dict[str, object]
+
+    def read_file(self, root: Path) -> str | None:
+        path = self.input.get("file_path")
+        if self.name != "Read" or not isinstance(path, str):
+            return None
+        resolved = (root / path).resolve()
+        if resolved.is_relative_to(root.resolve()):
+            return str(resolved.relative_to(root.resolve()))
+        return path
+
+
 class ClaudeResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -35,6 +52,7 @@ class ClaudeResult(BaseModel):
     model_usage: dict[str, ModelUsage] = Field(alias="modelUsage")
     usage_windows: dict[str, UsageWindow] = Field(alias="usageWindows")
     structured_output: Verdict | None = None
+    tool_uses: tuple[ToolUse, ...] = ()
 
     @classmethod
     def from_stream(cls, stream: str) -> Self:
@@ -47,7 +65,23 @@ class ClaudeResult(BaseModel):
             for message in messages
             if message["type"] == "rate_limit_event"
         ]
-        return cls.model_validate({**results[-1], "usageWindows": windows[-1] if windows else {}})
+        tool_uses = [
+            content
+            for message in messages
+            if message["type"] == "assistant"
+            for content in message["message"]["content"]
+            if content["type"] == "tool_use"
+        ]
+        return cls.model_validate(
+            {
+                **results[-1],
+                "usageWindows": windows[-1] if windows else {},
+                "tool_uses": tool_uses,
+            }
+        )
+
+    def read_files(self, root: Path) -> tuple[str, ...]:
+        return tuple(file for use in self.tool_uses if (file := use.read_file(root)) is not None)
 
     @property
     def telemetry(self) -> dict[str, object]:

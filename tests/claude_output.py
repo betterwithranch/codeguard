@@ -34,8 +34,17 @@ def claude_result(violations: list[dict]) -> dict:
     }
 
 
-def fake_claude_script(violations: list[dict], before: str = "") -> str:
+def tool_use(name: str, **arguments: object) -> dict:
+    return {
+        "type": "assistant",
+        "message": {"content": [{"type": "tool_use", "name": name, "input": arguments}]},
+    }
+
+
+def fake_claude_script(
+    violations: list[dict], before: str = "", tool_uses: tuple[dict, ...] = ()
+) -> str:
     stream = "\n".join(
-        json.dumps(message) for message in (RATE_LIMIT_EVENT, claude_result(violations))
+        json.dumps(message) for message in (RATE_LIMIT_EVENT, *tool_uses, claude_result(violations))
     )
     return f"#!/bin/sh\n{before}cat > /dev/null\ncat <<'EOF'\n{stream}\nEOF\n"

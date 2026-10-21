@@ -1,7 +1,5 @@
-import tempfile
 from collections.abc import Sequence
 from concurrent.futures import ThreadPoolExecutor
-from contextlib import ExitStack
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -10,8 +8,9 @@ from codeguard.config import ChangeKind, RulesetLoader
 from codeguard.judge_evals.judge_case import JudgeCase
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings, JudgeError, JudgeRequest, Verdict
-from codeguard.rule_tests import JudgeEval, NumberedCase, Outcome, RuleTestResult
+from codeguard.rule_tests import EditRepo, JudgeEval, NumberedCase, Outcome, RuleTestResult
 from codeguard.syntax import SyntaxScanner
+from codeguard.working_tree import ChangedLines
 
 
 @dataclass(frozen=True)
@@ -20,13 +19,17 @@ class _CaseRun:
     case: JudgeCase
     name: str
     directory: Path
+    lines: frozenset[int] | None
     judges: JudgeFactory
     run: int
     scanner: SyntaxScanner
 
     def problem(self, confidence_threshold: float) -> str | None:
         judge = self.judges(self.directory, self.binding.model)
-        verdict = judge.judge(JudgeRequest(self.binding.skill, self.case.file))
+        request = JudgeRequest.of_change(
+            self.binding.skill, self.directory, self.case.file, self.lines
+        )
+        verdict = judge.judge(request).verdict
         return self.case.problem(verdict, confidence_threshold) or self._trigger_problem(
             verdict, confidence_threshold
         )
@@ -65,19 +68,26 @@ class JudgeEvalRunner:
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
         scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         problems: list[str] = []
-        judged = RuleTestResult()
-        with ExitStack() as stack:
-            case_runs: list[_CaseRun] = []
-            for file, judge_eval in evals:
-                where = file.relative_to(self.root)
-                binding = bindings.get(judge_eval.id)
-                if binding is None:
-                    problems.append(f"{where}: no judge rule {judge_eval.id}")
-                    continue
-                for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID):
-                    name = f"{where} {case.name}"
-                    case_runs.extend(self._case_runs(binding, case, name, stack, scanner))
-            judged = self._judged(case_runs)
+        cases: list[_Case] = []
+        for file, judge_eval in evals:
+            where = file.relative_to(self.root)
+            binding = bindings.get(judge_eval.id)
+            if binding is None:
+                problems.append(f"{where}: no judge rule {judge_eval.id}")
+                continue
+            cases.extend(
+                _Case(binding, case, f"{where} {case.name}", judge_eval.id)
+                for case in judge_eval.cases(Outcome.INVALID, Outcome.VALID)
+            )
+        with EditRepo.of({case.path: case.numbered.edit for case in cases}) as repo:
+            changed = repo.classified(self.ast_grep, ruleset)
+            judged = self._judged(
+                [
+                    case_run
+                    for case in cases
+                    for case_run in case.runs(repo.root, changed, self.runs, scanner)
+                ]
+            )
         return RuleTestResult.merge([RuleTestResult(problems=tuple(problems)), judged])
 
     def _judged(self, case_runs: list[_CaseRun]) -> RuleTestResult:
@@ -85,21 +95,6 @@ class JudgeEvalRunner:
             return RuleTestResult()
         with ThreadPoolExecutor(max_workers=len(case_runs)) as executor:
             return RuleTestResult.merge(executor.map(self._result, case_runs))
-
-    def _case_runs(
-        self,
-        binding: Binding,
-        case: NumberedCase,
-        name: str,
-        stack: ExitStack,
-        scanner: SyntaxScanner,
-    ) -> list[_CaseRun]:
-        directory = _written(stack, case)
-        judged = JudgeCase(file=case.edit.file, violates=case.outcome == Outcome.INVALID)
-        return [
-            _CaseRun(binding, judged, name, directory, judges, run, scanner)
-            for run, judges in enumerate(self.runs, start=1)
-        ]
 
     def _result(self, case_run: _CaseRun) -> RuleTestResult:
         rule = case_run.binding.skill.name
@@ -120,9 +115,41 @@ class JudgeEvalRunner:
         return where
 
 
-def _written(stack: ExitStack, case: NumberedCase) -> Path:
-    directory = Path(stack.enter_context(tempfile.TemporaryDirectory())) / case.directory
-    file = directory / case.edit.file
-    file.parent.mkdir(parents=True)
-    file.write_text(case.edit.after)
-    return directory
+@dataclass(frozen=True)
+class _Case:
+    binding: Binding
+    numbered: NumberedCase
+    name: str
+    rule: str
+
+    @property
+    def directory(self) -> str:
+        return f"{self.rule}/{self.numbered.directory}"
+
+    @property
+    def path(self) -> str:
+        return f"{self.directory}/{self.numbered.edit.file}"
+
+    def runs(
+        self,
+        root: Path,
+        changed: ChangedLines,
+        judges: Sequence[JudgeFactory],
+        scanner: SyntaxScanner,
+    ) -> list[_CaseRun]:
+        judged = JudgeCase(
+            file=self.numbered.edit.file, violates=self.numbered.outcome == Outcome.INVALID
+        )
+        return [
+            _CaseRun(
+                self.binding,
+                judged,
+                self.name,
+                root / self.directory,
+                changed.judged_lines(self.path),
+                factory,
+                run,
+                scanner,
+            )
+            for run, factory in enumerate(judges, start=1)
+        ]

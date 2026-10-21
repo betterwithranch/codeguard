@@ -15,6 +15,7 @@ from codeguard.gemini_provider.file_tools import FileTools
 from codeguard.gemini_provider.gemini_usage import GeminiUsage
 from codeguard.review import (
     Deadline,
+    Judgement,
     JudgeNoVerdict,
     JudgeProcessError,
     JudgeRequest,
@@ -58,14 +59,14 @@ class GeminiJudge:
     def identity(self) -> str:
         return "\0".join((_PROVIDER, self.model))
 
-    def judge(self, request: JudgeRequest) -> Verdict:
+    def judge(self, request: JudgeRequest) -> Judgement:
         with logfire.span(
             "gemini judges {rule} on {file}",
             rule=request.skill.name,
             file=request.file,
             model=self.model,
         ) as span:
-            instructions = request.instructions((self.root / request.file).read_text())
+            instructions = request.instructions
             usage = GeminiUsage()
             try:
                 with self.processes:
@@ -73,7 +74,7 @@ class GeminiJudge:
             finally:
                 span.set_attributes(usage.telemetry)
 
-    def _converse(self, instructions: str, prompt: str, usage: GeminiUsage) -> Verdict:
+    def _converse(self, instructions: str, prompt: str, usage: GeminiUsage) -> Judgement:
         tools = FileTools(self.root)
         contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
         for _ in range(self.max_turns):
@@ -88,7 +89,7 @@ class GeminiJudge:
                 arguments = call.args or {}
                 if call.name == _SUBMIT_VERDICT.name:
                     try:
-                        return Verdict.model_validate(arguments)
+                        return Judgement(Verdict.model_validate(arguments), tuple(tools.read_files))
                     except ValidationError as error:
                         replies.append(_reply(call, f"Error: the verdict is invalid.\n{error}"))
                         continue

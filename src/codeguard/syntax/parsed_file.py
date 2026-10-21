@@ -25,6 +25,9 @@ class ParsedFile:
             scope.start_line for line in lines for scope in scopes if scope.spans(line)
         )
 
+    def judged_lines(self, points: frozenset[int]) -> frozenset[int]:
+        return frozenset(line for point in points for line in self._innermost_scope_lines(point))
+
     def touched_kinds(self, points: frozenset[int], base: Self | None) -> frozenset[str]:
         kinds = {kind for point in points for kind in self._kinds_spanning(point)}
         if points:
@@ -50,6 +53,13 @@ class ParsedFile:
         for node, text in sorted(replacements, key=lambda pair: pair[0].start, reverse=True):
             content = content[: node.start] + text + content[node.end :]
         return content
+
+    def _innermost_scope_lines(self, point: int) -> range:
+        enclosing = [scope for scope in self.of_kind(NodeKind.SCOPE) if scope.spans(point)]
+        if not enclosing:
+            return range(point, point + 1)
+        innermost = min(enclosing, key=lambda scope: scope.end_line - scope.start_line)
+        return range(innermost.start_line, innermost.end_line + 1)
 
     def _kinds_spanning(self, line: int) -> set[str]:
         found: set[str] = {
