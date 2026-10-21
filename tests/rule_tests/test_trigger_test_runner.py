@@ -219,3 +219,45 @@ class TestInvalidEvalFiles:
             f"{repo.root / EVAL_FILE} is invalid:\n"
             "  cases.0.inputs: Value error, unchanged lists the edited file module.py"
         )
+
+    @pytest.mark.parametrize("path", ["/etc/module.py", "../module.py", "./module.py"])
+    def test_case_whose_unchanged_path_leaves_the_repository_or_is_not_normalized_fails_the_run(
+        self, repo, path
+    ):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: reads the value\n"
+            "    inputs:\n"
+            "      after: label = status.value\n"
+            "      unchanged:\n"
+            f"        {path}: label = status.name\n"
+            "    expected_output: {outcome: valid}\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n"
+            f"  cases.0.inputs: Value error, {path} is not a normalized relative path"
+        )
+
+    def test_case_whose_file_leaves_the_repository_fails_the_run(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: reads the value\n"
+            "    inputs:\n"
+            "      file: ../module.py\n"
+            "      after: label = status.value\n"
+            "    expected_output: {outcome: valid}\n",
+        )
+
+        with pytest.raises(ConfigError) as error:
+            TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n"
+            "  cases.0.inputs: Value error, ../module.py is not a normalized relative path"
+        )

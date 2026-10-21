@@ -1,5 +1,5 @@
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Self
 
 import yaml
@@ -25,6 +25,14 @@ class EditCase(BaseModel):
     before: str | None = None
     after: str
     unchanged: dict[str, str] = {}
+
+    @model_validator(mode="after")
+    def paths_are_inside_the_repository(self) -> Self:
+        for path in (self.file, *self.unchanged):
+            posix = PurePosixPath(path)
+            if posix.is_absolute() or ".." in posix.parts or str(posix) != path:
+                raise ValueError(f"{path} is not a normalized relative path")
+        return self
 
     @model_validator(mode="after")
     def file_is_not_unchanged(self) -> Self:
