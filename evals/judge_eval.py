@@ -55,7 +55,7 @@ _DATASET = Dataset[JudgeCase, bool, None](
 
 def violates(judge: Judge, case: JudgeCase) -> bool:
     skill = Skill.from_file(case.skill, _FIXTURES / "skills" / case.skill / SKILL_FILE)
-    verdict = judge.judge(JudgeRequest.read(skill, _FIXTURES, case.file))
+    verdict = judge.judge(JudgeRequest(skill, case.file))
     return any(violation.file == case.file for violation in verdict.violations)
 
 

@@ -36,7 +36,7 @@ class _CaseRun:
 
     def problem(self, confidence_threshold: float) -> str | None:
         judge = self.judges(self.directory, self.binding.model)
-        verdict = judge.judge(JudgeRequest.read(self.binding.skill, self.directory, self.case.file))
+        verdict = judge.judge(JudgeRequest(self.binding.skill, self.case.file))
         return self.case.problem(verdict, confidence_threshold) or self._trigger_problem(
             verdict, confidence_threshold
         )

@@ -21,7 +21,7 @@ class Judges:
     warmup: PromptCacheWarmup = field(default_factory=PromptCacheWarmup)
 
     def cached(self, root: Path, model: str, deadline: Deadline | None = None) -> CachedJudge:
-        return CachedJudge(self.uncached(root, model, deadline), self.store)
+        return CachedJudge(self.uncached(root, model, deadline), self.store, root)
 
     def uncached(self, root: Path, model: str, deadline: Deadline | None = None) -> Judge:
         model = self.config.model_for(model)

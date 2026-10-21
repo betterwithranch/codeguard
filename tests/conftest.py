@@ -4,7 +4,6 @@ from pathlib import Path
 import pytest
 from diskcache import Cache
 from factories.diagnostic import MakeDiagnostic, MakeViolation
-from factories.judge_request import MakeJudgeRequest
 from factories.skill import MakeBinding, MakeSkill
 from git_repo import GitRepo
 from pytest_factoryboy import register
@@ -13,7 +12,6 @@ register(MakeDiagnostic)
 register(MakeViolation)
 register(MakeSkill)
 register(MakeBinding)
-register(MakeJudgeRequest)
 
 
 @pytest.fixture(autouse=True)

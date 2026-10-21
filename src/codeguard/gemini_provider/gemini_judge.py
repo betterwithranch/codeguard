@@ -63,7 +63,7 @@ class GeminiJudge:
             file=request.file,
             model=self.model,
         ) as span:
-            instructions = request.instructions
+            instructions = request.instructions((self.root / request.file).read_text())
             usage = GeminiUsage()
             try:
                 with self.processes:
