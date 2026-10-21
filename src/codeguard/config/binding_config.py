@@ -30,6 +30,15 @@ class BindingConfig(BaseModel):
     model: str = "claude-sonnet-5-5"
     triggers: frozenset[str] = Field(frozenset({ChangeKind.ANY}), min_length=1)
 
+    @model_validator(mode="before")
+    @classmethod
+    def require_a_gemini_model(cls, data: object) -> object:
+        if not isinstance(data, dict):
+            return data
+        if data.get("provider") == JudgeProvider.GEMINI and "model" not in data:
+            raise ValueError("provider gemini needs a model")
+        return data
+
     @property
     def judge_model(self) -> JudgeModel:
         return JudgeModel(provider=self.provider, name=self.model)

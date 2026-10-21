@@ -7,6 +7,7 @@ from pydantic_evals import Dataset
 from codeguard.config import JUDGE_EVAL_DIR, ConfigError
 
 EVAL_FILE_GLOB = "*.yaml"
+_MISNAMED_GLOB = "*.yml"
 
 
 class Outcome(StrEnum):
@@ -51,7 +52,14 @@ type RuleEval = Dataset[EditCase, EditReview, None]
 
 
 def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
-    return [_load(file) for file in sorted((ruleset / JUDGE_EVAL_DIR).glob(EVAL_FILE_GLOB))]
+    directory = ruleset / JUDGE_EVAL_DIR
+    misnamed = sorted(directory.glob(_MISNAMED_GLOB))
+    if misnamed:
+        raise ConfigError(
+            "rule evals are <rule id>.yaml datasets; rename or convert:"
+            + "".join(f"\n  {file}" for file in misnamed)
+        )
+    return [_load(file) for file in sorted(directory.glob(EVAL_FILE_GLOB))]
 
 
 def _load(file: Path) -> tuple[Path, RuleEval]:
@@ -61,6 +69,8 @@ def _load(file: Path) -> tuple[Path, RuleEval]:
         )
     except ValidationError as error:
         raise ConfigError.invalid(file, error) from error
+    except (ValueError, ExceptionGroup) as error:
+        raise ConfigError(f"{file} is invalid:\n  {error}") from error
     problems = [
         f"{case.name or f'case {number}'} has no {field}"
         for number, case in enumerate(dataset.cases, start=1)

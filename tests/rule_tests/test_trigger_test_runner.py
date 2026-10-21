@@ -2,7 +2,7 @@ import textwrap
 
 import pytest
 
-from codeguard.config import RulesetLoader
+from codeguard.config import ConfigError, RulesetLoader
 from codeguard.rule_tests import RuleTestResult, TriggerTestRunner
 
 EVAL_FILE = ".codeguard/rule-evals/enum-usage.yaml"
@@ -186,3 +186,16 @@ def test_ruleset_without_evals_passes(repo):
     result = TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
 
     assert result == RuleTestResult()
+
+
+@pytest.mark.usefixtures("enum_rule")
+class TestInvalidEvalFiles:
+    def test_case_without_expected_output_fails_the_run(self, repo):
+        repo.write(EVAL_FILE, "cases:\n  - name: passes a string\n    inputs:\n      after: x\n")
+
+        with pytest.raises(ConfigError) as error:
+            TriggerTestRunner(repo.root, RulesetLoader.local(repo.root)).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n  passes a string has no expected_output"
+        )

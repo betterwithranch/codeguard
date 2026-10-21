@@ -32,7 +32,12 @@ class ViolationsOnTriggers(Evaluator[EditCase, EditReview, None]):
     def evaluate(
         self, ctx: EvaluatorContext[EditCase, EditReview, None]
     ) -> EvaluationReason | dict[str, bool]:
-        if ctx.output.outcome is not Outcome.INVALID or ChangeKind.ANY in self.triggers:
+        expected = ctx.expected_output.outcome if ctx.expected_output else None
+        if (
+            expected is not Outcome.INVALID
+            or ctx.output.outcome is not Outcome.INVALID
+            or ChangeKind.ANY in self.triggers
+        ):
             return {}
         kinds = {
             violation.line: violation.kinds

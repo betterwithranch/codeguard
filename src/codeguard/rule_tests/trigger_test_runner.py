@@ -49,10 +49,10 @@ class TriggerTestRunner:
     ast_grep: AstGrep = AstGrep()
 
     def run(self) -> RuleTestResult:
+        evals = rule_evals(self.ruleset.root)
+        if not evals:
+            return RuleTestResult()
         try:
-            evals = rule_evals(self.ruleset.root)
-            if not evals:
-                return RuleTestResult()
             ruleset = self.ruleset.load()
         except ConfigError as error:
             return RuleTestResult(warnings=(f"trigger tests not run: {error}",))

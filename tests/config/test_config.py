@@ -312,6 +312,14 @@ class TestRulesetConfig:
             "Value error, model: a rule is judged with the model its binding names"
         ]
 
+    def test_gemini_binding_without_a_model_is_an_error(self, tmp_path):
+        skill = write_skill(tmp_path)
+
+        with pytest.raises(ValidationError) as error:
+            BindingConfig.model_validate({"skill": skill, "paths": ["**"], "provider": "gemini"})
+
+        assert messages(error) == ["Value error, provider gemini needs a model"]
+
 
 class TestJudgeConfig:
     def test_claude_runs_a_call_per_cpu_at_once(self):

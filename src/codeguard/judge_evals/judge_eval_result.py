@@ -66,4 +66,6 @@ def _failures(report: RuleEvalReport) -> list[str]:
     not_judged = [
         f"{rule} {failure.name}: not judged: {failure.error_message}" for failure in report.failures
     ]
-    return failed + not_evaluated + not_judged
+    evaluated = report.averages() is not None or report.failures
+    empty = [] if evaluated else [f"{rule}: no case was evaluated"]
+    return failed + not_evaluated + not_judged + empty

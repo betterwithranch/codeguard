@@ -133,6 +133,31 @@ class TestJudgeEvalRunner:
             "code, module-statement, number-literal",
         )
 
+    def test_violation_outside_the_triggers_in_a_valid_case_fails_only_as_a_false_positive(
+        self, repo, make_violation
+    ):
+        repo.write(
+            ".codeguard/bindings/enum-usage.yaml",
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [string-literal]\n',
+        )
+        verdict = Verdict(violations=(make_violation(file="module.py", line=2, confidence=0.9),))
+
+        result = run(
+            repo,
+            dataset(case("passes a string", "valid", "ship(status='shipped')\ncount = 1\n")),
+            verdict,
+        )
+
+        assert [failure.split("\n")[0] for failure in result.failures] == [
+            "enum-usage passes a string: expected outcome valid, got outcome invalid"
+        ]
+
+    def test_dataset_without_cases_fails_with_its_name(self, repo):
+        result = run(repo, "name: enum-usage\ncases: []\n", Verdict(violations=()))
+
+        assert not result.passed
+        assert result.failures == ("enum-usage: no case was evaluated",)
+
     def test_violation_inside_the_triggers_passes(self, repo, make_violation):
         repo.write(
             ".codeguard/bindings/enum-usage.yaml",
@@ -282,6 +307,30 @@ class TestJudgeEvalRunner:
             JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert str(error.value) == f"{repo.root / EVAL_FILE} is invalid:\n  case 1 has no name"
+
+    def test_cases_with_the_same_name_are_invalid(self, repo):
+        repo.write(
+            EVAL_FILE, dataset(case("passes a string", "valid"), case("passes a string", "valid"))
+        )
+        judges = RecordingJudges(RecordingJudge())
+
+        with pytest.raises(ConfigError) as error:
+            JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert str(error.value).startswith(f"{repo.root / EVAL_FILE} is invalid:\n  ")
+        assert "passes a string" in str(error.value)
+
+    def test_eval_file_named_yml_is_an_error(self, repo):
+        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", "cases: []\n")
+        judges = RecordingJudges(RecordingJudge())
+
+        with pytest.raises(ConfigError) as error:
+            JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert str(error.value) == (
+            "rule evals are <rule id>.yaml datasets; rename or convert:\n"
+            f"  {repo.root}/.codeguard/rule-evals/enum-usage-eval.yml"
+        )
 
 
 @dataclass(frozen=True)
