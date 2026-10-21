@@ -1,12 +1,16 @@
 import os
 from enum import StrEnum
-from typing import Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 # Gemini's pay-as-you-go capacity is shared, so fewer calls at once keep a run under its
 # tokens-per-minute limit.
 _GEMINI_CALLS_AT_ONCE = 2
+# A rule is judged with the model its evals pass on, so only its binding names one.
+_RETIRED_FIELDS = {
+    "provider": "a rule's binding names its provider",
+    "model": "a rule's binding names its model",
+}
 
 
 class JudgeProvider(StrEnum):
@@ -14,30 +18,32 @@ class JudgeProvider(StrEnum):
     GEMINI = "gemini"
 
 
+class JudgeModel(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: JudgeProvider
+    name: str
+
+
 class JudgeConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    provider: JudgeProvider = JudgeProvider.CLAUDE_CLI
-    model: str | None = None
     project: str | None = None
     location: str | None = None
     calls_at_once: int | None = Field(default=None, ge=1)
 
-    @model_validator(mode="after")
-    def validate_provider_settings(self) -> Self:
-        if self.provider is JudgeProvider.GEMINI and self.model is None:
-            raise ValueError("the gemini provider needs a model, such as gemini-3.1-pro-preview")
-        if self.provider is JudgeProvider.CLAUDE_CLI and (self.project or self.location):
-            raise ValueError("project and location apply to the gemini provider only")
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def reject_retired_fields(cls, data: object) -> object:
+        if isinstance(data, dict):
+            retired = [f"judge.{key}: {why}" for key, why in _RETIRED_FIELDS.items() if key in data]
+            if retired:
+                raise ValueError("; ".join(retired))
+        return data
 
-    @property
-    def concurrency(self) -> int:
+    def concurrency(self, provider: JudgeProvider) -> int:
         if self.calls_at_once is not None:
             return self.calls_at_once
-        if self.provider is JudgeProvider.GEMINI:
+        if provider is JudgeProvider.GEMINI:
             return _GEMINI_CALLS_AT_ONCE
         return os.process_cpu_count() or 1
-
-    def model_for(self, rule_model: str) -> str:
-        return self.model or rule_model

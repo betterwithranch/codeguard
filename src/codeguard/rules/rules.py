@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 from functools import cached_property
-from threading import Semaphore
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Config, ConfigLoader
@@ -138,8 +137,7 @@ class Rules:
 
     @cached_property
     def _judges(self) -> Judges:
-        judge = self.config.judge
-        return Judges(judge, processes=Semaphore(judge.concurrency))
+        return Judges(self.config.judge)
 
     def _judge_checks(
         self, scope: ChangedLines | AllLines, deadline: Deadline

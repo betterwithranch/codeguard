@@ -5,13 +5,14 @@ import pytest
 from factories.diagnostic import MakeViolation
 from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
-from codeguard.config import ConfigError, RulesetLoader
+from codeguard.config import ConfigError, JudgeModel, JudgeProvider, RulesetLoader
 from codeguard.judge_evals import JudgeEvalResult, JudgeEvalRunner, JudgeFactory
 from codeguard.review import Judge, JudgeRequest, Skill, Verdict
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
 EVAL_FILE = ".codeguard/rule-evals/enum-usage.yaml"
+HAIKU = JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
 
 
 def case(name: str, outcome: str, after: str = "ship(status='shipped')\n") -> str:
@@ -47,9 +48,9 @@ def run(repo, judge_eval: str, verdict: Verdict) -> JudgeEvalResult:
 
 @dataclass
 class ReadingJudges:
-    judged: list[tuple[str, str]]
+    judged: list[tuple[JudgeModel, str]]
 
-    def __call__(self, root: Path, model: str) -> Judge:
+    def __call__(self, root: Path, model: JudgeModel) -> Judge:
         self.judged.append((model, (root / "status.py").read_text()))
         return RecordingJudge()
 
@@ -81,8 +82,8 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert sorted(judges.judged) == [
-            ("claude-haiku-5-5", "ship(status='shipped')\n"),
-            ("claude-haiku-5-5", "ship(status=Status.SHIPPED)\n"),
+            (HAIKU, "ship(status='shipped')\n"),
+            (HAIKU, "ship(status=Status.SHIPPED)\n"),
         ]
 
     def test_judges_the_case_file_with_the_rule_skill(self, repo):
@@ -309,7 +310,7 @@ class TestRepeats:
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
 
-        assert [creation.model for creation in judges.created] == ["claude-haiku-5-5"] * 3
+        assert [creation.model for creation in judges.created] == [HAIKU] * 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))

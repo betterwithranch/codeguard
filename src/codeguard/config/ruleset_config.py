@@ -13,7 +13,13 @@ class RuleOverride(BaseModel):
     paths: tuple[str, ...] | None = Field(default=None, min_length=1)
     exclude_paths: tuple[str, ...] | None = None
     severity: Severity | None = None
-    model: str | None = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_model(cls, data: object) -> object:
+        if isinstance(data, dict) and "model" in data:
+            raise ValueError("model: a rule is judged with the model its binding names")
+        return data
 
     def apply(self, binding: BindingConfig) -> BindingConfig:
         scope = self.apply_scope(PathScope(binding.paths, binding.exclude_paths))
@@ -22,7 +28,6 @@ class RuleOverride(BaseModel):
                 "paths": scope.paths,
                 "exclude_paths": scope.exclude_paths,
                 "severity": self.severity or binding.severity,
-                "model": self.model or binding.model,
             }
         )
 

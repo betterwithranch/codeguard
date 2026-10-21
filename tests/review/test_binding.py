@@ -1,6 +1,8 @@
 from codeguard.config import (
     BindingConfig,
     BindingsConfig,
+    JudgeModel,
+    JudgeProvider,
     RuleOverride,
     Ruleset,
     RulesetConfig,
@@ -73,7 +75,9 @@ class TestBinding:
 
         binding = Binding.from_config(SKILL_NAME, config)
 
-        assert binding == make_binding(model="claude-haiku-5-5")
+        assert binding == make_binding(
+            model=JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
+        )
 
 
 class TestBindings:
@@ -117,9 +121,7 @@ class TestBindings:
 
     def test_override_replaces_the_binding_fields(self, tmp_path, make_binding, make_skill):
         skill = write_skill(tmp_path, make_skill().text)
-        override = RuleOverride(
-            paths=("app/**",), severity=Severity.WARNING, model="claude-haiku-5-5"
-        )
+        override = RuleOverride(paths=("app/**",), severity=Severity.WARNING)
         selection = RulesetConfig(rules={SKILL_NAME: override})
 
         bindings = Bindings.from_rulesets([ruleset(tmp_path, skill, "example/python", selection)])
@@ -129,7 +131,6 @@ class TestBindings:
                 rule=f"example/python/{SKILL_NAME}",
                 paths=("app/**",),
                 severity=Severity.WARNING,
-                model="claude-haiku-5-5",
             ),
         )
 

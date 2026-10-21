@@ -6,6 +6,7 @@ from codeguard.config import (
     SKILL_FILE,
     BindingConfig,
     ChangeKind,
+    JudgeModel,
     PathScope,
     Ruleset,
     Severity,
@@ -20,7 +21,7 @@ class Binding:
     skill: Skill
     paths: tuple[str, ...]
     severity: Severity
-    model: str
+    model: JudgeModel
     triggers: frozenset[str]
     exclude_paths: tuple[str, ...] = ()
 
@@ -31,7 +32,7 @@ class Binding:
             skill=Skill.from_file(binding.skill.name, binding.skill / SKILL_FILE),
             paths=binding.paths,
             severity=binding.severity,
-            model=binding.model,
+            model=binding.judge_model,
             triggers=binding.triggers,
             exclude_paths=binding.exclude_paths,
         )

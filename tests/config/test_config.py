@@ -304,19 +304,21 @@ class TestRulesetConfig:
             triggers=frozenset({"any"}), skill=skill, paths=("app/**",), severity=Severity.WARNING
         )
 
+    def test_rule_override_model_is_an_error(self):
+        with pytest.raises(ValidationError) as error:
+            RuleOverride.model_validate({"model": "claude-haiku-5-5"})
+
+        assert messages(error) == [
+            "Value error, model: a rule is judged with the model its binding names"
+        ]
+
 
 class TestJudgeConfig:
     def test_claude_runs_a_call_per_cpu_at_once(self):
-        assert JudgeConfig().concurrency == os.process_cpu_count()
+        assert JudgeConfig().concurrency(JudgeProvider.CLAUDE_CLI) == os.process_cpu_count()
 
     def test_gemini_runs_two_calls_at_once(self):
-        config = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
-
-        assert config.concurrency == 2
+        assert JudgeConfig().concurrency(JudgeProvider.GEMINI) == 2
 
     def test_calls_at_once_sets_the_concurrency(self):
-        config = JudgeConfig(
-            provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview", calls_at_once=1
-        )
-
-        assert config.concurrency == 1
+        assert JudgeConfig(calls_at_once=1).concurrency(JudgeProvider.GEMINI) == 1

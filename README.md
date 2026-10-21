@@ -138,8 +138,9 @@ packages:
 - Only the listed rulesets run.
 - `include` lists the only rules that run, pattern and judged; rules the package adds
   later stay off. `exclude` turns rules off. Set one or the other.
-- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`, and a judge
-  rule's `model`. `exclude_paths: []` brings back the files its binding leaves out.
+- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`.
+  `exclude_paths: []` brings back the files its binding leaves out. A judge rule's
+  model can't be overridden: its evals pass on the model its binding names.
 - `severity` on the ruleset sets every rule in it, including rules the package adds
   later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
   so `severity: warning` trials a package: its findings print without blocking. A
@@ -349,8 +350,9 @@ a Logfire token each experiment is also in Logfire.
 
 `codeguard test` and `codeguard eval` take a package directory, so
 `codeguard eval path/to/package` evaluates a package outside the current repository.
-`judge.model` in the config overrides every binding's model, so set `CODEGUARD_CONFIG`
-to a config file with it to evaluate the rules against another model.
+The binding's `provider` and `model` are the only place a rule's model is set, and
+nothing overrides them, so a review judges with the model the rule's evals passed on.
+To move a rule to another model, change its binding and run its evals again.
 
 ### Which test to write
 
@@ -425,23 +427,34 @@ limit in `.codeguard/config.yaml`:
 review_time_limit_minutes: 10
 ```
 
-Each binding judges with `claude-sonnet-5-5` unless it sets `model`:
+Each binding judges with `claude-sonnet-5-5` through the `claude` CLI unless it sets
+`provider` and `model`:
 
 ```yaml
 skill: .claude/skills/responsibility-placement
 paths: ["app/**/*.py"]
-model: claude-haiku-5-5
+provider: claude-cli              # default: claude-cli; or gemini
+model: claude-haiku-5-5           # default: claude-sonnet-5-5
 ```
+
+The same model judges the rule's evals and its reviews.
 
 ### Judge with Gemini on Google Cloud
 
-By default the judge runs `claude -p`. To judge with Gemini on Google Cloud (Vertex AI)
-instead, set `judge` in `.codeguard/config.yaml`:
+By default the judge runs `claude -p`. A binding with `provider: gemini` judges with
+Gemini on Google Cloud (Vertex AI) instead:
+
+```yaml
+skill: .claude/skills/responsibility-placement
+paths: ["app/**/*.py"]
+provider: gemini
+model: gemini-3.1-pro-preview
+```
+
+`judge` in `.codeguard/config.yaml` sets where Gemini runs and how many calls run at once:
 
 ```yaml
 judge:
-  provider: gemini                # default: claude-cli
-  model: gemini-3.1-pro-preview   # replaces every rule's model
   project: my-project             # default: GOOGLE_CLOUD_PROJECT
   location: global                # default: GOOGLE_CLOUD_LOCATION
   calls_at_once: 2                # default: 2 for gemini, one per CPU for claude-cli
@@ -453,7 +466,7 @@ takes the same verdict schema as Claude. Verdicts are cached per provider and mo
 so switching providers doesn't reuse Claude's verdicts.
 
 Gemini's pay-as-you-go capacity is shared and limited by tokens per minute, so the
-gemini provider makes 2 calls at once. A call that Gemini turns away with a 429 is
+gemini provider makes 2 calls at once. Each provider has its own limit. A call that Gemini turns away with a 429 is
 retried for about 15 seconds, and then the rule is reported as not judged.
 
 Use `gemini-3.1-pro-preview`, the Gemini model the judge evals were run against.
@@ -528,16 +541,14 @@ uv run pytest
 ```
 
 `evals/judge` is a rule package whose evals check the judge itself. They run the real
-`claude` CLI and cost tokens. CI runs them against each model in `evals/models`; run
-them after changing the judge's instructions, request, model or tools:
+`claude` CLI and cost tokens. Each binding names the model it is judged with. CI runs
+them; run them after changing the judge's instructions, request or tools:
 
 ```sh
 codeguard test evals/judge     # its triggers; no model call
-CODEGUARD_CONFIG=$PWD/evals/models/claude-sonnet-5-5.yaml codeguard eval evals/judge
-CODEGUARD_CONFIG=$PWD/evals/models/claude-sonnet-5-5.yaml codeguard eval evals/judge --repeat 5
+codeguard eval evals/judge
+codeguard eval evals/judge --repeat 5
 ```
-
-For a Gemini model, point `CODEGUARD_CONFIG` at a config with `judge.provider: gemini`.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:

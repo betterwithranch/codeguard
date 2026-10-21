@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from codeguard.config import JudgeModel
 from codeguard.review import JudgeError, JudgeRequest, Verdict
 
 
@@ -27,7 +28,7 @@ class FailingJudge:
 @dataclass(frozen=True)
 class JudgeCreation:
     root: Path
-    model: str
+    model: JudgeModel
 
 
 @dataclass(frozen=True)
@@ -35,6 +36,6 @@ class RecordingJudges:
     judge: RecordingJudge | FailingJudge
     created: list[JudgeCreation] = field(default_factory=list)
 
-    def __call__(self, root: Path, model: str) -> RecordingJudge | FailingJudge:
+    def __call__(self, root: Path, model: JudgeModel) -> RecordingJudge | FailingJudge:
         self.created.append(JudgeCreation(root, model))
         return self.judge

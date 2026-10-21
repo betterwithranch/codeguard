@@ -55,18 +55,18 @@ class JudgeEvalRunner:
         dataset.add_evaluator(
             ViolationsOnTriggers(tuple(sorted(binding.triggers)), self.confidence_threshold)
         )
-        model = self.judge_config.model_for(binding.model)
+        model = binding.model
         task = EditReviewTask(binding, self.judges, self.confidence_threshold, scanner)
         return await dataset.evaluate(
             task,
-            name=f"{dataset.name} on {model}",
-            task_name=model,
+            name=f"{dataset.name} on {model.name}",
+            task_name=model.name,
             metadata={
-                "provider": self.judge_config.provider,
-                "model": model,
+                "provider": model.provider,
+                "model": model.name,
                 "confidence_threshold": self.confidence_threshold,
             },
             repeat=self.repeat,
-            max_concurrency=self.judge_config.concurrency,
+            max_concurrency=self.judge_config.concurrency(model.provider),
             progress=False,
         )
