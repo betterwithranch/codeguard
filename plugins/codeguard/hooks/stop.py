@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import textwrap
+from dataclasses import dataclass
 
 INSTALL = (
     "curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh"
@@ -48,16 +49,52 @@ def response(host: str) -> dict[str, str]:
     )
     if review.returncode in (0, 1):
         try:
-            return items(json.loads(review.stdout)["diagnostics"])
+            raw = json.loads(review.stdout)["diagnostics"]
+            return items([Diagnostic.from_json(diagnostic) for diagnostic in raw])
         except (ValueError, KeyError):
             pass
     output = (review.stdout + review.stderr).rstrip()
     return {"systemMessage": f"{NOT_REVIEWED}\n{output}"}
 
 
-def items(diagnostics: list[dict[str, object]]) -> dict[str, str]:
-    blocking = [render(diagnostic) for diagnostic in diagnostics if diagnostic["blocks"]]
-    other = [render(diagnostic) for diagnostic in diagnostics if not diagnostic["blocks"]]
+@dataclass(frozen=True)
+class Diagnostic:
+    location: str
+    severity: str
+    rule: str
+    message: str
+    confidence: float | None
+    id: str
+    note: str | None
+    blocks: bool
+
+    @classmethod
+    def from_json(cls, raw: dict[str, object]) -> "Diagnostic":
+        file, line, note = raw["file"], raw["line"], raw["note"]
+        return cls(
+            location=str(file) if line is None else f"{file}:{line}",
+            severity=str(raw["severity"]),
+            rule=str(raw["rule"]),
+            message=str(raw["message"]),
+            confidence=float(str(raw["confidence"])) if raw["category"] == "judged" else None,
+            id=str(raw["id"]),
+            note=None if note is None else str(note),
+            blocks=bool(raw["blocks"]),
+        )
+
+    def render(self) -> str:
+        confidence = "" if self.confidence is None else f" (confidence {self.confidence:.2f})"
+        summary = (
+            f"{self.location}: {self.severity} {self.rule}: {self.message}{confidence} [{self.id}]"
+        )
+        if self.note is None:
+            return summary
+        return f"{summary}\n{textwrap.indent(self.note.rstrip(), '  ')}"
+
+
+def items(diagnostics: list[Diagnostic]) -> dict[str, str]:
+    blocking = [diagnostic.render() for diagnostic in diagnostics if diagnostic.blocks]
+    other = [diagnostic.render() for diagnostic in diagnostics if not diagnostic.blocks]
     result: dict[str, str] = {}
     if blocking:
         result["decision"] = "block"
@@ -65,23 +102,6 @@ def items(diagnostics: list[dict[str, object]]) -> dict[str, str]:
     if other:
         result["systemMessage"] = "\n".join(["codeguard warnings:", *other])
     return result
-
-
-def render(diagnostic: dict[str, object]) -> str:
-    file, line, note = diagnostic["file"], diagnostic["line"], diagnostic["note"]
-    location = file if line is None else f"{file}:{line}"
-    confidence = (
-        f" (confidence {diagnostic['confidence']:.2f})"
-        if diagnostic["category"] == "judged"
-        else ""
-    )
-    summary = (
-        f"{location}: {diagnostic['severity']} {diagnostic['rule']}: "
-        f"{diagnostic['message']}{confidence} [{diagnostic['id']}]"
-    )
-    if note is None:
-        return summary
-    return f"{summary}\n{textwrap.indent(str(note).rstrip(), '  ')}"
 
 
 if __name__ == "__main__":
