@@ -8,16 +8,13 @@ class SelectionCheck:
     ruleset: Ruleset
 
     def problems(self) -> list[str]:
-        unjudged = {
-            **dict.fromkeys(self.ruleset.pattern_rule_ids(), "pattern"),
-            **dict.fromkeys(self.ruleset.dead_code_rule_ids(), "dead-code"),
-        }
-        known = unjudged.keys() | self.ruleset.judged_rule_ids()
+        pattern_rules = self.ruleset.pattern_rule_ids()
+        known = pattern_rules | self.ruleset.judged_rule_ids()
         selection = self.ruleset.selection
         unknown = [f"unknown rule {rule}" for rule in selection.rule_ids if rule not in known]
-        model_on_unjudged_rule = [
-            f"rules.{rule}.model: a {unjudged[rule]} rule has no model"
+        model_on_pattern_rule = [
+            f"rules.{rule}.model: a pattern rule has no model"
             for rule, override in selection.rules.items()
-            if rule in unjudged and override.model is not None
+            if rule in pattern_rules and override.model is not None
         ]
-        return [*unknown, *model_on_unjudged_rule]
+        return [*unknown, *model_on_pattern_rule]

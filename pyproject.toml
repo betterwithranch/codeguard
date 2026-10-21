@@ -14,7 +14,6 @@ dependencies = [
     "packaging>=26.3",
     "pydantic>=2.13.5",
     "pyyaml>=6.0.3",
-    "vulture>=2.16",
 ]
 
 [project.scripts]
@@ -80,7 +79,7 @@ layers = [
     "cli",
     "rules",
     "claude_provider | gemini_provider | judge_evals",
-    "pattern_rules | dead_code",
+    "pattern_rules",
     "rule_tests",
     "review | packages",
     "syntax",

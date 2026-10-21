@@ -7,7 +7,6 @@ from codeguard.config import (
     BindingConfig,
     BindingsConfig,
     ConfigError,
-    DeadCodeRule,
     Lock,
     LockedPackage,
     PathPackageConfig,
@@ -215,39 +214,6 @@ class TestPackages:
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
             "  packages.0.rulesets.python: rules.no-print.model: a pattern rule has no model"
-        )
-
-    def test_included_dead_code_rule_is_selected(self, repo, package, fetch, no_lock):
-        package.write(
-            "python/rules/dead-code/no-dead-code.yml",
-            "id: no-dead-code\nlanguage: python\nseverity: error\n",
-        )
-        selection = RulesetConfig(
-            include=("no-dead-code",),
-            rules={"no-dead-code": RuleOverride(severity=Severity.WARNING)},
-        )
-        config = PathPackageConfig(path=package.root, rulesets={"python": selection})
-
-        rulesets = Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
-
-        assert [ruleset.dead_code_rules() for ruleset in rulesets] == [
-            (DeadCodeRule(id="no-dead-code", language="python", severity=Severity.WARNING),)
-        ]
-
-    def test_model_on_a_dead_code_rule_is_an_error(self, repo, package, fetch, no_lock):
-        package.write(
-            "python/rules/dead-code/no-dead-code.yml",
-            "id: no-dead-code\nlanguage: python\nseverity: error\n",
-        )
-        selection = RulesetConfig(rules={"no-dead-code": RuleOverride(model="claude-haiku-5-5")})
-        config = PathPackageConfig(path=package.root, rulesets={"python": selection})
-
-        with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
-
-        assert str(error.value) == (
-            f"{repo.root}/.codeguard is invalid:\n"
-            "  packages.0.rulesets.python: rules.no-dead-code.model: a dead-code rule has no model"
         )
 
     def test_directory_without_a_manifest_is_an_error(self, repo, tmp_path, fetch, no_lock):

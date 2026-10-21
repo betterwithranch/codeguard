@@ -4,7 +4,6 @@ from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config import Config
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
-from codeguard.config.dead_code_rule import DeadCodeRule
 from codeguard.config.gate_rule import GateRule
 from codeguard.config.judge_config import JudgeConfig, JudgeProvider
 from codeguard.config.lock import LOCK_FILE, Lock, LockedPackage
@@ -48,7 +47,6 @@ __all__ = [
     "Config",
     "ConfigError",
     "ConfigLoader",
-    "DeadCodeRule",
     "ExactVersion",
     "GateRule",
     "GitPackageConfig",

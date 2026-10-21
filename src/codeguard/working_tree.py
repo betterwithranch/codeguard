@@ -1,13 +1,11 @@
 import re
 import subprocess
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Self
 
 _HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
-_REGULAR_FILE_MODES = frozenset({"100644", "100755"})
-_SKIP_WORKTREE = "S"
 
 
 @dataclass(frozen=True)
@@ -88,20 +86,10 @@ class WorkingTree:
     def base_contents(self, base: str, files: Sequence[str]) -> dict[str, bytes]:
         if not files:
             return {}
-        return self._blobs(base, self._regular_files(base, "--", *files) & set(files))
-
-    def committed_files(self, ref: str, suffix: str) -> dict[str, bytes]:
-        return self._blobs(
-            ref, {file for file in self._regular_files(ref) if file.endswith(suffix)}
-        )
-
-    def current_files(self, suffix: str) -> dict[str, bytes]:
-        on_disk = {
-            file: (self.root / file).read_bytes()
-            for file in self.all_lines().files
-            if file.endswith(suffix) and not (self.root / file).is_symlink()
+        in_base = self._git_paths("ls-tree", "-r", "--name-only", base, "--", *files)
+        return {
+            file: self._git_bytes("show", f"{base}:{file}") for file in files if file in in_base
         }
-        return {**on_disk, **self._blobs("", self._skip_worktree_files(suffix))}
 
     def all_lines(self) -> AllLines:
         listed = self._git_paths("ls-files", "--cached", "--others", "--exclude-standard")
@@ -120,34 +108,10 @@ class WorkingTree:
     def _git(self, *args: str) -> str:
         return _run_git(self.root, *args)
 
-    def _regular_files(self, ref: str, *pathspec: str) -> set[str]:
-        entries = (
-            entry.split("\t", 1) for entry in self._git_paths("ls-tree", "-r", ref, *pathspec)
-        )
-        return {path for meta, path in entries if meta.split(" ")[0] in _REGULAR_FILE_MODES}
-
-    def _skip_worktree_files(self, suffix: str) -> set[str]:
-        entries = (entry.split("\t", 1) for entry in self._git_paths("ls-files", "-t", "-s"))
-        return {
-            path
-            for meta, path in entries
-            if meta.startswith(f"{_SKIP_WORKTREE} ")
-            and meta.split(" ")[1] in _REGULAR_FILE_MODES
-            and path.endswith(suffix)
-        }
-
-    def _blobs(self, ref: str, files: set[str]) -> dict[str, bytes]:
-        if not files:
-            return {}
-        ordered = sorted(files)
-        batch = subprocess.run(
-            ["git", "cat-file", "--batch"],
-            cwd=self.root,
-            input="".join(f"{ref}:{file}\n" for file in ordered).encode(),
-            stdout=subprocess.PIPE,
-            check=True,
+    def _git_bytes(self, *args: str) -> bytes:
+        return subprocess.run(
+            ["git", *args], cwd=self.root, stdout=subprocess.PIPE, check=True
         ).stdout
-        return dict(zip(ordered, _batch_contents(batch), strict=True))
 
 
 def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
@@ -170,16 +134,6 @@ def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, fro
             else:
                 deletions[file].add(max(start, 1))
     return _frozen(added), _frozen(deletions)
-
-
-def _batch_contents(batch: bytes) -> Iterator[bytes]:
-    offset = 0
-    while offset < len(batch):
-        header_end = batch.index(b"\n", offset)
-        size = int(batch[offset:header_end].split()[2])
-        start = header_end + 1
-        yield batch[start : start + size]
-        offset = start + size + 1
 
 
 def _frozen(points: dict[str, set[int]]) -> dict[str, frozenset[int]]:

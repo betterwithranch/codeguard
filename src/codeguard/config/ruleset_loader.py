@@ -77,7 +77,6 @@ class RulesetLoader:
                 *self._unbound_pattern_rules(ruleset),
                 *self._unknown_triggers(ruleset, gates),
                 *self._shared_ids(ruleset, gates),
-                *self._dead_code_ids_of_pattern_rules(ruleset),
             ]
         )
         return ruleset
@@ -87,13 +86,6 @@ class RulesetLoader:
             return []
         shared = sorted(ruleset.pattern_rule_ids() & gates.keys())
         return [f"gates.{gate}: a pattern rule has this id" for gate in shared]
-
-    def _dead_code_ids_of_pattern_rules(self, ruleset: Ruleset) -> list[str]:
-        dead_code = ruleset.dead_code_rule_ids()
-        if not dead_code:
-            return []
-        shared = sorted(dead_code & ruleset.pattern_rule_ids())
-        return [f"dead-code.{rule}: a pattern rule has this id" for rule in shared]
 
     def _unbound_pattern_rules(self, ruleset: Ruleset) -> list[str]:
         if not ruleset.pattern_bindings.root:

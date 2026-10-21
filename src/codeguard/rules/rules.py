@@ -3,7 +3,6 @@ from functools import cached_property
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Config, ConfigLoader
-from codeguard.dead_code import DeadCodeCheck
 from codeguard.judge_evals import EvalCoverage, JudgeEvalRunner
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
@@ -38,27 +37,23 @@ class Rules:
         classified = self._classified(scope)
         reviewer = Reviewer(
             steps=(
-                self._deterministic_step(scope),
+                self._pattern_step,
                 CheckStep(checks=self._judge_checks(classified, deadline)),
             )
         )
         return reviewer.run(classified)
 
-    def check_deterministic(self, scope: ChangedLines | AllLines) -> Review:
-        return Reviewer(steps=(self._deterministic_step(scope),)).run(scope)
+    def check_patterns(self, scope: ChangedLines | AllLines) -> Review:
+        return Reviewer(steps=(self._pattern_step,)).run(scope)
 
-    def _deterministic_step(self, scope: ChangedLines | AllLines) -> CheckStep:
+    @property
+    def _pattern_step(self) -> CheckStep:
         root = self.working_tree.root
-        rulesets = self._resolver.rulesets
-        patterns = tuple(PatternRuleCheck(root, ruleset, self._ast_grep) for ruleset in rulesets)
-        return CheckStep(checks=(*patterns, *self._dead_code_checks(scope)))
-
-    def _dead_code_checks(self, scope: ChangedLines | AllLines) -> tuple[DeadCodeCheck, ...]:
-        if isinstance(scope, AllLines) or scope.base is None:
-            return ()
-        return tuple(
-            DeadCodeCheck(self.working_tree, ruleset, scope.base)
-            for ruleset in self._resolver.rulesets
+        return CheckStep(
+            checks=tuple(
+                PatternRuleCheck(root, ruleset, self._ast_grep)
+                for ruleset in self._resolver.rulesets
+            )
         )
 
     def _classified(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:

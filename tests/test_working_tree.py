@@ -86,64 +86,6 @@ class TestWorkingTree:
 
         assert contents == {"a.py": b"a = 1\n"}
 
-    def test_committed_files_are_the_files_with_the_suffix_at_the_ref(self, tmp_path):
-        git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a.py", "a = 1\n")
-        git_repo.write("pkg/b.py", "b = 1\n")
-        git_repo.write("README.md", "# A\n")
-        git_repo.commit("Add files")
-        git_repo.write("a.py", "a = 2\n")
-        git_repo.write("new.py", "c = 1\n")
-
-        files = WorkingTree(root=git_repo.root).committed_files(git_repo.head(), ".py")
-
-        assert files == {"a.py": b"a = 1\n", "pkg/b.py": b"b = 1\n"}
-
-    def test_current_files_are_the_tracked_and_untracked_files_with_the_suffix(self, tmp_path):
-        git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a.py", "a = 1\n")
-        git_repo.write("deleted.py", "b = 1\n")
-        git_repo.write("README.md", "# A\n")
-        git_repo.commit("Add files")
-        git_repo.write("a.py", "a = 2\n")
-        (git_repo.root / "deleted.py").unlink()
-        git_repo.write("new.py", "c = 1\n")
-
-        files = WorkingTree(root=git_repo.root).current_files(".py")
-
-        assert files == {"a.py": b"a = 2\n", "new.py": b"c = 1\n"}
-
-    def test_base_contents_are_only_the_requested_files(self, tmp_path):
-        git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("pkg/a.py", "a = 1\n")
-        git_repo.commit("Add pkg")
-
-        contents = WorkingTree(root=git_repo.root).base_contents(git_repo.head(), ["pkg"])
-
-        assert contents == {}
-
-    def test_current_files_read_files_outside_a_sparse_checkout_from_the_index(self, tmp_path):
-        git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a/x.py", "x = 1\n")
-        git_repo.write("b/y.py", "y = 1\n")
-        git_repo.commit("Add files")
-        git_repo.git("sparse-checkout", "set", "a")
-
-        files = WorkingTree(root=git_repo.root).current_files(".py")
-
-        assert files == {"a/x.py": b"x = 1\n", "b/y.py": b"y = 1\n"}
-
-    def test_symlinks_are_neither_committed_nor_current_files(self, tmp_path):
-        git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a.py", "a = 1\n")
-        (git_repo.root / "link.py").symlink_to("a.py")
-        git_repo.commit("Add a link")
-        working_tree = WorkingTree(root=git_repo.root)
-
-        committed = working_tree.committed_files(git_repo.head(), ".py")
-
-        assert committed == working_tree.current_files(".py") == {"a.py": b"a = 1\n"}
-
     def test_all_lines_has_tracked_and_untracked_files(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
         git_repo.write("tracked.py", "")

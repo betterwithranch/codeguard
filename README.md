@@ -108,10 +108,9 @@ project edits. A release that breaks the rule format starts `v1`.
 A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
 guides an agent through writing a rule and its tests.
 
-A rule is one of three kinds:
+A rule is one of two kinds:
 
 - A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
-- A **dead-code rule** reports code whose last use the change removed.
 - A **judge rule** is a skill that Claude reads each changed file against.
 
 Write a pattern rule whenever ast-grep can check the convention: it runs in
@@ -202,7 +201,6 @@ Each ruleset is a directory with the same layout as a project's `.codeguard/`:
 ```
 python/
   rules/pattern/<id>.yml     # ast-grep rules
-  rules/dead-code/<id>.yml   # dead-code rules
   gates/<id>.yml             # ast-grep rules that gate judge rules
   rule-tests/<id>-test.yml   # tests for both, with __snapshots__/
   skills/<id>/SKILL.md       # judge rules
@@ -366,23 +364,6 @@ claude plugin install codeguard@codeguard --scope project
 
 In Codex, trust codeguard's hooks in `/hooks`.
 
-A dead-code rule in `<ruleset>/rules/dead-code/<id>.yml` reports a definition that the
-base used and the change left unused, on whatever line it is, even in a file the change
-didn't touch. Dead code the base already had isn't reported, and neither is a definition
-the change adds without a use. vulture finds unused Python definitions; Python is the
-only language so far. `whitelist` lists names, with `*` wildcards, that are used in ways
-vulture can't see:
-
-```yaml
-id: no-dead-code
-language: python
-severity: error
-whitelist: ["visit_*", "Meta"]
-```
-
-The rule runs vulture on every Python file in the base and in the working tree, so a
-review with `--all`, which has no base, doesn't run it.
-
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
@@ -504,7 +485,7 @@ codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
 codeguard review --latest     # newest tag in each package range, not the lock
-codeguard review --dry-run    # pattern and dead-code rules, then count the judge calls; calls no model
+codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
 codeguard review --format json  # one JSON object with every diagnostic
 codeguard review --judge-errors-as-warnings  # judge calls that couldn't complete don't fail
 codeguard test                # pattern rule and gate tests, and judge rule eval triggers

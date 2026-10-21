@@ -7,14 +7,12 @@ from pydantic import BaseModel, ConfigDict
 from codeguard.config.binding_config import BindingConfig
 from codeguard.config.bindings_config import BindingsConfig
 from codeguard.config.change_kind import ChangeKind
-from codeguard.config.dead_code_rule import DeadCodeRule
 from codeguard.config.gate_rule import GateRule
 from codeguard.config.path_scope import PathScope
 from codeguard.config.pattern_binding_config import PatternBindingsConfig
 from codeguard.config.ruleset_config import RulesetConfig
 
 PATTERN_RULE_DIR = "rules/pattern"
-DEAD_CODE_RULE_DIR = "rules/dead-code"
 GATE_DIR = "gates"
 RULE_TEST_DIR = "rule-tests"
 SNAPSHOT_DIR = f"{RULE_TEST_DIR}/__snapshots__"
@@ -52,24 +50,6 @@ class Ruleset:
             for document in yaml.safe_load_all(path.read_text())
             if document
         )
-
-    def dead_code_rule_ids(self) -> frozenset[str]:
-        return frozenset(rule.id for rule in self._all_dead_code_rules())
-
-    def dead_code_rules(self) -> tuple[DeadCodeRule, ...]:
-        return tuple(
-            rule.model_copy(
-                update={"severity": self.selection.severity_for(rule.id, rule.severity)}
-            )
-            for rule in self._all_dead_code_rules()
-            if not self.selection.excludes(rule.id)
-        )
-
-    def _all_dead_code_rules(self) -> tuple[DeadCodeRule, ...]:
-        return DeadCodeRule.load_all(self.root / DEAD_CODE_RULE_DIR)
-
-    def dead_code_scope(self, rule: str) -> PathScope:
-        return self.selection.apply_scope(rule, PathScope())
 
     def gates(self) -> dict[str, GateRule]:
         gate_dir = self.root / GATE_DIR

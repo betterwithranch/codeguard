@@ -11,7 +11,6 @@ class TestRulesetStructure:
         make_dirs(
             tmp_path,
             "rules/pattern",
-            "rules/dead-code",
             "gates",
             "rule-tests/__snapshots__",
             "rule-evals",
