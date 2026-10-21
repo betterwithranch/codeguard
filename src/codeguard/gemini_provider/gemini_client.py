@@ -2,11 +2,7 @@ from dataclasses import dataclass
 from functools import cached_property
 
 from google import genai
-from google.genai import models, types
-
-# Backoff runs 1s doubling to 60s, about 6 minutes in all, so a 429 from exhausted shared
-# capacity has time to clear.
-_RETRIES = types.HttpRetryOptions(attempts=12)
+from google.genai import models
 
 
 def gemini_client(project: str | None = None, location: str | None = None) -> genai.Client:
@@ -14,7 +10,6 @@ def gemini_client(project: str | None = None, location: str | None = None) -> ge
         enterprise=True,
         project=project,
         location=location,
-        http_options=types.HttpOptions(retry_options=_RETRIES),
     )
 
 

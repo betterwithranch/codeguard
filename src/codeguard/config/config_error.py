@@ -12,7 +12,8 @@ class ConfigError(Exception):
         problems = (
             _Problem.from_details(details, prefix) for details in error.errors(include_url=False)
         )
-        return cls(f"{location} is invalid:{''.join(f'\n  {problem}' for problem in problems)}")
+        lines = "".join(f"\n  {problem}" for problem in problems)
+        return cls(f"{location} is invalid:{lines}")
 
 
 @dataclass(frozen=True)
