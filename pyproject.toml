@@ -7,7 +7,7 @@ authors = [
 ]
 requires-python = ">=3.13"
 dependencies = [
-    "ast-grep-cli>=0.45.3",
+    "ast-grep-cli>=0.45.3,<0.46",
     "diskcache>=5.6.3",
     "google-genai>=2.28.0",
     "logfire>=5.2.0",
