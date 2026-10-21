@@ -24,31 +24,28 @@ packages:
           - no-tuple-fixtures
           - typed-dispatch-registries
         rules:
-          no-assert-on-lookup-field: &evals-are-tests
+          no-assert-on-lookup-field: &tests-only
             paths:
               - "**/test_*.py"
               - "**/*_test.py"
               - "**/tests/**/*.py"
               - "**/conftest.py"
-              - "evals/**/*.py"
-            exclude_paths: ["evals/fixtures/**"]
-          no-comments-in-tests: *evals-are-tests
-          no-constructed-test-constants: *evals-are-tests
-          no-default-constructor-fixtures: *evals-are-tests
-          no-field-tuple-asserts: *evals-are-tests
-          no-len-asserts: *evals-are-tests
-          no-manual-kwargs-check: *evals-are-tests
-          no-normalized-asserts: *evals-are-tests
-          no-pop-from-kwargs: *evals-are-tests
-          enum-usage: &evals-are-not-production
+          no-comments-in-tests: *tests-only
+          no-constructed-test-constants: *tests-only
+          no-default-constructor-fixtures: *tests-only
+          no-field-tuple-asserts: *tests-only
+          no-len-asserts: *tests-only
+          no-manual-kwargs-check: *tests-only
+          no-normalized-asserts: *tests-only
+          no-pop-from-kwargs: *tests-only
+          enum-usage: &not-in-tests
             exclude_paths:
               - "**/test_*.py"
               - "**/*_test.py"
               - "**/tests/**/*.py"
               - "**/conftest.py"
-              - "evals/**"
-          no-append-in-every-branch: *evals-are-not-production
+          no-append-in-every-branch: *not-in-tests
           no-bucket-module-names:
             exclude_paths: []
-          no-dict-round-trip-between-models: *evals-are-not-production
-          typed-dispatch-registries: *evals-are-not-production
+          no-dict-round-trip-between-models: *not-in-tests
+          typed-dispatch-registries: *not-in-tests

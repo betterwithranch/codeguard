@@ -5,7 +5,15 @@ from codeguard.judge_evals import EvalCoverage
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
-INVALID_EVAL = "id: enum-usage\ninvalid:\n  - after: |\n      ship('shipped')\n"
+INVALID_EVAL = """\
+cases:
+  - name: passes a literal
+    inputs:
+      after: |
+        ship('shipped')
+    expected_output:
+      outcome: invalid
+"""
 
 
 @pytest.fixture
@@ -25,14 +33,16 @@ class TestEvalCoverage:
         assert result == RuleTestResult(problems=("enum-usage: no eval with an invalid case",))
 
     def test_judge_rule_with_an_invalid_case_passes(self, repo):
-        repo.write(".codeguard/rule-evals/enum-usage-eval.yml", INVALID_EVAL)
+        repo.write(".codeguard/rule-evals/enum-usage.yaml", INVALID_EVAL)
 
         assert EvalCoverage(RulesetLoader.local(repo.root)).run() == RuleTestResult()
 
     def test_judge_rule_with_only_a_valid_case_fails(self, repo):
         repo.write(
-            ".codeguard/rule-evals/enum-usage-eval.yml",
-            "id: enum-usage\nvalid:\n  - after: |\n      ship(Status.SHIPPED)\n",
+            ".codeguard/rule-evals/enum-usage.yaml",
+            INVALID_EVAL.replace("ship('shipped')", "ship(Status.SHIPPED)").replace(
+                "invalid", "valid"
+            ),
         )
 
         result = EvalCoverage(RulesetLoader.local(repo.root)).run()

@@ -1,0 +1,58 @@
+# yaml-language-server: $schema=rule-eval-schema.json
+cases:
+  - name: recomputes another type's data
+    inputs:
+      file: orders/invoice.py
+      after: |
+        from dataclasses import dataclass
+
+
+        @dataclass(frozen=True)
+        class Line:
+            price: int
+            quantity: int
+
+            def amount(self) -> int:
+                return self.price * self.quantity
+
+
+        @dataclass(frozen=True)
+        class Order:
+            lines: tuple[Line, ...]
+
+            def total(self) -> int:
+                return sum(line.amount() for line in self.lines)
+
+
+        def invoice_amount(order: Order) -> int:
+            return sum(line.price * line.quantity for line in order.lines)
+    expected_output:
+      outcome: invalid
+  - name: calls the type's method
+    inputs:
+      file: orders/receipt.py
+      after: |
+        from dataclasses import dataclass
+
+
+        @dataclass(frozen=True)
+        class Line:
+            price: int
+            quantity: int
+
+            def amount(self) -> int:
+                return self.price * self.quantity
+
+
+        @dataclass(frozen=True)
+        class Order:
+            lines: tuple[Line, ...]
+
+            def total(self) -> int:
+                return sum(line.amount() for line in self.lines)
+
+
+        def receipt(customer_name: str, order: Order) -> str:
+            return f"{customer_name}: {order.total()}"
+    expected_output:
+      outcome: valid

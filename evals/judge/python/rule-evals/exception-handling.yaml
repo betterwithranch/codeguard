@@ -1,0 +1,39 @@
+# yaml-language-server: $schema=rule-eval-schema.json
+cases:
+  - name: discards an exception
+    inputs:
+      file: payments/charge.py
+      after: |
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+    expected_output:
+      outcome: invalid
+  - name: logs and re-raises an exception
+    inputs:
+      file: payments/refund.py
+      after: |
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+
+        def refund(gateway, amount: int) -> None:
+            try:
+                gateway.refund(amount)
+            except gateway.Error:
+                logger.exception("Refund failed")
+                raise
+    expected_output:
+      outcome: valid
+  - name: changes no control flow
+    inputs:
+      file: payments/charge.py
+      before: |
+        RETRIES = 1
+      after: |
+        RETRIES = 2
+    expected_output:
+      outcome: skipped

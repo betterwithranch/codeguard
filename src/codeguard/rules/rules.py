@@ -4,7 +4,7 @@ from threading import Semaphore
 
 from codeguard.ast_grep import AstGrep
 from codeguard.config import Config, ConfigLoader
-from codeguard.judge_evals import EvalCoverage, JudgeEvalRunner
+from codeguard.judge_evals import EvalCoverage, JudgeEvalResult, JudgeEvalRunner
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
     Bindings,
@@ -17,7 +17,7 @@ from codeguard.review import (
     Review,
     Reviewer,
 )
-from codeguard.rule_tests import BroadTriggers, RuleTestResult, RuleTests, TriggerTestRunner
+from codeguard.rule_tests import BroadTriggers, RuleEvalSchema, RuleTests, TriggerTestRunner
 from codeguard.rules.judges import Judges
 from codeguard.rules.ruleset_resolver import RulesetResolver
 from codeguard.syntax import ChangeClassifier
@@ -89,8 +89,12 @@ class Rules:
         loaders = self._resolver.own_rulesets
         return RuleTests(
             snapshot_runners=[
-                PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep))
+                runner
                 for loader in loaders
+                for runner in (
+                    PatternRuleTestRunner(Layout(root, loader.root, self._ast_grep)),
+                    RuleEvalSchema(root, loader.root),
+                )
             ],
             runners=[
                 runner
@@ -102,22 +106,22 @@ class Rules:
             ],
         )
 
-    def evaluate(self, repeat: int = 1) -> RuleTestResult:
+    def evaluate(self, repeat: int = 1) -> JudgeEvalResult:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         judges = self._judges
         # A repeat has to call the model again to show whether the verdict is stable.
         judge = judges.cached if repeat == 1 else judges.uncached
-        concurrency = self.config.judge.concurrency
-        return RuleTestResult.merge(
-            result
-            for loader in self._resolver.own_rulesets
-            for result in (
-                JudgeEvalRunner(
-                    root, loader, judge, threshold, repeat, concurrency, self._ast_grep
-                ).run(),
-                EvalCoverage(loader).run(),
+        return JudgeEvalResult.merge(
+            JudgeEvalResult.merge(
+                (
+                    JudgeEvalRunner(
+                        root, loader, judge, threshold, repeat, self.config.judge, self._ast_grep
+                    ).run(),
+                    JudgeEvalResult(checks=EvalCoverage(loader).run()),
+                )
             )
+            for loader in self._resolver.own_rulesets
         )
 
     @cached_property

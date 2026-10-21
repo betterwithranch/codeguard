@@ -27,10 +27,16 @@ jobs:
           dry-run: true
   judge-evals:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        model: [claude-haiku-5-5, claude-sonnet-5-5]
     steps:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
       - run: npm install --global @anthropic-ai/claude-code
-      - run: uv run --frozen evals/judge_eval.py
+      - run: uv run --frozen codeguard test evals/judge
+      - run: uv run --frozen codeguard eval evals/judge
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          CODEGUARD_CONFIG: ${{ github.workspace }}/evals/models/${{ matrix.model }}.yaml

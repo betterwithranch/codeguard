@@ -1,0 +1,3 @@
+skill: python/skills/exception-handling
+paths: ["**/*.py"]
+triggers: [control-flow]

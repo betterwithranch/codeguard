@@ -205,7 +205,7 @@ python/
   rule-tests/<id>-test.yml   # tests for both, with __snapshots__/
   skills/<id>/SKILL.md       # judge rules
   bindings/<id>.yaml         # skill and default paths
-  rule-evals/<id>-eval.yml   # judge rule evals
+  rule-evals/<id>.yaml       # judge rule evals, with rule-eval-schema.json
 ```
 
 Pattern rule tests in `rule-tests/pattern/`, the old layout, still run. codeguard
@@ -273,57 +273,84 @@ built-in kinds are `comment`, `docstring`, `import`,
 that is not only a comment or docstring) and `any`. The syntax table in
 `src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
 
-A judge rule's eval, `rule-evals/<id>-eval.yml`, lists edits. Each is a `before` (left
-out for a new file), an `after` and a `file` (default `module.py`), which must match the
-binding's paths:
+A judge rule's eval, `rule-evals/<id>.yaml`, is a
+[pydantic-evals](https://ai.pydantic.dev/evals/) dataset, named after the rule. Each
+case has a `name`, an edit as its `inputs` and the review's `expected_output`. The edit
+is a `before` (left out for a new file), an `after` and a `file` (default `module.py`),
+which must match the binding's paths:
 
 ```yaml
-id: one-concept-per-module
-invalid:                         # the triggers fire and the judge reports a violation
-  - before: |
-      class Order:
-          pass
-    after: |
-      class Order:
-          pass
+# yaml-language-server: $schema=rule-eval-schema.json
+cases:
+  - name: adds a second class
+    inputs:
+      before: |
+        class Order:
+            pass
+      after: |
+        class Order:
+            pass
 
 
-      class Invoice:
-          pass
-valid:                           # the judge reports no violation
-  - after: |
-      class Order:
-          pass
-skipped:                         # the triggers don't fire, so the judge never sees it
-  - before: |
-      class Order:
-          total = 1
-    after: |
-      class Order:
-          total = 2
+        class Invoice:
+            pass
+    expected_output:
+      outcome: invalid             # the triggers fire and the judge reports a violation
+  - name: defines one class
+    inputs:
+      after: |
+        class Order:
+            pass
+    expected_output:
+      outcome: valid               # the judge reports no violation
+  - name: changes an attribute
+    inputs:
+      before: |
+        class Order:
+            total = 1
+      after: |
+        class Order:
+            total = 2
+    expected_output:
+      outcome: skipped             # the triggers don't fire, so the judge never sees it
 ```
+
+`uncertain` is the fourth outcome: the judge reports a violation below the confidence
+threshold. `codeguard test --update-all` writes `rule-eval-schema.json` next to the
+datasets, so an editor validates them, and `codeguard test` fails when it is out of date.
 
 `codeguard test` checks the triggers on every case, with no model call. It commits each
 `before` to a scratch repository, writes each `after`, and classifies the diff the way a
-review does. An `invalid` case fails when the triggers miss the change, and a `skipped`
-case fails when they fire. The message lists the kinds the change touches. Narrow a gate
-until a `skipped` case passes, and keep every `invalid` case passing.
+review does. An `invalid` or `uncertain` case fails when the triggers miss the change,
+and a `skipped` case fails when they fire. The message lists the kinds the change
+touches. Narrow a gate until a `skipped` case passes, and keep every `invalid` case
+passing.
 
-`codeguard eval` judges the file after each `invalid` and `valid` edit with the
-binding's model. An `invalid` case needs a violation at the confidence threshold, on a
-line with one of the rule's `triggers`; the message lists the kinds on that line. A
-`valid` case needs no violation. Verdicts are cached like reviews, so only changed cases
-and skills call Claude again.
+`codeguard eval` runs each dataset as one experiment against the binding's model. The
+task reviews the edit the way `codeguard review` does: the paths, then the triggers,
+then the judge, then the confidence threshold, so a `skipped` case calls no model. Its
+output is the outcome and the violations. Two evaluators check every case:
 
-`codeguard eval` also fails a judge rule with no eval that has an `invalid` case.
+- `PartialEqualsExpected` compares the fields `expected_output` sets with the output.
+- `ViolationsOnTriggers` fails an `invalid` outcome whose violations are all on lines
+  with none of the rule's `triggers`; the message lists the kinds on those lines.
 
-A case whose judge call fails, such as a quota error that outlasts the provider's retries,
-fails too, so a passing eval means every case was judged. The other cases still run.
+The eval passes when every assertion in every experiment passes. It prints each report
+with the failing assertions' reasons, then one line per failure. Verdicts are cached
+like reviews, so only changed cases and skills call the model again. A case whose judge
+call fails, such as a quota error that outlasts the provider's retries, fails too, so a
+passing eval means every case was judged. The other cases still run.
+
+`codeguard eval` also fails a judge rule with no case whose outcome is `invalid`.
 
 `codeguard eval --repeat 3` judges each case three times, all skipping the cache, so an
-unstable verdict shows up as a failing run, named like `valid case 1 [2/3]`. The cases run
-as a [pydantic-evals](https://ai.pydantic.dev/evals/) dataset, so with a Logfire token
-each run is also an experiment in Logfire.
+unstable verdict shows up as a failing run, named like `adds a second class [2/3]`. With
+a Logfire token each experiment is also in Logfire.
+
+`codeguard test` and `codeguard eval` take a package directory, so
+`codeguard eval path/to/package` evaluates a package outside the current repository.
+`judge.model` in the config overrides every binding's model, so set `CODEGUARD_CONFIG`
+to a config file with it to evaluate the rules against another model.
 
 ### Which test to write
 
@@ -332,8 +359,8 @@ A project tests the rules in its `.codeguard/` the same way a package does.
 | You add or change | Write | It checks | Run | Calls Claude |
 |---|---|---|---|---|
 | A pattern rule or gate | `rule-tests/<id>-test.yml` | the rule matches its `invalid` cases and none of its `valid` ones | `codeguard test` | no |
-| A judge rule's skill or `triggers` | `rule-evals/<id>-eval.yml` | the triggers fire on each `invalid` edit and on no `skipped` edit | `codeguard test` | no |
-| | | the judge finds a violation after each `invalid` edit and none after a `valid` one | `codeguard eval` | yes |
+| A judge rule's skill or `triggers` | `rule-evals/<id>.yaml` | the triggers fire on each `invalid` edit and on no `skipped` edit | `codeguard test` | no |
+| | | each edit's review has its expected outcome | `codeguard eval` | yes |
 
 Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
 releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
@@ -500,14 +527,17 @@ Tests:
 uv run pytest
 ```
 
-Judge evals run the real `claude` CLI against fixture skills and cost tokens. Run them
-after changing the judge's instructions, request, model or tools:
+`evals/judge` is a rule package whose evals check the judge itself. They run the real
+`claude` CLI and cost tokens. CI runs them against each model in `evals/models`; run
+them after changing the judge's instructions, request, model or tools:
 
 ```sh
-uv run evals/judge_eval.py              # each case once
-uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
-uv run evals/judge_eval.py --gemini gemini-3.1-pro-preview  # a Gemini model instead of Claude
+codeguard test evals/judge     # its triggers; no model call
+CODEGUARD_CONFIG=$PWD/evals/models/claude-sonnet-5-5.yaml codeguard eval evals/judge
+CODEGUARD_CONFIG=$PWD/evals/models/claude-sonnet-5-5.yaml codeguard eval evals/judge --repeat 5
 ```
+
+For a Gemini model, point `CODEGUARD_CONFIG` at a config with `judge.provider: gemini`.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:

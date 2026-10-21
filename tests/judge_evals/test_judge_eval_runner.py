@@ -5,14 +5,28 @@ import pytest
 from factories.diagnostic import MakeViolation
 from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
-from codeguard.config import RulesetLoader
-from codeguard.judge_evals import JudgeEvalRunner, JudgeFactory
+from codeguard.config import ConfigError, RulesetLoader
+from codeguard.judge_evals import JudgeEvalResult, JudgeEvalRunner, JudgeFactory
 from codeguard.review import Judge, JudgeRequest, Skill, Verdict
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
-EVAL_FILE = ".codeguard/rule-evals/enum-usage-eval.yml"
-STATUS_CASE = "  - after: |\n      ship(status='shipped')\n"
+EVAL_FILE = ".codeguard/rule-evals/enum-usage.yaml"
+
+
+def case(name: str, outcome: str, after: str = "ship(status='shipped')\n") -> str:
+    indented = "".join(f"      {line}\n" for line in after.splitlines())
+    return (
+        f"  - name: {name}\n"
+        f"    inputs:\n"
+        f"      after: |\n  {indented.replace(chr(10) + '      ', chr(10) + '        ')}"
+        f"    expected_output:\n"
+        f"      outcome: {outcome}\n"
+    )
+
+
+def dataset(*cases: str) -> str:
+    return "name: enum-usage\ncases:\n" + "".join(cases)
 
 
 @pytest.fixture
@@ -25,7 +39,7 @@ def enum_rule(repo):
     )
 
 
-def run(repo, judge_eval: str, verdict: Verdict) -> RuleTestResult:
+def run(repo, judge_eval: str, verdict: Verdict) -> JudgeEvalResult:
     repo.write(EVAL_FILE, judge_eval)
     judges = RecordingJudges(RecordingJudge(verdict))
     return JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
@@ -42,24 +56,25 @@ class ReadingJudges:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
-    def test_judges_the_file_after_each_invalid_and_valid_edit(self, repo):
+    def test_judges_the_file_after_each_judged_edit(self, repo):
         repo.write(
             EVAL_FILE,
-            "id: enum-usage\n"
-            "invalid:\n"
-            "  - file: status.py\n"
-            "    before: |\n"
-            "      ship(status=Status.SHIPPED)\n"
-            "    after: |\n"
-            "      ship(status='shipped')\n"
-            "valid:\n"
-            "  - file: status.py\n"
-            "    after: |\n"
-            "      ship(status=Status.SHIPPED)\n"
-            "skipped:\n"
-            "  - file: status.py\n"
-            "    after: |\n"
-            "      count = 1\n",
+            "name: enum-usage\n"
+            "cases:\n"
+            "  - name: passes a string\n"
+            "    inputs:\n"
+            "      file: status.py\n"
+            "      before: |\n"
+            "        ship(status=Status.SHIPPED)\n"
+            "      after: |\n"
+            "        ship(status='shipped')\n"
+            "    expected_output: {outcome: invalid}\n"
+            "  - name: passes the member\n"
+            "    inputs:\n"
+            "      file: status.py\n"
+            "      after: |\n"
+            "        ship(status=Status.SHIPPED)\n"
+            "    expected_output: {outcome: valid}\n",
         )
         judges = ReadingJudges([])
 
@@ -71,7 +86,7 @@ class TestJudgeEvalRunner:
         ]
 
     def test_judges_the_case_file_with_the_rule_skill(self, repo):
-        repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
+        repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
         judges = RecordingJudges(RecordingJudge())
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
@@ -80,31 +95,41 @@ class TestJudgeEvalRunner:
             JudgeRequest(Skill(name="enum-usage", text=ENUM_SKILL), "module.py")
         ]
 
+    def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(self, repo):
+        result = run(repo, dataset(case("passes a string", "valid")), Verdict(violations=()))
+
+        assert [(report.dataset_name, report.name) for report in result.reports] == [
+            ("enum-usage", "enum-usage on claude-haiku-5-5")
+        ]
+
     def test_confident_violation_passes_an_invalid_case(self, repo, make_violation):
         verdict = Verdict(violations=(make_violation(file="module.py", confidence=0.9),))
 
-        result = run(repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", verdict)
+        result = run(repo, dataset(case("passes a string", "invalid")), verdict)
 
-        assert result == RuleTestResult()
+        assert result.passed
 
     def test_violation_outside_the_triggers_fails_with_the_kinds_on_its_line(
         self, repo, make_violation
     ):
         repo.write(
             ".codeguard/bindings/enum-usage.yaml",
-            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [class-header]\n',
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\n'
+            "triggers: [class-header, string-literal]\n",
         )
-        verdict = Verdict(violations=(make_violation(file="module.py", confidence=0.9),))
+        verdict = Verdict(violations=(make_violation(file="module.py", line=2, confidence=0.9),))
 
-        result = run(repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", verdict)
+        result = run(
+            repo,
+            dataset(case("passes a string", "invalid", "ship(status='shipped')\ncount = 1\n")),
+            verdict,
+        )
 
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} invalid case 1: enum-usage violation on line 1 is outside the "
-                "triggers class-header\n"
-                "  Add one of the kinds on that line to triggers in its binding: "
-                "call, code, module-statement, string-literal",
-            )
+        assert result.failures == (
+            "enum-usage passes a string: violation on line 2 is outside the "
+            "triggers class-header, string-literal\n"
+            "  Add one of the kinds on that line to triggers in its binding: "
+            "code, module-statement, number-literal",
         )
 
     def test_violation_inside_the_triggers_passes(self, repo, make_violation):
@@ -114,92 +139,148 @@ class TestJudgeEvalRunner:
         )
         verdict = Verdict(violations=(make_violation(file="module.py", confidence=0.9),))
 
-        result = run(repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", verdict)
+        result = run(repo, dataset(case("passes a string", "invalid")), verdict)
 
-        assert result == RuleTestResult()
+        assert result.passed
 
     def test_unconfident_violation_fails_an_invalid_case(self, repo, make_violation):
         violation = make_violation(file="module.py", message="Pass the member.", confidence=0.6)
 
         result = run(
-            repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", Verdict(violations=(violation,))
+            repo, dataset(case("passes a string", "invalid")), Verdict(violations=(violation,))
         )
 
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} invalid case 1: "
-                "enum-usage expected a violation with confidence 0.90, got:\n"
-                "  line 1 (0.60): Pass the member.",
-            ),
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome invalid, got outcome uncertain\n"
+            "  line 1 (0.60): Pass the member.",
         )
 
     def test_no_violation_fails_an_invalid_case(self, repo):
-        result = run(repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", Verdict(violations=()))
+        result = run(repo, dataset(case("passes a string", "invalid")), Verdict(violations=()))
 
-        assert result == RuleTestResult(
-            problems=(f"{EVAL_FILE} invalid case 1: enum-usage expected a violation, got none",),
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome invalid, got outcome valid",
         )
 
     def test_violation_in_another_file_does_not_pass_an_invalid_case(self, repo, make_violation):
         verdict = Verdict(violations=(make_violation(file="other.py"),))
 
-        result = run(repo, f"id: enum-usage\ninvalid:\n{STATUS_CASE}", verdict)
+        result = run(repo, dataset(case("passes a string", "invalid")), verdict)
 
-        assert result == RuleTestResult(
-            problems=(f"{EVAL_FILE} invalid case 1: enum-usage expected a violation, got none",),
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome invalid, got outcome valid",
         )
 
     def test_no_violation_passes_a_valid_case(self, repo):
-        result = run(repo, f"id: enum-usage\nvalid:\n{STATUS_CASE}", Verdict(violations=()))
+        result = run(repo, dataset(case("passes a string", "valid")), Verdict(violations=()))
 
-        assert result == RuleTestResult()
+        assert result.passed
 
     def test_any_violation_fails_a_valid_case(self, repo, make_violation):
         violation = make_violation(file="module.py", message="Pass the member.", confidence=0.3)
 
         result = run(
-            repo, f"id: enum-usage\nvalid:\n{STATUS_CASE}", Verdict(violations=(violation,))
+            repo, dataset(case("passes a string", "valid")), Verdict(violations=(violation,))
         )
 
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} valid case 1: enum-usage expected no violation, got:\n"
-                "  line 1 (0.30): Pass the member.",
-            ),
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome valid, got outcome uncertain\n"
+            "  line 1 (0.30): Pass the member.",
         )
 
-    def test_skipped_case_is_not_judged(self, repo):
-        repo.write(EVAL_FILE, f"id: enum-usage\nskipped:\n{STATUS_CASE}")
+    def test_case_outside_the_triggers_is_skipped_without_judging(self, repo):
+        repo.write(
+            ".codeguard/bindings/enum-usage.yaml",
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [string-literal]\n',
+        )
+        repo.write(EVAL_FILE, dataset(case("counts", "skipped", "count = 1\n")))
         judges = RecordingJudges(RecordingJudge())
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert judges.created == []
+        assert (result.passed, judges.created) == (True, [])
+
+    def test_invalid_case_outside_the_triggers_fails_as_skipped(self, repo):
+        repo.write(
+            ".codeguard/bindings/enum-usage.yaml",
+            'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [string-literal]\n',
+        )
+
+        result = run(
+            repo, dataset(case("counts", "invalid", "count = 1\n")), Verdict(violations=())
+        )
+
+        assert result.failures == (
+            "enum-usage counts: expected outcome invalid, got outcome skipped",
+        )
 
     def test_judge_error_fails_the_case(self, repo):
-        repo.write(EVAL_FILE, f"id: enum-usage\ninvalid:\n{STATUS_CASE}")
+        repo.write(EVAL_FILE, dataset(case("passes a string", "invalid")))
         judges = RecordingJudges(FailingJudge())
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == RuleTestResult(
-            problems=(
-                f"{EVAL_FILE} invalid case 1: enum-usage not judged: "
-                "JudgeError: gemini failed with 502: upstream request failed",
-            )
+        assert result.failures == (
+            "enum-usage passes a string: not judged: "
+            "JudgeError: gemini failed with 502: upstream request failed",
         )
+
+    def test_judge_error_does_not_pass(self, repo):
+        repo.write(EVAL_FILE, dataset(case("passes a string", "invalid")))
+        judges = RecordingJudges(FailingJudge())
+
+        result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert not result.passed
 
     def test_unknown_rule_fails(self, repo):
         repo.write(
-            ".codeguard/rule-evals/enum-usge-eval.yml", f"id: enum-usge\nvalid:\n{STATUS_CASE}"
+            ".codeguard/rule-evals/enum-usge.yaml",
+            "name: enum-usge\ncases:\n" + case("passes a string", "valid"),
         )
         judges = RecordingJudges(RecordingJudge())
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == RuleTestResult(
-            problems=(".codeguard/rule-evals/enum-usge-eval.yml: no judge rule enum-usge",),
+        assert result == JudgeEvalResult(
+            checks=RuleTestResult(
+                problems=(".codeguard/rule-evals/enum-usge.yaml: no judge rule enum-usge",)
+            )
         )
+
+    def test_dataset_name_defaults_to_the_file_name(self, repo):
+        repo.write(EVAL_FILE, "cases:\n" + case("passes a string", "valid"))
+
+        result = run(repo, "cases:\n" + case("passes a string", "valid"), Verdict(violations=()))
+
+        assert [report.dataset_name for report in result.reports] == ["enum-usage"]
+
+    def test_case_without_expected_output_is_invalid(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "name: enum-usage\ncases:\n  - name: passes a string\n    inputs:\n      after: x\n",
+        )
+        judges = RecordingJudges(RecordingJudge())
+
+        with pytest.raises(ConfigError) as error:
+            JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert str(error.value) == (
+            f"{repo.root / EVAL_FILE} is invalid:\n  passes a string has no expected_output"
+        )
+
+    def test_case_without_a_name_is_invalid(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "name: enum-usage\ncases:\n  - inputs:\n      after: x\n"
+            "    expected_output: {outcome: valid}\n",
+        )
+        judges = RecordingJudges(RecordingJudge())
+
+        with pytest.raises(ConfigError) as error:
+            JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert str(error.value) == f"{repo.root / EVAL_FILE} is invalid:\n  case 1 has no name"
 
 
 @dataclass(frozen=True)
@@ -223,7 +304,7 @@ def flagging(text: str) -> JudgeFactory:
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
     def test_judges_each_case_once_per_repeat(self, repo):
-        repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
+        repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
         judges = RecordingJudges(RecordingJudge())
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
@@ -231,15 +312,15 @@ class TestRepeats:
         assert [creation.model for creation in judges.created] == ["claude-haiku-5-5"] * 3
 
     def test_failing_run_is_numbered(self, repo):
-        repo.write(EVAL_FILE, f"id: enum-usage\nvalid:\n{STATUS_CASE}")
+        repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
 
         result = JudgeEvalRunner(
             repo.root, RulesetLoader.local(repo.root), flagging("ship"), 0.9, repeat=2
         ).run()
 
-        assert sorted(result.problems) == [
-            f"{EVAL_FILE} valid case 1 [{run}/2]: enum-usage expected no violation, got:\n"
-            "  line 1 (1.00): Rename it."
+        assert sorted(result.failures) == [
+            f"enum-usage passes a string [{run}/2]: expected outcome valid, got outcome "
+            "invalid\n  line 1 (1.00): Rename it."
             for run in (1, 2)
         ]
 
@@ -251,4 +332,4 @@ class TestWithoutJudgeEvals:
 
         result = JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
-        assert result == RuleTestResult()
+        assert result == JudgeEvalResult()

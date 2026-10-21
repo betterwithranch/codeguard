@@ -2,7 +2,7 @@ from dataclasses import dataclass
 
 from codeguard.config import RulesetLoader
 from codeguard.review import Bindings
-from codeguard.rule_tests import JudgeEval, RuleTestResult
+from codeguard.rule_tests import Outcome, RuleTestResult, rule_evals
 
 
 @dataclass(frozen=True)
@@ -12,9 +12,12 @@ class EvalCoverage:
     def run(self) -> RuleTestResult:
         ruleset = self.ruleset.load()
         evaluated = {
-            judge_eval.id
-            for _, judge_eval in JudgeEval.in_ruleset(ruleset.root)
-            if judge_eval.invalid
+            dataset.name
+            for _, dataset in rule_evals(ruleset.root)
+            if any(
+                case.expected_output and case.expected_output.outcome is Outcome.INVALID
+                for case in dataset.cases
+            )
         }
         return RuleTestResult(
             problems=tuple(

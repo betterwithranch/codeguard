@@ -12,6 +12,7 @@ from rules_package import write_package
 
 from codeguard.file_lock import exclusive_lock
 from codeguard.review import Severity
+from codeguard.rule_tests import RuleEvalSchema
 
 CODEGUARD = Path(sysconfig.get_path("scripts")) / "codeguard"
 BUNDLED_AST_GREP = metadata.version("ast-grep-cli")
@@ -658,15 +659,16 @@ class TestReviewWithVersionedPackages:
 
 
 class TestEvalCommand:
+    @pytest.mark.parametrize("from_package", [True, False], ids=["in-package", "package-path"])
     def test_invalid_case_below_the_confidence_threshold_is_reported_and_exits_1(
-        self, tmp_path, tmp_path_factory
+        self, tmp_path, tmp_path_factory, from_package
     ):
         package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
         write_package(package)
         package.write(
-            "python/rule-evals/responsibility-placement-eval.yml",
-            "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
-            "      x = 1\n",
+            "python/rule-evals/responsibility-placement.yaml",
+            "cases:\n  - name: assigns in the invoice\n    inputs:\n      file: invoice.py\n"
+            "      after: |\n        x = 1\n    expected_output:\n      outcome: invalid\n",
         )
         violation = {"file": "invoice.py", "line": 1, "message": "Move it."}
         bin_dir = tmp_path / "bin"
@@ -676,17 +678,17 @@ class TestEvalCommand:
         claude.chmod(0o755)
 
         result = subprocess.run(
-            [CODEGUARD, "eval"],
-            cwd=package.root,
+            [CODEGUARD, "eval"] if from_package else [CODEGUARD, "eval", str(package.root)],
+            cwd=package.root if from_package else tmp_path,
             capture_output=True,
             text=True,
             env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
         )
 
-        assert result.stderr == (
-            "python/rule-evals/responsibility-placement-eval.yml invalid case 1: "
-            "responsibility-placement expected a violation with confidence 0.90, got:\n"
-            "  line 1 (0.40): Move it.\n"
+        assert "Evaluation Summary: responsibility-placement on claude-sonnet-5-5" in result.stdout
+        assert result.stdout.endswith(
+            "responsibility-placement assigns in the invoice: expected outcome invalid, got "
+            "outcome uncertain\n  line 1 (0.40): Move it.\n"
         )
         assert result.returncode == 1
 
@@ -832,14 +834,16 @@ class TestTestCommand:
             'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [comment]\n',
         )
         repo.write(
-            ".codeguard/rule-evals/placement-eval.yml",
-            "id: placement\ninvalid:\n  - after: |\n      count = 1\n",
+            ".codeguard/rule-evals/placement.yaml",
+            "cases:\n  - name: assigns a count\n    inputs:\n      after: |\n        count = 1\n"
+            "    expected_output:\n      outcome: invalid\n",
         )
+        RuleEvalSchema(repo.root, repo.root / ".codeguard").update_snapshots()
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
         assert result.stderr == (
-            ".codeguard/rule-evals/placement-eval.yml invalid case 1: placement "
+            ".codeguard/rule-evals/placement.yaml assigns a count: placement "
             "triggers comment miss the change, which touches code, module-statement, "
             "number-literal\n"
         )

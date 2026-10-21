@@ -32,7 +32,6 @@ addopts = ["--import-mode=importlib"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-extend-exclude = ["evals/fixtures"]
 
 [tool.ruff.lint]
 select = [
@@ -60,8 +59,7 @@ extend-immutable-calls = ["codeguard.config.RulesetConfig"]
 "typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."
 
 [tool.basedpyright]
-include = ["src", "evals"]
-exclude = ["evals/fixtures"]
+include = ["src"]
 typeCheckingMode = "standard"
 reportExplicitAny = "error"
 reportMissingTypeArgument = "error"
