@@ -489,12 +489,26 @@ class TestReviewJudgeErrorsAsWarnings:
         assert result.stdout.startswith("a.py: warning placement: The judge call failed")
         assert result.returncode == 0
 
-    def test_rule_violation_still_fails_the_review_with_the_flag(self, repo, tmp_path, make_skill):
+    def test_rule_violation_still_fails_the_review_with_the_flag(
+        self, repo, tmp_path, make_skill, make_diagnostic
+    ):
         bin_dir = judged_repo(repo, tmp_path, make_skill)
-        repo.write("a.py", "print(1)\n")
+        repo.write("b.py", "print(1)\n")
 
-        result = run_review(repo, tmp_path, bin_dir, "--judge-errors-as-warnings")
+        result = run_review(
+            repo, tmp_path, bin_dir, "--judge-errors-as-warnings", "--format", "json"
+        )
 
+        violation = make_diagnostic(file="b.py")
+        judge_error = make_diagnostic(
+            judge_error=True,
+            rule="placement",
+            severity=Severity.WARNING,
+            note="claude exited with 1.\nstdout:\nrate limited\n\nstderr:\n",
+        )
+        assert json.loads(result.stdout) == {
+            "diagnostics": [violation.as_json(), judge_error.as_json()]
+        }
         assert result.returncode == 1
 
 
@@ -569,20 +583,24 @@ class TestConfigCommand:
 
 
 class TestReviewWithVersionedPackages:
-    def test_unlocked_range_exits_2(self, repo, released_package):
+    def test_unlocked_range_reviews_with_the_newest_tag(
+        self, repo, released_package, make_diagnostic
+    ):
         repo.write(".codeguard/config.yaml", versioned_config(released_package))
         repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        released_package.git("rm", "--quiet", "python/rules/pattern/no-print.yml")
+        released_package.commit("Remove no-print")
+        released_package.git("tag", "v1.1.0")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
 
         result = subprocess.run(
             [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
         )
 
-        _, traceback = result.stderr.split(TRACEBACK_HEADING)
-        assert traceback.splitlines()[-1] == (
-            "codeguard.config.config_error.ConfigError: .codeguard/lock.yaml has no ref for "
-            f"{released_package.file_url} <2,>=1. Run codeguard update."
-        )
-        assert result.returncode == 2
+        assert result.stdout == f"{local}\n"
+        assert result.returncode == 1
 
     def test_locked_range_reviews_with_the_locked_rules(
         self, repo, released_package, make_diagnostic
@@ -591,6 +609,27 @@ class TestReviewWithVersionedPackages:
         subprocess.run([CODEGUARD, "update"], cwd=repo.root, check=True)
         repo.write("a.py", "x = 1\n")
         repo.commit("Opt in")
+        repo.write("a.py", "x = 1\nprint(x)\n")
+        local = make_diagnostic(line=2)
+        packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review"], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == f"{local}\n{packaged}\n"
+        assert result.returncode == 1
+
+    def test_newer_tag_in_range_reviews_with_the_locked_tag(
+        self, repo, released_package, make_diagnostic
+    ):
+        repo.write(".codeguard/config.yaml", versioned_config(released_package))
+        subprocess.run([CODEGUARD, "update"], cwd=repo.root, check=True)
+        repo.write("a.py", "x = 1\n")
+        repo.commit("Opt in")
+        released_package.git("rm", "--quiet", "python/rules/pattern/no-print.yml")
+        released_package.commit("Remove no-print")
+        released_package.git("tag", "v1.1.0")
         repo.write("a.py", "x = 1\nprint(x)\n")
         local = make_diagnostic(line=2)
         packaged = make_diagnostic(line=2, rule="example/python/no-print", note=None)
