@@ -49,6 +49,7 @@ packages:
               - "**/conftest.py"
               - "evals/**"
           no-append-in-every-branch: *evals-are-not-production
-          no-bucket-module-names: *evals-are-not-production
+          no-bucket-module-names:
+            exclude_paths: []
           no-dict-round-trip-between-models: *evals-are-not-production
           typed-dispatch-registries: *evals-are-not-production
