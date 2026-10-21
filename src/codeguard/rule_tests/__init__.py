@@ -1,4 +1,5 @@
 from codeguard.rule_tests.broad_triggers import BroadTriggers
+from codeguard.rule_tests.edit_repo import EditRepo
 from codeguard.rule_tests.rule_eval import (
     EditCase,
     EditReview,
@@ -10,13 +11,13 @@ from codeguard.rule_tests.rule_eval import (
 )
 from codeguard.rule_tests.rule_test_result import RuleTestResult
 from codeguard.rule_tests.rule_tests import RuleTests
-from codeguard.rule_tests.scratch_repo import ScratchRepo
 from codeguard.rule_tests.test_runner import SnapshotTestRunner, TestRunner
 from codeguard.rule_tests.trigger_test_runner import TriggerTestRunner
 
 __all__ = [
     "BroadTriggers",
     "EditCase",
+    "EditRepo",
     "EditReview",
     "JudgedViolation",
     "Outcome",
@@ -24,7 +25,6 @@ __all__ = [
     "RuleEvalCase",
     "RuleTestResult",
     "RuleTests",
-    "ScratchRepo",
     "SnapshotTestRunner",
     "TestRunner",
     "TriggerTestRunner",

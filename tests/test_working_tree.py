@@ -100,6 +100,14 @@ class TestWorkingTree:
 
 
 class TestChangedLines:
+    def test_unclassified_file_judges_its_changed_points(self):
+        changed = ChangedLines({"a.py": frozenset({3})}, deletions={"a.py": frozenset({7})})
+
+        assert changed.judged_lines("a.py") == {3, 7}
+
+    def test_all_lines_judges_the_whole_file(self):
+        assert AllLines(("a.py",)).judged_lines("a.py") is None
+
     def test_covers_a_changed_line(self):
         assert ChangedLines({"a.py": frozenset({2})}).covers("a.py", 2)
 

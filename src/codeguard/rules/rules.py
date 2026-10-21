@@ -71,7 +71,9 @@ class Rules:
                     rule=binding.rule,
                     file=file,
                     cached=self.judges.cached(root, binding.model).has(
-                        JudgeRequest(binding.skill, file)
+                        JudgeRequest.of_change(
+                            binding.skill, root, file, classified.judged_lines(file)
+                        )
                     ),
                     triggered=binding.is_triggered(classified, file),
                 )
@@ -121,6 +123,8 @@ class Rules:
         root = self.working_tree.root
         threshold = self.config.confidence_threshold
         return tuple(
-            JudgeCheck(binding, self.judges.cached(root, binding.model, deadline), threshold, scope)
+            JudgeCheck(
+                root, binding, self.judges.cached(root, binding.model, deadline), threshold, scope
+            )
             for binding in Bindings.from_rulesets(self.resolver.rulesets)
         )

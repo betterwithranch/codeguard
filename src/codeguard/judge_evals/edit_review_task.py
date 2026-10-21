@@ -1,12 +1,9 @@
-import tempfile
 from dataclasses import dataclass
-from pathlib import Path
 
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, JudgeRequest
-from codeguard.rule_tests import EditCase, EditReview, JudgedViolation, Outcome, ScratchRepo
-from codeguard.syntax import ChangeClassifier, SyntaxScanner
-from codeguard.working_tree import WorkingTree
+from codeguard.rule_tests import EditCase, EditRepo, EditReview, JudgedViolation, Outcome
+from codeguard.syntax import SyntaxScanner
 
 
 @dataclass(frozen=True)
@@ -19,19 +16,15 @@ class EditReviewTask:
     def __call__(self, inputs: EditCase) -> EditReview:
         if not self.binding.files([inputs.file]):
             return EditReview(outcome=Outcome.SKIPPED)
-        with tempfile.TemporaryDirectory() as directory:
-            repo = ScratchRepo.init(Path(directory))
-            if inputs.before is not None:
-                repo.write({inputs.file: inputs.before})
-            repo.commit()
-            repo.write({inputs.file: inputs.after})
-            working_tree = WorkingTree(repo.root)
-            classifier = ChangeClassifier(self.scanner, working_tree)
-            changed = classifier.classify(working_tree.changed_lines("HEAD"))
+        with EditRepo.of(inputs.edits()) as repo:
+            changed = repo.classified(self.scanner)
             if not self.binding.is_triggered(changed, inputs.file):
                 return EditReview(outcome=Outcome.SKIPPED)
             judge = self.judges(repo.root, self.binding.model)
-            verdict = judge.judge(JudgeRequest(self.binding.skill, inputs.file))
+            request = JudgeRequest.of_change(
+                self.binding.skill, repo.root, inputs.file, changed.judged_lines(inputs.file)
+            )
+            verdict = judge.judge(request).verdict
             parsed = self.scanner.scan_files(repo.root, [inputs.file]).get(inputs.file)
         violations = tuple(
             JudgedViolation(

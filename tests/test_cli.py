@@ -7,7 +7,7 @@ from importlib import metadata
 from pathlib import Path
 
 import pytest
-from claude_output import fake_claude_script
+from claude_output import fake_claude_script, tool_result, tool_use
 from git_repo import GitRepo
 from rules_package import write_package
 
@@ -471,6 +471,54 @@ class TestReviewJsonFormat:
 
         assert "not allowed with argument" in result.stderr
         assert result.returncode == 2
+
+
+class TestReviewJudgeCache:
+    def test_cached_verdict_is_reused_until_a_file_the_judge_read_changes(
+        self, repo, tmp_path, make_skill
+    ):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+        repo.write("orders/pricing.toml", "discount = 5\n")
+        calls = tmp_path / "calls"
+        (bin_dir / "claude").write_text(
+            fake_claude_script(
+                [],
+                before=f"echo called >> {calls}\n",
+                messages=(tool_use("Read", file_path="orders/pricing.toml"),),
+            )
+        )
+        run_review(repo, tmp_path, bin_dir)
+        run_review(repo, tmp_path, bin_dir)
+        repo.write("orders/pricing.toml", "discount = 10\n")
+
+        run_review(repo, tmp_path, bin_dir)
+
+        assert calls.read_text() == "called\ncalled\n"
+
+    @pytest.mark.parametrize("search", ["Grep", "Glob"])
+    def test_cached_verdict_is_reused_until_a_file_a_search_found_changes(
+        self, repo, tmp_path, make_skill, search
+    ):
+        bin_dir = judged_repo(repo, tmp_path, make_skill)
+        repo.write("orders/pricing.toml", "discount = 5\n")
+        calls = tmp_path / "calls"
+        (bin_dir / "claude").write_text(
+            fake_claude_script(
+                [],
+                before=f"echo called >> {calls}\n",
+                messages=(
+                    tool_use(search, "toolu_search", pattern="discount"),
+                    tool_result("toolu_search", filenames=["orders/pricing.toml"]),
+                ),
+            )
+        )
+        run_review(repo, tmp_path, bin_dir)
+        run_review(repo, tmp_path, bin_dir)
+        repo.write("orders/pricing.toml", "discount = 10\n")
+
+        run_review(repo, tmp_path, bin_dir)
+
+        assert calls.read_text() == "called\ncalled\n"
 
 
 class TestReviewJudgeErrorsAsWarnings:

@@ -111,7 +111,7 @@ guides an agent through writing a rule and its tests.
 A rule is one of two kinds:
 
 - A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
-- A **judge rule** is a skill that Claude reads each changed file against.
+- A **judge rule** is a skill that Claude judges each change to a file against.
 
 Write a pattern rule whenever ast-grep can check the convention: it runs in
 milliseconds, costs nothing, and gives the same answer every time. A judge rule costs a
@@ -305,7 +305,9 @@ that is not only a comment or docstring) and `any`. The syntax table in
 - `name`: what the edit does, unique in the file.
 - `inputs`: the edit. `before` is the file before it (leave it out for a new file),
   `after` is the file after it, and `file` is its path (default `module.py`), which
-  must match the binding's paths.
+  must match the binding's paths. `unchanged` maps the path of each other file the
+  edit needs, such as a package's `__init__.py`, to its text; the judge can read them,
+  but they aren't part of the change.
 - `expected_output`: the review's `outcome`, one of:
   - `invalid`: the triggers fire and the judge reports a violation;
   - `valid`: the triggers fire and the judge reports none;
@@ -359,7 +361,7 @@ ignore.
 #### Test a judge rule
 
 1. `codeguard test` checks the triggers on every case, with no model call. It commits
-   each `before` to a scratch repository, writes each `after`, and classifies the diff
+   each `before` and `unchanged` file to a scratch repository, writes each `after`, and classifies the diff
    the way a review does. Fix the triggers until it passes.
 2. `codeguard eval` reviews every case with the binding's model, the way
    `codeguard review` would. Fix the skill, or the case, until it passes.
@@ -401,7 +403,7 @@ failure.
 
 | Input | From |
 |---|---|
-| The edits and their expected reviews | the rule eval, `rule-evals/<id>.yaml` |
+| The edits, the files around them and their expected reviews | the rule eval, `rule-evals/<id>.yaml` |
 | The convention | the skill |
 | Paths, triggers, provider and model | the binding |
 | The confidence threshold, and the Google Cloud project, location and calls at once | the caller's `.codeguard/config.yaml` |
@@ -455,6 +457,14 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
 - If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
   goes through.
+
+The judge gets the code the change touched: each changed function, method or class, and
+each changed line outside them, with the file's line numbers. A new file, and every file
+with `--all`, is sent whole. The judge reads the rest of the file, or any other file in
+the repository, with its read-only tools. A verdict is cached until the changed code, the
+rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
+is one the judge read, or one its searches returned: a file a grep matched or a glob
+listed. A file a search would only start returning later doesn't count.
 
 The judge rates its confidence in each violation from 0 to 1. An error below the
 threshold is reported as a warning, with its confidence, and doesn't block. The
@@ -555,7 +565,10 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
 - `gemini judges {rule} on {file}`: one span per Gemini judgement, with `model`,
   `num_turns`, `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
   `thinking_tokens`, summed over its turns.
-- `judge {rule} on {file}`: one span per rule and file, with `cache_hit` and `violations`.
+- `judge {rule} on {file}`: one span per rule and file, with `cache_hit`, `violations`,
+  `loaded_files` (the files the verdict depends on) and `changed_files` (the loaded files
+  that changed since the cached verdict, which is why it was judged again). The Claude or
+  Gemini span inside it has that judgement's time and tokens.
 - `review {repository}`: `files`, `diagnostics`, `errors`, and `host` (the caller passed
   with `--host`, such as `claude-code` or `codex`).
 

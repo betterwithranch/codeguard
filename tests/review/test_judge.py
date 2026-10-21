@@ -8,23 +8,53 @@ THRESHOLD = 0.9
 
 
 class TestJudgeRequest:
-    def test_prompt_is_the_skill_text(self, make_skill):
+    def test_prompt_is_the_skill_text(self, make_skill, make_judge_request):
         skill = make_skill()
 
-        assert JudgeRequest(skill, "a.py").prompt == skill.text
+        assert make_judge_request(skill=skill).prompt == skill.text
 
-    def test_instructions_end_with_the_numbered_file(self, make_skill):
-        request = JudgeRequest(make_skill(), "a.py")
-
-        assert request.instructions("x = 1\nprint(x)\n") == (
-            f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n     2\tprint(x)\n</file>\n'
+    def test_changed_lines_are_numbered_with_their_file_line_numbers(self, tmp_path, make_skill):
+        (tmp_path / "pricing.py").write_text(
+            "DISCOUNT = 5\n\n\ndef discounted(total):\n    return total - DISCOUNT\n"
         )
 
-    def test_instructions_end_a_file_without_a_final_newline(self, make_skill):
-        request = JudgeRequest(make_skill(), "a.py")
+        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({4, 5}))
 
-        assert request.instructions("x = 1") == (
-            f'{INSTRUCTIONS}\n<file path="a.py">\n     1\tx = 1\n</file>\n'
+        assert request == JudgeRequest(
+            make_skill(),
+            "pricing.py",
+            "     4\tdef discounted(total):\n     5\t    return total - DISCOUNT\n",
+        )
+
+    def test_no_changed_lines_is_the_whole_file(self, tmp_path, make_skill):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\nTAX = 2")
+
+        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", None)
+
+        assert request == JudgeRequest(
+            make_skill(), "pricing.py", "     1\tDISCOUNT = 5\n     2\tTAX = 2\n"
+        )
+
+    def test_changed_point_past_the_end_of_the_file_is_left_out(self, tmp_path, make_skill):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\n")
+
+        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({1, 2}))
+
+        assert request == JudgeRequest(make_skill(), "pricing.py", "     1\tDISCOUNT = 5\n")
+
+    def test_lines_are_numbered_as_git_numbers_them(self, tmp_path, make_skill):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\f\nTAX = 2\n")
+
+        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({2}))
+
+        assert request == JudgeRequest(make_skill(), "pricing.py", "     2\tTAX = 2\n")
+
+    def test_instructions_end_with_the_changes(self, make_judge_request):
+        request = make_judge_request(file="pricing.py", changes="     4\tdef discounted(total):\n")
+
+        assert request.instructions == (
+            f'{INSTRUCTIONS}\n<changes path="pricing.py">\n     4\tdef discounted(total):\n'
+            "</changes>\n"
         )
 
 

@@ -6,6 +6,7 @@ from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severit
 from codeguard.review.judge import (
     Judge,
     JudgeError,
+    Judgement,
     JudgeNoVerdict,
     JudgeProcessError,
     JudgeRequest,
@@ -19,6 +20,7 @@ from codeguard.review.reviewer import Reviewer, Step
 from codeguard.review.skill import Skill
 
 __all__ = [
+    "Judgement",
     "Binding",
     "Bindings",
     "CachedJudge",

@@ -1,3 +1,4 @@
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -7,7 +8,7 @@ from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
 from codeguard.config import ConfigError, JudgeModel, JudgeProvider, RulesetLoader
 from codeguard.judge_evals import JudgeEvalResult, JudgeEvalRunner, JudgeFactory
-from codeguard.review import Judge, JudgeRequest, Skill, Verdict
+from codeguard.review import Judge, Judgement, JudgeRequest, Skill, Verdict
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
@@ -55,6 +56,21 @@ class ReadingJudges:
         return RecordingJudge()
 
 
+@dataclass
+class ListingJudges:
+    listed: list[list[str]]
+
+    def __call__(self, root: Path, model: JudgeModel) -> Judge:
+        self.listed.append(sorted(git(root, "ls-files", "--cached", "--others").split()))
+        return RecordingJudge()
+
+
+def git(directory: Path, *args: str) -> str:
+    return subprocess.run(
+        ["git", *args], cwd=directory, check=True, capture_output=True, text=True
+    ).stdout
+
+
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
     def test_judges_the_file_after_each_judged_edit(self, repo):
@@ -93,7 +109,75 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert judges.judge.received == [
-            JudgeRequest(Skill(name="enum-usage", text=ENUM_SKILL), "module.py")
+            JudgeRequest(
+                Skill(name="enum-usage", text=ENUM_SKILL),
+                "module.py",
+                "     1\tship(status='shipped')\n",
+            )
+        ]
+
+    def test_each_case_is_judged_in_a_repository_holding_its_files(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: passes a string\n"
+            "    inputs:\n"
+            "      file: shipping/ship.py\n"
+            "      after: |\n"
+            "        ship(status='shipped')\n"
+            "      unchanged:\n"
+            "        shipping/__init__.py: |\n"
+            "          from shipping.status import Status\n"
+            "    expected_output: {outcome: invalid}\n"
+            "  - name: passes the member\n"
+            "    inputs:\n"
+            "      file: cancelling.py\n"
+            "      after: |\n"
+            "        cancel(status=Status.CANCELLED)\n"
+            "    expected_output: {outcome: valid}\n",
+        )
+        judges = ListingJudges([])
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert sorted(judges.listed) == [
+            ["cancelling.py"],
+            ["shipping/__init__.py", "shipping/ship.py"],
+        ]
+
+    def test_judges_only_the_function_an_edit_changes(self, repo):
+        repo.write(
+            EVAL_FILE,
+            "cases:\n"
+            "  - name: passes a string\n"
+            "    inputs:\n"
+            "      file: status.py\n"
+            "      before: |\n"
+            "        def ship_order():\n"
+            "            ship(status=Status.SHIPPED)\n"
+            "\n"
+            "\n"
+            "        def cancel_order():\n"
+            "            cancel(status=Status.CANCELLED)\n"
+            "      after: |\n"
+            "        def ship_order():\n"
+            "            ship(status=Status.SHIPPED)\n"
+            "\n"
+            "\n"
+            "        def cancel_order():\n"
+            "            cancel(status='cancelled')\n"
+            "    expected_output: {outcome: invalid}\n",
+        )
+        judges = RecordingJudges(RecordingJudge())
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert judges.judge.received == [
+            JudgeRequest(
+                Skill(name="enum-usage", text=ENUM_SKILL),
+                "status.py",
+                "     5\tdef cancel_order():\n     6\t    cancel(status='cancelled')\n",
+            )
         ]
 
     def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(self, repo):
@@ -355,19 +439,18 @@ class TestJudgeEvalRunner:
 @dataclass(frozen=True)
 class FlagsText:
     text: str
-    root: Path
 
     identity = "flags-text"
 
-    def judge(self, request: JudgeRequest) -> Verdict:
-        if self.text not in (self.root / request.file).read_text():
-            return Verdict(violations=())
+    def judge(self, request: JudgeRequest) -> Judgement:
+        if self.text not in request.changes:
+            return Judgement(Verdict(violations=()))
         violation = MakeViolation(file=request.file, message="Rename it.")
-        return Verdict(violations=(violation,))
+        return Judgement(Verdict(violations=(violation,)))
 
 
 def flagging(text: str) -> JudgeFactory:
-    return lambda root, model: FlagsText(text, root)
+    return lambda root, model: FlagsText(text)
 
 
 @pytest.mark.usefixtures("enum_rule")

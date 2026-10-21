@@ -1,4 +1,3 @@
-import tempfile
 from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,11 +5,11 @@ from pathlib import Path
 from codeguard.ast_grep import AstGrep
 from codeguard.config import ChangeKind, ConfigError, Ruleset, RulesetLoader
 from codeguard.review import Binding, Bindings
+from codeguard.rule_tests.edit_repo import EditRepo
 from codeguard.rule_tests.rule_eval import Outcome, RuleEvalCase, rule_evals
 from codeguard.rule_tests.rule_test_result import RuleTestResult
-from codeguard.rule_tests.scratch_repo import ScratchRepo
-from codeguard.syntax import ChangeClassifier
-from codeguard.working_tree import ChangedLines, WorkingTree
+from codeguard.syntax import SyntaxScanner
+from codeguard.working_tree import ChangedLines
 
 
 @dataclass(frozen=True)
@@ -18,7 +17,11 @@ class _CaseCheck:
     binding: Binding
     case: RuleEvalCase
     name: str
-    path: str
+    prefix: str
+
+    @property
+    def path(self) -> str:
+        return f"{self.prefix}{self.case.inputs.file}"
 
     def problem(self, changed: ChangedLines) -> str | None:
         rule = self.binding.skill.name
@@ -64,7 +67,7 @@ class TriggerTestRunner:
                 bindings[dataset.name],
                 case,
                 name=f"{where} {case.name}",
-                path=f"{dataset.name}/{number}/{case.inputs.file}",
+                prefix=f"{dataset.name}/{number}/",
             )
             for where, dataset in named
             if dataset.name in bindings
@@ -78,17 +81,10 @@ class TriggerTestRunner:
 def _classify_changes(
     checks: Sequence[_CaseCheck], ast_grep: AstGrep, ruleset: Ruleset
 ) -> ChangedLines:
-    with tempfile.TemporaryDirectory() as directory:
-        repo = ScratchRepo.init(Path(directory))
-        repo.write(
-            {
-                check.path: check.case.inputs.before
-                for check in checks
-                if check.case.inputs.before is not None
-            }
-        )
-        repo.commit()
-        repo.write({check.path: check.case.inputs.after for check in checks})
-        working_tree = WorkingTree(repo.root)
-        classifier = ChangeClassifier.for_rulesets(ast_grep, [ruleset], working_tree)
-        return classifier.classify(working_tree.changed_lines("HEAD"))
+    edits = {
+        path: edit
+        for check in checks
+        for path, edit in check.case.inputs.edits(check.prefix).items()
+    }
+    with EditRepo.of(edits) as repo:
+        return repo.classified(SyntaxScanner.for_rulesets(ast_grep, [ruleset]))

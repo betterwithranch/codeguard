@@ -23,6 +23,14 @@ class EditCase(BaseModel):
     file: str = "module.py"
     before: str | None = None
     after: str
+    unchanged: dict[str, str] = {}
+
+    def edits(self, prefix: str = "") -> dict[str, "EditCase"]:
+        unchanged = {
+            f"{prefix}{path}": EditCase(file=path, before=text, after=text)
+            for path, text in self.unchanged.items()
+        }
+        return {**unchanged, f"{prefix}{self.file}": self}
 
 
 class JudgedViolation(BaseModel):
