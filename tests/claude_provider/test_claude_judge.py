@@ -298,6 +298,27 @@ class TestClaudeJudge:
             "orders/receipt.py",
         )
 
+    def test_loaded_files_include_a_single_file_grep_searched(
+        self, tmp_path, processes, make_judge_request
+    ):
+        (tmp_path / "ledger").mkdir()
+        (tmp_path / "ledger" / "__init__.py").write_text("from ledger.entry import Entry\n")
+        judge = judge_answering(
+            tmp_path,
+            processes,
+            tool_use("Grep", "toolu_grep", pattern="Entry", path="ledger/__init__.py"),
+            tool_result(
+                "toolu_grep",
+                mode="content",
+                filenames=[],
+                content="1:from ledger.entry import Entry",
+            ),
+        )
+
+        judgement = judge.judge(make_judge_request())
+
+        assert judgement.loaded_files == ("ledger/__init__.py",)
+
     def test_claude_runs_the_given_model(
         self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):

@@ -39,7 +39,9 @@ class ToolUse(BaseModel):
             path = self.input.get("file_path")
             files = [path] if isinstance(path, str) else []
         elif self.name in _SEARCHES and isinstance(self.result, dict):
+            searched = self.input.get("path")
             files = [
+                *([searched] if isinstance(searched, str) and (root / searched).is_file() else []),
                 *_strings(self.result.get("filenames")),
                 *_files_in_lines(root, self.result.get("content")),
             ]
