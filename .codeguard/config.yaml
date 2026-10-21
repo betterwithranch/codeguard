@@ -23,3 +23,32 @@ packages:
           - no-sleep-in-async-tests
           - no-tuple-fixtures
           - typed-dispatch-registries
+        rules:
+          no-assert-on-lookup-field: &evals-are-tests
+            paths:
+              - "**/test_*.py"
+              - "**/*_test.py"
+              - "**/tests/**/*.py"
+              - "**/conftest.py"
+              - "evals/**/*.py"
+            exclude_paths: ["evals/fixtures/**"]
+          no-comments-in-tests: *evals-are-tests
+          no-constructed-test-constants: *evals-are-tests
+          no-default-constructor-fixtures: *evals-are-tests
+          no-field-tuple-asserts: *evals-are-tests
+          no-len-asserts: *evals-are-tests
+          no-manual-kwargs-check: *evals-are-tests
+          no-normalized-asserts: *evals-are-tests
+          no-pop-from-kwargs: *evals-are-tests
+          enum-usage: &evals-are-not-production
+            exclude_paths:
+              - "**/test_*.py"
+              - "**/*_test.py"
+              - "**/tests/**/*.py"
+              - "**/conftest.py"
+              - "evals/**"
+          no-append-in-every-branch: *evals-are-not-production
+          no-bucket-module-names:
+            exclude_paths: []
+          no-dict-round-trip-between-models: *evals-are-not-production
+          typed-dispatch-registries: *evals-are-not-production
