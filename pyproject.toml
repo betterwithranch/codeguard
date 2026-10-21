@@ -60,7 +60,8 @@ extend-immutable-calls = ["codeguard.config.RulesetConfig"]
 "typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."
 
 [tool.basedpyright]
-include = ["src"]
+include = ["src", "evals"]
+exclude = ["evals/fixtures"]
 typeCheckingMode = "standard"
 reportExplicitAny = "error"
 reportMissingTypeArgument = "error"
