@@ -754,7 +754,6 @@ class TestEvalCommand:
         )
         assert result.returncode == 1
 
-
     def test_each_run_calls_the_model_again(self, tmp_path, tmp_path_factory):
         package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
         write_package(package)
@@ -776,6 +775,7 @@ class TestEvalCommand:
             subprocess.run([CODEGUARD, "eval"], cwd=package.root, check=True, env=env)
 
         assert calls.read_text() == "called\ncalled\n"
+
 
 class TestTestCommand:
     def test_ast_grep_outside_the_package_range_exits_2(self, tmp_path):

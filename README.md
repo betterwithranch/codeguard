@@ -286,7 +286,9 @@ rule:
 ```
 
 A file touches a trigger when a changed line falls inside a node it matches. A new file
-touches every trigger it matches. A rule that needs every change says `triggers: [any]`;
+touches every trigger it matches. A blank line is never a changed line, in any language:
+adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic, so
+the blank line before a new method doesn't make its class part of the change. A rule that needs every change says `triggers: [any]`;
 `codeguard test` warns on `any`, `code`, `function-body` and `function-signature`. The
 built-in kinds are `comment`, `docstring`, `import`,
 `function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,

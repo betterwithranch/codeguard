@@ -86,7 +86,7 @@ class WorkingTree:
         )
         untracked = self._git_paths("ls-files", "--others", "--exclude-standard")
         added, deletions = _changed_points(diff)
-        lines = {**added, **{file: self._every_line(file) for file in untracked}}
+        lines = {**added, **{file: self._code_lines(file) for file in untracked}}
         return ChangedLines(
             lines={file: numbers for file, numbers in lines.items() if numbers},
             deletions={file: numbers for file, numbers in deletions.items() if numbers},
@@ -108,9 +108,9 @@ class WorkingTree:
     def git_path(self, name: str) -> Path:
         return self.root / self._git("rev-parse", "--git-path", name).strip()
 
-    def _every_line(self, file: str) -> frozenset[int]:
-        count = len((self.root / file).read_bytes().splitlines())
-        return frozenset(range(1, count + 1))
+    def _code_lines(self, file: str) -> frozenset[int]:
+        lines = (self.root / file).read_bytes().splitlines()
+        return frozenset(number for number, text in enumerate(lines, 1) if _holds_code(text))
 
     def _git_paths(self, command: str, *args: str) -> set[str]:
         return set(self._git(command, "-z", *args).split("\0")) - {""}
@@ -127,6 +127,30 @@ class WorkingTree:
 def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
     added: dict[str, set[int]] = {}
     deletions: dict[str, set[int]] = {}
+    for hunk in _hunks(diff):
+        points = hunk.points
+        added.setdefault(hunk.file, set()).update(points)
+        deletions.setdefault(hunk.file, set())
+        if not points and any(_holds_code(text) for text in hunk.removed):
+            deletions[hunk.file].add(max(hunk.start - 1 if hunk.added else hunk.start, 1))
+    return _frozen(added), _frozen(deletions)
+
+
+@dataclass
+class _Hunk:
+    file: str
+    start: int
+    removed: list[str] = field(default_factory=list)
+    added: list[str] = field(default_factory=list)
+
+    @property
+    def points(self) -> set[int]:
+        # A blank line changes nothing in any language, so only lines holding code count.
+        return {self.start + offset for offset, text in enumerate(self.added) if _holds_code(text)}
+
+
+def _hunks(diff: str) -> list[_Hunk]:
+    hunks: list[_Hunk] = []
     file = ""
     in_header = False
     for row in diff.splitlines():
@@ -134,16 +158,18 @@ def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, fro
             in_header = True
         elif in_header and row.startswith("+++ "):
             file = row.removeprefix("+++ ")
-            added[file] = set()
-            deletions[file] = set()
         elif match := _HUNK.match(row):
             in_header = False
-            start, count = int(match[1]), int(match[2] or 1)
-            if count:
-                added[file].update(range(start, start + count))
-            else:
-                deletions[file].add(max(start, 1))
-    return _frozen(added), _frozen(deletions)
+            hunks.append(_Hunk(file, int(match[1])))
+        elif not in_header and hunks and row.startswith("-"):
+            hunks[-1].removed.append(row[1:])
+        elif not in_header and hunks and row.startswith("+"):
+            hunks[-1].added.append(row[1:])
+    return hunks
+
+
+def _holds_code(text: str | bytes) -> bool:
+    return bool(text.strip())
 
 
 def _frozen(points: dict[str, set[int]]) -> dict[str, frozenset[int]]:
