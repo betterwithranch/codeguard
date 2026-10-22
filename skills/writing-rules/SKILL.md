@@ -46,9 +46,9 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
   directory instead of `.codeguard/`, with the same layout.
 - A rule eval lists `cases`, each with a `name` saying what the edit does, the edit as
   `inputs` (`file`, `before`, `after`) and `expected_output` with its `outcome`:
-  `invalid`, `valid`, `uncertain` or `skipped`. Add an `invalid` case for each kind of
-  code the rule forbids, a `valid` case for each near miss it allows, and a `skipped`
-  case for each change its triggers should ignore. codeguard's README has the format.
+  `invalid`, `valid` or `skipped`. Add an `invalid` case for each kind of code the rule
+  forbids, a `valid` case for each near miss it allows, and a `skipped` case for each
+  change its triggers should ignore. codeguard's README has the format.
 - Before writing a rule, check the rulesets the project opts into in
   `.codeguard/config.yaml`. To change a packaged rule for this project, override or
   exclude it there; don't copy it into `.codeguard/`.
