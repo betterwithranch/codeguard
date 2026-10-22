@@ -333,8 +333,10 @@ the review it should get:
 - `expected_output`: the review's `outcome`, one of:
   - `invalid`: the triggers fire and the judge reports a violation;
   - `valid`: the triggers fire and the judge reports none;
-  - `uncertain`: the judge reports a violation below the confidence threshold;
   - `skipped`: the triggers don't fire, so the judge never sees the edit.
+
+  A review whose only violations are below the confidence threshold has the outcome
+  `uncertain`. No case can expect it: a case fails when the judge is uncertain about it.
 
 ```yaml
 cases:
@@ -410,7 +412,7 @@ also in Logfire.
 
 - its `file` is outside the binding's paths;
 - its edit changes no code;
-- it expects `invalid`, `uncertain` or `valid` but the triggers miss the change, since a
+- it expects `invalid` or `valid` but the triggers miss the change, since a
   review would never judge it. The message lists the kinds the change touches;
 - it expects `skipped` but the triggers fire. Narrow the gate until it passes, and keep
   every other case passing.

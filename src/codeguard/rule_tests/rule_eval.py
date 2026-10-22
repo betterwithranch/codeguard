@@ -79,6 +79,16 @@ class RuleEvalCase(BaseModel):
     inputs: EditCase
     expected_output: EditReview
 
+    @field_validator("expected_output")
+    @classmethod
+    def expects_a_clear_outcome(cls, expected: EditReview) -> EditReview:
+        if expected.outcome is Outcome.UNCERTAIN:
+            raise ValueError(
+                "a case expects invalid, valid or skipped; one the judge can't decide isn't "
+                "clear enough for a rule eval"
+            )
+        return expected
+
 
 class RuleEval(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
