@@ -319,6 +319,31 @@ class TestClaudeJudge:
 
         assert judgement.loaded_files == ("ledger/__init__.py",)
 
+    def test_failed_search_loads_no_files(self, tmp_path, processes, make_judge_request):
+        judge = judge_answering(
+            tmp_path,
+            processes,
+            tool_use("Grep", "toolu_grep", pattern="DISCOUNT", path="orders"),
+            {
+                "type": "user",
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_grep",
+                            "content": "<tool_use_error>No such path</tool_use_error>",
+                            "is_error": True,
+                        }
+                    ]
+                },
+                "tool_use_result": "Error: Path does not exist: orders",
+            },
+        )
+
+        judgement = judge.judge(make_judge_request())
+
+        assert judgement.loaded_files == ()
+
     def test_claude_runs_the_given_model(
         self, tmp_path, processes, fake_claude_executable, arguments, make_judge_request
     ):
