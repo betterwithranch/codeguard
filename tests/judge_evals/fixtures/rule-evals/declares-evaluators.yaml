@@ -1,0 +1,8 @@
+cases:
+  - name: passes a string
+    inputs:
+      after: |
+        ship(status='shipped')
+    expected_output: {outcome: valid}
+evaluators:
+  - EqualsExpected

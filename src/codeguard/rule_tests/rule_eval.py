@@ -7,8 +7,7 @@ from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, mo
 
 from codeguard.config import JUDGE_EVAL_DIR, ConfigError
 
-EVAL_FILE_GLOB = "*.yaml"
-_MISNAMED_GLOB = "*.yml"
+_EVAL_FILE_SUFFIXES = (".yaml", ".yml")
 
 
 class Outcome(StrEnum):
@@ -99,13 +98,14 @@ class RuleEval(BaseModel):
 
 def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
     directory = ruleset / JUDGE_EVAL_DIR
-    misnamed = sorted(directory.glob(_MISNAMED_GLOB))
-    if misnamed:
+    files = sorted(file for file in directory.glob("*") if file.suffix in _EVAL_FILE_SUFFIXES)
+    stems = [file.stem for file in files]
+    doubled = [file for file in files if stems.count(file.stem) > 1]
+    if doubled:
         raise ConfigError(
-            "rule evals are <rule id>.yaml files; rename or convert:"
-            + "".join(f"\n  {file}" for file in misnamed)
+            "a rule has one eval file; remove one of:" + "".join(f"\n  {file}" for file in doubled)
         )
-    return [_load(file) for file in sorted(directory.glob(EVAL_FILE_GLOB))]
+    return [_load(file) for file in files]
 
 
 def _load(file: Path) -> tuple[Path, RuleEval]:

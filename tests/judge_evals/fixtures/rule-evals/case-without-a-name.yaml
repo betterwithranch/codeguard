@@ -1,0 +1,4 @@
+cases:
+  - inputs:
+      after: x
+    expected_output: {outcome: valid}

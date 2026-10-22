@@ -319,7 +319,8 @@ that is not only a comment or docstring) and `any`. The syntax table in
 
 #### The rule eval
 
-`rule-evals/<id>.yaml` lists cases. Each case is an edit and the review it should get:
+`rule-evals/<id>.yaml` (or `<id>.yml`, but not both) lists cases. Each case is an edit and
+the review it should get:
 
 - `name`: what the edit does, unique in the file.
 - `inputs`: the edit. `before` is the file before it (leave it out for a new file),
