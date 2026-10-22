@@ -31,17 +31,17 @@ def dataset(*cases: str) -> str:
 
 
 @pytest.fixture
-def haiku() -> JudgeModel:
+def non_default_model() -> JudgeModel:
     return JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
 
 
 @pytest.fixture
-def enum_rule(repo):
+def enum_rule(repo, non_default_model):
     repo.write(".codeguard/skills/enum-usage/SKILL.md", f"---\nname: enum-usage\n---\n{ENUM_SKILL}")
     repo.write(
         ".codeguard/bindings/enum-usage.yaml",
         'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
-        "model: claude-haiku-5-5\n",
+        f"model: {non_default_model.name}\n",
     )
 
 
@@ -86,7 +86,7 @@ def git(directory: Path, *args: str) -> str:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
-    def test_judges_the_file_after_each_judged_edit(self, repo, haiku):
+    def test_judges_the_file_after_each_judged_edit(self, repo, non_default_model):
         repo.write(
             EVAL_FILE,
             "name: enum-usage\n"
@@ -111,8 +111,8 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert sorted(judges.judged) == [
-            (haiku, "ship(status='shipped')\n"),
-            (haiku, "ship(status=Status.SHIPPED)\n"),
+            (non_default_model, "ship(status='shipped')\n"),
+            (non_default_model, "ship(status=Status.SHIPPED)\n"),
         ]
 
     def test_judges_the_case_file_with_the_rule_skill(self, repo):
@@ -215,11 +215,13 @@ class TestJudgeEvalRunner:
             )
         ]
 
-    def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(self, repo):
+    def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(
+        self, repo, non_default_model
+    ):
         result = run(repo, dataset(case("passes a string", "valid")), Verdict(violations=()))
 
         assert [(report.dataset_name, report.name) for report in result.reports] == [
-            ("enum-usage", "enum-usage on claude-haiku-5-5")
+            ("enum-usage", f"enum-usage on {non_default_model.name}")
         ]
 
     def test_confident_violation_passes_an_invalid_case(self, repo, make_violation):
@@ -490,13 +492,13 @@ def flagging(text: str) -> JudgeFactory:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
-    def test_judges_each_case_once_per_repeat(self, repo, haiku):
+    def test_judges_each_case_once_per_repeat(self, repo, non_default_model):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
         judges = RecordingJudges(RecordingJudge())
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
 
-        assert [creation.model for creation in judges.created] == [haiku] * 3
+        assert [creation.model for creation in judges.created] == [non_default_model] * 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
