@@ -34,7 +34,7 @@ class EditReviewTask:
                 kinds=None if parsed is None else tuple(sorted(parsed.kinds_on(violation.line))),
             )
             for violation in verdict.violations
-            if violation.file == inputs.file
+            if changed.covers(violation.file, violation.line) and violation.file == inputs.file
         )
         return EditReview(outcome=self._outcome(violations), violations=violations)
 

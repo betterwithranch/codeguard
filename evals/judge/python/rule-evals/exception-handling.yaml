@@ -53,6 +53,23 @@ cases:
                 pass
     expected_output:
       outcome: invalid
+  - name: edits a call in a try block whose untouched handler discards its exception
+    inputs:
+      file: payments/charge.py
+      before: |
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+      after: |
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount, currency="EUR")
+            except Exception:
+                pass
+    expected_output:
+      outcome: valid
   - name: edits a condition in a function whose untouched handler discards its exception
     inputs:
       file: payments/charge.py

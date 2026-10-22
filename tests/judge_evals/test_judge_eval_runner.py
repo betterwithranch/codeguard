@@ -240,6 +240,19 @@ class TestJudgeEvalRunner:
             "enum-usage passes a string: expected outcome invalid, got outcome valid",
         )
 
+    def test_violation_on_an_unchanged_line_is_dropped_as_a_review_drops_it(
+        self, enum_rule, make_violation
+    ):
+        enum_rule.evaluate("edit-in-the-second-function.yaml")
+
+        result = enum_rule.judged_with(
+            Verdict(violations=(make_violation(file="status.py", line=2, confidence=0.9),))
+        )
+
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome invalid, got outcome valid",
+        )
+
     def test_violation_in_another_file_does_not_pass_an_invalid_case(
         self, enum_rule, make_violation
     ):
