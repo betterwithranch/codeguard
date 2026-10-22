@@ -1,6 +1,5 @@
 from dataclasses import dataclass
 
-from pydantic.main import IncEx
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
 from codeguard.config import ChangeKind
@@ -14,9 +13,8 @@ class PartialEqualsExpected(Evaluator[EditCase, EditReview, None]):
     ) -> EvaluationReason | dict[str, bool]:
         if ctx.expected_output is None:
             return {}
-        fields = _listed_fields(ctx.expected_output)
-        expected = ctx.expected_output.model_dump(mode="json", include=fields)
-        actual = ctx.output.model_dump(mode="json", include=fields)
+        expected = _listed(ctx.expected_output, ctx.expected_output)
+        actual = _listed(ctx.output, ctx.expected_output)
         if actual == expected:
             return EvaluationReason(value=True)
         return EvaluationReason(
@@ -60,9 +58,18 @@ def _described(fields: dict[str, object]) -> str:
     return ", ".join(f"{name} {value}" for name, value in fields.items())
 
 
-def _listed_fields(review: EditReview) -> IncEx:
-    fields: dict[str, IncEx | bool] = dict.fromkeys(review.model_fields_set, True)
-    if "violations" in fields:
-        listed = {name for violation in review.violations for name in violation.model_fields_set}
-        fields["violations"] = {"__all__": listed}
+def _listed(review: EditReview, expected: EditReview) -> dict[str, object]:
+    listed = expected.model_fields_set
+    fields: dict[str, object] = review.model_dump(mode="json", include=listed - {"violations"})
+    if "violations" in listed:
+        fields["violations"] = [
+            violation.model_dump(mode="json", include=_violation_fields(expected, index))
+            for index, violation in enumerate(review.violations)
+        ]
     return fields
+
+
+def _violation_fields(expected: EditReview, index: int) -> set[str]:
+    if index < len(expected.violations):
+        return set(expected.violations[index].model_fields_set)
+    return {name for violation in expected.violations for name in violation.model_fields_set}

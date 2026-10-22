@@ -155,6 +155,32 @@ class TestRulesetLoader:
 
         assert ruleset.bindings.root["placement.yaml"].model == "claude-sonnet-5-5"
 
+    def test_binding_file_may_end_in_yml(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yml",
+            'skill: .claude/skills/responsibility-placement\npaths: ["**"]\ntriggers: [any]\n',
+        )
+
+        ruleset = RulesetLoader.local(repo.root).load()
+
+        assert ruleset.judged_rule_ids() == {"responsibility-placement"}
+
+    def test_skill_bound_in_a_yaml_and_a_yml_file_is_an_error(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        binding = 'skill: .claude/skills/responsibility-placement\npaths: ["**"]\ntriggers: [any]\n'
+        repo.write(BINDING, binding)
+        repo.write(".codeguard/bindings/placement.yml", binding)
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            f"  bindings: Value error, skill {repo.root}/.claude/skills/responsibility-placement "
+            "is bound more than once: placement.yaml, placement.yml"
+        )
+
     def test_loads_the_binding_model(self, repo, make_skill):
         repo.write(SKILL, make_skill().text)
         repo.write(

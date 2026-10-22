@@ -226,9 +226,10 @@ python/
   rule-evals/<id>.yaml       # rule evals: test cases for judge rules
 ```
 
-Pattern rule tests in `rule-tests/pattern/`, the old layout, still run. codeguard
-rejects anything else in a ruleset directory, and in `.codeguard/` anything
-else but `config.yaml` and `lock.yaml`, so a rule moves between a project and a package unchanged.
+A binding or rule eval may end in `.yaml` or `.yml`. Pattern rule tests in
+`rule-tests/pattern/`, the old layout, still run. codeguard rejects anything else in a
+ruleset directory, and in `.codeguard/` anything else but `config.yaml` and
+`lock.yaml`, so a rule moves between a project and a package unchanged.
 
 ### Bindings
 
@@ -370,8 +371,9 @@ cases:
       outcome: skipped
 ```
 
-`expected_output` can also list the `violations`, each with any of a `line`,
-`confidence`, `message` and `kinds`; a violation is checked only on the fields it lists.
+`expected_output` can also list the `violations`, each with a `line`, `confidence` and
+`message`, and optionally the `kinds` on its line; a violation without `kinds` isn't
+checked on them.
 A case that leaves them out checks only the outcome. Besides `cases`, the file may set
 `name`, the rule id, which defaults to the file name; a rule has one eval file. The file
 holds nothing else: codeguard decides how a case is judged and checked, so every rule is

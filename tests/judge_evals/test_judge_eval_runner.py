@@ -295,6 +295,17 @@ class TestJudgeEvalRunner:
 
         assert result.passed
 
+    def test_each_expected_violation_is_checked_on_its_own_fields(self, enum_rule, make_violation):
+        enum_rule.evaluate("violations-with-and-without-kinds.yaml")
+        first = make_violation(file="module.py", line=1, message="Pass the member.", confidence=0.9)
+        second = make_violation(
+            file="module.py", line=2, message="Pass the member.", confidence=0.9
+        )
+
+        result = enum_rule.judged_with(Verdict(violations=(first, second)))
+
+        assert result.passed
+
     def test_invalid_case_outside_the_triggers_fails_as_skipped(self, enum_rule):
         enum_rule.bind("string-literal-trigger.yaml")
         enum_rule.evaluate("number-only-is-invalid.yaml")
