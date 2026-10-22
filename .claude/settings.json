@@ -1,11 +1,22 @@
 {
   "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup|resume",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv sync --quiet --frozen --project \"$CLAUDE_PROJECT_DIR\""
+          }
+        ]
+      }
+    ],
     "Stop": [
       {
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.sh\""
+            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.py\" claude-code"
           }
         ]
       }
@@ -15,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.sh\""
+            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.py\" claude-code"
           }
         ]
       }

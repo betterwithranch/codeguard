@@ -210,7 +210,7 @@ A package is a git repo with a `codeguard-package.yaml` at its root:
 ```yaml
 name: betterwithranch
 rulesets: [python]
-ast-grep: ">=0.45,<0.46"   # the ast-grep versions its pattern rules work with
+ast-grep: ">=0.45"         # the ast-grep versions its pattern rules work with
 codeguard: ">=0.2"         # the codeguard versions that can load it
 ```
 
@@ -469,7 +469,10 @@ In Codex, trust codeguard's hooks in `/hooks`.
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
-directory: the uncommitted and untracked files, whoever changed them and however. It runs
+directory: the uncommitted and untracked files, whoever changed them and however. Start
+the session in the repository's directory and make changes from there. Claude Code reads a
+project's hooks only from the directory a session starts in, and a cloud session over several
+repositories starts above them, where no repository's hooks run. It runs
 the `codeguard` the installer put on your PATH, the same one you run from the command
 line, through `uv`. Claude Code and Codex get the same behaviour.
 

@@ -8,7 +8,8 @@ from pathlib import Path
 import pytest
 from claude_output import fake_claude_script
 
-PLUGIN = Path(__file__).resolve().parent.parent / "plugins" / "codeguard"
+PROJECT = Path(__file__).resolve().parent.parent
+PLUGIN = PROJECT / "plugins" / "codeguard"
 SCRIPTS = sysconfig.get_path("scripts")
 UV = Path(shutil.which("uv") or "uv")
 CLAUDE_CODE_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" claude-code'
@@ -23,8 +24,8 @@ INSTALL = (
 )
 
 
-def commands(config: str, event: str) -> list[str]:
-    hooks = json.loads((PLUGIN / "hooks" / config).read_text())["hooks"]
+def commands(config: Path, event: str) -> list[str]:
+    hooks = json.loads(config.read_text())["hooks"]
     return [hook["command"] for group in hooks[event] for hook in group["hooks"]]
 
 
@@ -80,6 +81,7 @@ def run_stop_hook(
         env={
             **os.environ,
             "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
+            "CLAUDE_PROJECT_DIR": str(PROJECT),
             "PATH": os.pathsep.join(str(directory) for directory in directories),
         },
     )
@@ -97,13 +99,58 @@ def stop(stop_hook_active: bool = False) -> dict:
 
 class TestHookConfig:
     def test_claude_code_reviews_when_an_agent_stops(self):
-        assert commands("hooks.json", "Stop") == [CLAUDE_CODE_COMMAND]
+        assert commands(PLUGIN / "hooks" / "hooks.json", "Stop") == [CLAUDE_CODE_COMMAND]
 
     def test_claude_code_reviews_when_a_subagent_stops(self):
-        assert commands("hooks.json", "SubagentStop") == [CLAUDE_CODE_COMMAND]
+        assert commands(PLUGIN / "hooks" / "hooks.json", "SubagentStop") == [CLAUDE_CODE_COMMAND]
+
+    @pytest.mark.parametrize("event", ["Stop", "SubagentStop"])
+    def test_codeguard_reviews_its_own_changes_with_its_development_version(
+        self, repo, uv_only, make_diagnostic, event
+    ):
+        repo.write("a.py", "print(1)\n")
+        [command] = commands(PROJECT / ".claude" / "settings.json", event)
+
+        response = run_stop_hook(repo, stop(), command, path=[uv_only, "/usr/bin", "/bin"])
+
+        assert response == {
+            "decision": "block",
+            "reason": f"{make_diagnostic()}\n{REQUIRED_FIXES}",
+        }
+
+    def test_a_session_installs_the_development_version_before_any_review(self, tmp_path):
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "tool"\n'
+            'version = "0"\n'
+            "[project.scripts]\n"
+            'tool = "tool:main"\n'
+            "[build-system]\n"
+            'requires = ["uv_build>=0.10.11,<0.13"]\n'
+            'build-backend = "uv_build"\n'
+        )
+        (project / "src" / "tool").mkdir(parents=True)
+        (project / "src" / "tool" / "__init__.py").write_text("def main() -> None: ...\n")
+        offline = {**os.environ, "UV_OFFLINE": "1"}
+        subprocess.run([UV, "lock", "--quiet"], cwd=project, env=offline, check=True)
+        [command] = commands(PROJECT / ".claude" / "settings.json", "SessionStart")
+
+        result = subprocess.run(
+            ["sh", "-c", command],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            env={**offline, "CLAUDE_PROJECT_DIR": str(project)},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == ""
+        assert (project / ".venv" / "bin" / "tool").exists()
 
     def test_codex_reviews_when_an_agent_stops(self):
-        assert commands("codex.json", "Stop") == [CODEX_COMMAND]
+        assert commands(PLUGIN / "hooks" / "codex.json", "Stop") == [CODEX_COMMAND]
 
 
 class TestStopHook:
