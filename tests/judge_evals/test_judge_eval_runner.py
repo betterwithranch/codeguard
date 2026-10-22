@@ -13,7 +13,6 @@ from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
 EVAL_FILE = ".codeguard/rule-evals/enum-usage.yaml"
-HAIKU = JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
 
 
 def case(name: str, outcome: str, after: str = "ship(status='shipped')\n") -> str:
@@ -29,6 +28,11 @@ def case(name: str, outcome: str, after: str = "ship(status='shipped')\n") -> st
 
 def dataset(*cases: str) -> str:
     return "name: enum-usage\ncases:\n" + "".join(cases)
+
+
+@pytest.fixture
+def haiku() -> JudgeModel:
+    return JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
 
 
 @pytest.fixture
@@ -82,7 +86,7 @@ def git(directory: Path, *args: str) -> str:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
-    def test_judges_the_file_after_each_judged_edit(self, repo):
+    def test_judges_the_file_after_each_judged_edit(self, repo, haiku):
         repo.write(
             EVAL_FILE,
             "name: enum-usage\n"
@@ -107,8 +111,8 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert sorted(judges.judged) == [
-            (HAIKU, "ship(status='shipped')\n"),
-            (HAIKU, "ship(status=Status.SHIPPED)\n"),
+            (haiku, "ship(status='shipped')\n"),
+            (haiku, "ship(status=Status.SHIPPED)\n"),
         ]
 
     def test_judges_the_case_file_with_the_rule_skill(self, repo):
@@ -486,13 +490,13 @@ def flagging(text: str) -> JudgeFactory:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
-    def test_judges_each_case_once_per_repeat(self, repo):
+    def test_judges_each_case_once_per_repeat(self, repo, haiku):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
         judges = RecordingJudges(RecordingJudge())
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
 
-        assert [creation.model for creation in judges.created] == [HAIKU] * 3
+        assert [creation.model for creation in judges.created] == [haiku] * 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
