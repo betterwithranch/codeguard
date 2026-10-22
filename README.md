@@ -711,15 +711,22 @@ Tests:
 uv run pytest
 ```
 
-`evals/judge` is a rule package whose rule evals check the judge itself, on the model
-each of its bindings names. They run the real `claude` CLI and cost tokens. CI runs
-them; run them after changing the judge's instructions, request or tools:
+`uv run pytest` runs offline: it calls no model. The LLM tests check that the judge's
+instructions, request and tools still get the right verdicts from a real model. Each
+one reviews an edit in a scratch repository the way `codeguard review` does, calling
+the real `claude` CLI, so they cost tokens. They are marked `llm`, which plain `pytest`
+deselects. CI runs them; run them after changing the judge's instructions, request or
+tools:
 
 ```sh
-codeguard test evals/judge     # its triggers; no model call
-codeguard eval evals/judge
-codeguard eval evals/judge --repeat 5
+uv run pytest -m llm                  # each case 3 times, as CI does
+uv run pytest -m llm --llm-runs 20    # before merging a change to the judge
 ```
+
+Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skills and
+bindings beside them. A case that flips between runs or comes back uncertain is a defect
+in the case or the judge prompt; fix it, don't re-run until it passes. The plain suite
+checks each case's triggers.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:

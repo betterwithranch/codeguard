@@ -16,6 +16,15 @@ register(MakeBinding)
 register(MakeJudgeRequest)
 
 
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--llm-runs",
+        type=int,
+        default=3,
+        help="Run each llm test this many times. Default: 3.",
+    )
+
+
 @pytest.fixture(autouse=True)
 def no_telemetry(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("LOGFIRE_TOKEN", raising=False)
