@@ -358,10 +358,10 @@ In Codex, trust codeguard's hooks in `/hooks`.
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
-directory: the uncommitted and untracked files, whoever changed them and however. When the
-working directory isn't in a repository, as in a session over several repositories, it
-reviews each repository directly inside it, and each finding's file starts with its
-repository's directory. It runs
+directory: the uncommitted and untracked files, whoever changed them and however. Start
+the session in the repository's directory and make changes from there. Claude Code reads a
+project's hooks only from the directory a session starts in, and a cloud session over several
+repositories starts above them, where no repository's hooks run. It runs
 the `codeguard` the installer put on your PATH, the same one you run from the command
 line, through `uv`. Claude Code and Codex get the same behaviour.
 
@@ -523,8 +523,7 @@ uv run evals/judge_eval.py --gemini gemini-3.1-pro-preview  # a Gemini model ins
 
 To use this clone's CLI and plugin in every Claude Code session on this machine, run
 this from the clone. Nothing runs it for you: run it in each session that works on
-codeguard, including a session over several repositories, whose working directory is
-outside them, where no project's settings apply.
+codeguard.
 
 ```sh
 ./dev-setup.sh
