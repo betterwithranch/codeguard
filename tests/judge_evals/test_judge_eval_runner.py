@@ -30,19 +30,17 @@ def dataset(*cases: str) -> str:
     return "name: enum-usage\ncases:\n" + "".join(cases)
 
 
-@pytest.fixture
-def non_default_model() -> JudgeModel:
-    return JudgeModel(provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5")
-
-
-@pytest.fixture
-def enum_rule(repo, non_default_model):
-    repo.write(".codeguard/skills/enum-usage/SKILL.md", f"---\nname: enum-usage\n---\n{ENUM_SKILL}")
+def bind(repo, extra: str = "") -> None:
     repo.write(
         ".codeguard/bindings/enum-usage.yaml",
-        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n'
-        f"model: {non_default_model.name}\n",
+        'skill: .codeguard/skills/enum-usage\npaths: ["**/*.py"]\ntriggers: [any]\n' + extra,
     )
+
+
+@pytest.fixture
+def enum_rule(repo):
+    repo.write(".codeguard/skills/enum-usage/SKILL.md", f"---\nname: enum-usage\n---\n{ENUM_SKILL}")
+    bind(repo)
 
 
 def run(repo, judge_eval: str, verdict: Verdict) -> JudgeEvalResult:
@@ -53,10 +51,10 @@ def run(repo, judge_eval: str, verdict: Verdict) -> JudgeEvalResult:
 
 @dataclass
 class ReadingJudges:
-    judged: list[tuple[JudgeModel, str]]
+    judged: list[str]
 
     def __call__(self, root: Path, model: JudgeModel) -> Judge:
-        self.judged.append((model, (root / "status.py").read_text()))
+        self.judged.append((root / "status.py").read_text())
         return RecordingJudge()
 
 
@@ -86,7 +84,7 @@ def git(directory: Path, *args: str) -> str:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestJudgeEvalRunner:
-    def test_judges_the_file_after_each_judged_edit(self, repo, non_default_model):
+    def test_judges_the_file_after_each_judged_edit(self, repo):
         repo.write(
             EVAL_FILE,
             "name: enum-usage\n"
@@ -111,8 +109,8 @@ class TestJudgeEvalRunner:
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
 
         assert sorted(judges.judged) == [
-            (non_default_model, "ship(status='shipped')\n"),
-            (non_default_model, "ship(status=Status.SHIPPED)\n"),
+            "ship(status='shipped')\n",
+            "ship(status=Status.SHIPPED)\n",
         ]
 
     def test_judges_the_case_file_with_the_rule_skill(self, repo):
@@ -215,13 +213,24 @@ class TestJudgeEvalRunner:
             )
         ]
 
-    def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(
-        self, repo, non_default_model
-    ):
+    def test_judges_with_the_model_the_binding_names(self, repo):
+        bind(repo, "provider: gemini\nmodel: gemini-3.1-pro-preview\n")
+        repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
+        judges = RecordingJudges(RecordingJudge())
+
+        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9).run()
+
+        assert [creation.model for creation in judges.created] == [
+            JudgeModel(provider=JudgeProvider.GEMINI, name="gemini-3.1-pro-preview")
+        ]
+
+    def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(self, repo):
+        bind(repo, "model: claude-haiku-5-5\n")
+
         result = run(repo, dataset(case("passes a string", "valid")), Verdict(violations=()))
 
         assert [(report.dataset_name, report.name) for report in result.reports] == [
-            ("enum-usage", f"enum-usage on {non_default_model.name}")
+            ("enum-usage", "enum-usage on claude-haiku-5-5")
         ]
 
     def test_confident_violation_passes_an_invalid_case(self, repo, make_violation):
@@ -492,13 +501,13 @@ def flagging(text: str) -> JudgeFactory:
 
 @pytest.mark.usefixtures("enum_rule")
 class TestRepeats:
-    def test_judges_each_case_once_per_repeat(self, repo, non_default_model):
+    def test_judges_each_case_once_per_repeat(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
         judges = RecordingJudges(RecordingJudge())
 
         JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
 
-        assert [creation.model for creation in judges.created] == [non_default_model] * 3
+        assert len(judges.created) == 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
