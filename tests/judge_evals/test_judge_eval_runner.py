@@ -276,6 +276,25 @@ class TestJudgeEvalRunner:
 
         assert (result.passed, judges.created) == (True, [])
 
+    def test_case_adding_only_blank_lines_is_skipped_without_judging(self, enum_rule):
+        enum_rule.evaluate("blank-lines-only.yaml")
+        judges = RecordingJudges(RecordingJudge())
+
+        result = enum_rule.run(judges)
+
+        assert result.passed
+        assert judges.created == []
+
+    def test_expected_violation_is_checked_only_on_the_fields_it_lists(
+        self, enum_rule, make_violation
+    ):
+        enum_rule.evaluate("violation-without-kinds.yaml")
+        violation = make_violation(file="module.py", message="Pass the member.", confidence=0.9)
+
+        result = enum_rule.judged_with(Verdict(violations=(violation,)))
+
+        assert result.passed
+
     def test_invalid_case_outside_the_triggers_fails_as_skipped(self, enum_rule):
         enum_rule.bind("string-literal-trigger.yaml")
         enum_rule.evaluate("number-only-is-invalid.yaml")
@@ -319,6 +338,30 @@ class TestJudgeEvalRunner:
         result = enum_rule.judged_with(Verdict(violations=()))
 
         assert [report.dataset_name for report in result.reports] == ["enum-usage"]
+
+    def test_two_eval_files_naming_one_rule_are_an_error(self, enum_rule, repo):
+        enum_rule.evaluate("string-is-valid.yaml")
+        enum_rule.evaluate("named-enum-usage.yaml", as_file="more.yaml")
+
+        with pytest.raises(ConfigError) as error:
+            enum_rule.judged_with(Verdict(violations=()))
+
+        assert str(error.value) == (
+            "a rule has one eval file; remove one of:\n"
+            f"  {repo.root / EVAL_FILE}\n"
+            f"  {repo.root}/.codeguard/rule-evals/more.yaml"
+        )
+
+    def test_codeguard_0_4_eval_file_is_an_error_asking_to_convert_it(self, enum_rule, repo):
+        enum_rule.evaluate("codeguard-0.4-format.yml", as_file="enum-usage-eval.yml")
+
+        with pytest.raises(ConfigError) as error:
+            enum_rule.judged_with(Verdict(violations=()))
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard/rule-evals/enum-usage-eval.yml is a codeguard 0.4 rule "
+            "eval; convert it to rule-evals/<rule id>.yaml"
+        )
 
     def test_rule_with_a_yaml_and_a_yml_eval_file_is_an_error(self, enum_rule, repo):
         enum_rule.evaluate("string-is-valid.yaml")

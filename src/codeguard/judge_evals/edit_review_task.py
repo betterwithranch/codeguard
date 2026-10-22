@@ -18,7 +18,9 @@ class EditReviewTask:
             return EditReview(outcome=Outcome.SKIPPED)
         with EditRepo.of(inputs.edits()) as repo:
             changed = repo.classified(self.scanner)
-            if not self.binding.is_triggered(changed, inputs.file):
+            if inputs.file not in changed.files or not self.binding.is_triggered(
+                changed, inputs.file
+            ):
                 return EditReview(outcome=Outcome.SKIPPED)
             judge = self.judges(repo.root, self.binding.model)
             request = JudgeRequest.of_change(

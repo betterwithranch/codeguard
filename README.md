@@ -370,10 +370,12 @@ cases:
       outcome: skipped
 ```
 
-`expected_output` can also list the exact `violations`, each with a `line`,
-`confidence`, `message` and `kinds`. A case that leaves them out checks only the
-outcome. The file holds nothing else: codeguard decides how a case is judged and
-checked, so every rule is held to the same bar.
+`expected_output` can also list the `violations`, each with any of a `line`,
+`confidence`, `message` and `kinds`; a violation is checked only on the fields it lists.
+A case that leaves them out checks only the outcome. Besides `cases`, the file may set
+`name`, the rule id, which defaults to the file name; a rule has one eval file. The file
+holds nothing else: codeguard decides how a case is judged and checked, so every rule is
+held to the same bar.
 
 Every judge rule needs at least one `invalid` case. Give it `valid` cases for the
 nearby code it must not flag, and `skipped` cases for the changes its triggers should

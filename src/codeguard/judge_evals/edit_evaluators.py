@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 
+from pydantic.main import IncEx
 from pydantic_evals.evaluators import EvaluationReason, Evaluator, EvaluatorContext
 
 from codeguard.config import ChangeKind
@@ -13,7 +14,7 @@ class PartialEqualsExpected(Evaluator[EditCase, EditReview, None]):
     ) -> EvaluationReason | dict[str, bool]:
         if ctx.expected_output is None:
             return {}
-        fields = ctx.expected_output.model_fields_set
+        fields = _listed_fields(ctx.expected_output)
         expected = ctx.expected_output.model_dump(mode="json", include=fields)
         actual = ctx.output.model_dump(mode="json", include=fields)
         if actual == expected:
@@ -57,3 +58,11 @@ class ViolationsOnTriggers(Evaluator[EditCase, EditReview, None]):
 
 def _described(fields: dict[str, object]) -> str:
     return ", ".join(f"{name} {value}" for name, value in fields.items())
+
+
+def _listed_fields(review: EditReview) -> IncEx:
+    fields: dict[str, IncEx | bool] = dict.fromkeys(review.model_fields_set, True)
+    if "violations" in fields:
+        listed = {name for violation in review.violations for name in violation.model_fields_set}
+        fields["violations"] = {"__all__": listed}
+    return fields

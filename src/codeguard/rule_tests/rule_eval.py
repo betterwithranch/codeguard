@@ -99,13 +99,14 @@ class RuleEval(BaseModel):
 def rule_evals(ruleset: Path) -> list[tuple[Path, RuleEval]]:
     directory = ruleset / JUDGE_EVAL_DIR
     files = sorted(file for file in directory.glob("*") if file.suffix in _EVAL_FILE_SUFFIXES)
-    stems = [file.stem for file in files]
-    doubled = [file for file in files if stems.count(file.stem) > 1]
+    evals = [_load(file) for file in files]
+    names = [rule_eval.name for _, rule_eval in evals]
+    doubled = [file for file, rule_eval in evals if names.count(rule_eval.name) > 1]
     if doubled:
         raise ConfigError(
             "a rule has one eval file; remove one of:" + "".join(f"\n  {file}" for file in doubled)
         )
-    return [_load(file) for file in files]
+    return evals
 
 
 def _load(file: Path) -> tuple[Path, RuleEval]:
@@ -113,6 +114,10 @@ def _load(file: Path) -> tuple[Path, RuleEval]:
         data = yaml.safe_load(file.read_text())
     except yaml.YAMLError as error:
         raise ConfigError(f"{file} is invalid:\n  {error}") from error
+    if isinstance(data, dict) and "id" in data:
+        raise ConfigError(
+            f"{file} is a codeguard 0.4 rule eval; convert it to rule-evals/<rule id>.yaml"
+        )
     if isinstance(data, dict):
         data = {"name": file.stem, **data}
     try:
