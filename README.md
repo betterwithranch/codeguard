@@ -76,8 +76,10 @@ The review uses the package tags in `.codeguard/lock.yaml`, the same as a local 
 so run `codeguard update` and commit the lock. For now, a package range the lock
 doesn't have uses the newest tag in the range; a later release will require the lock.
 
-A judge call that couldn't complete fails the review. To merge the PR anyway, add the
-`codeguard-allow-judge-errors` label to it. The action then passes
+A judge call that couldn't complete fails the review, and no setting turns that off
+([why](#configuration-reference)). To merge the PR anyway, add the
+`codeguard-allow-judge-errors` label to it, so each bypass is chosen for one PR and
+shows in its history. The action then passes
 `--judge-errors-as-warnings` to the review, so those calls print as warnings, and rule
 violations still fail. The label doesn't cover the `eval` input's `codeguard eval`,
 which still fails on them.
@@ -458,8 +460,10 @@ an example.
 
 ## Setup
 
-Once the project has codeguard, everyone working in it runs the installer, then starts
-a new agent session. Rerun it to upgrade.
+The hooks need nothing installed but [uv](https://docs.astral.sh/uv/): without a
+`codeguard` on PATH, they run the latest `v0` release through `uv tool run`, which adds
+a second or two to each review. To skip that, and to run `codeguard` from the command
+line, install it, then start a new agent session. Rerun the installer to upgrade.
 
 ```sh
 curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh
@@ -481,7 +485,9 @@ the session in the repository's directory and make changes from there. Claude Co
 project's hooks only from the directory a session starts in, and a cloud session over several
 repositories starts above them, where no repository's hooks run. It runs
 the `codeguard` the installer put on your PATH, the same one you run from the command
-line, through `uv`. Claude Code and Codex get the same behaviour.
+line, through `uv`, or the latest `v0` release when none is installed
+(`CODEGUARD_SOURCE` names another uv source, such as a local checkout). Claude Code and
+Codex get the same behaviour.
 
 - An error blocks the stop, and only errors reach the agent. It blocks every time the
   agent stops until the errors are fixed. When the agent can't fix one, interrupt it
@@ -490,8 +496,8 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   threshold, and rules the judge couldn't check (a failed `claude` call or the time
   limit). The hook passes `--judge-errors-as-warnings`, since the agent can't fix those;
   CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
-- If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
-  goes through.
+- If the review crashes, or uv can't fetch codeguard, you see why, and the stop goes
+  through.
 
 The judge gets the code the change touched: each changed function, method or class, and
 each changed line outside them, with the file's line numbers. A new file is sent whole
@@ -609,6 +615,52 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
   with `--host`, such as `claude-code` or `codex`).
 
 In CI, pass the token as the action's `logfire-token` input.
+
+## Configuration reference
+
+A project's settings live in `.codeguard/config.yaml`, which is committed, so a commit
+gets the same review on every machine and in CI. Every setting is optional.
+
+| Setting | Default | What it does | Why the default |
+|---|---|---|---|
+| `confidence_threshold` | `0.9` | A judged `error` with a lower confidence is reported as a warning, to you rather than the agent, and doesn't block. | Only findings the judge is sure of should stop an agent or fail a PR. A doubtful finding that blocked would send the agent after a violation that may not exist. See [What the hooks check](#what-the-hooks-check). |
+| `review_time_limit_minutes` | `5` | The review stops judging after this long. Each rule and file it didn't judge is reported as not checked, at the rule's severity. The GitHub Action stops the review 2 minutes after it. | A stuck `claude` call once hung a CI review for 30 minutes with no output. A limit turns a hang into a visible failure. |
+| `ast-grep` | the version codeguard installs | The ast-grep version every pattern rule and gate runs with, through `uv tool run`. | One version for every rule, so a rule matches the same code on every machine. codeguard fails when it is outside a package's `ast-grep` range. |
+| `packages` | none | The rule packages and rulesets the project uses; see [Rules](#rules). Without it, only the rules in `.codeguard/` run. | A project opts into each ruleset, so no rule runs that the project didn't choose. |
+| `packages[].rulesets.<name>.include` | every rule in the ruleset | The only rules that run. Rules the package adds later stay off. Set it or `exclude`, not both. | |
+| `packages[].rulesets.<name>.exclude` | none | Rules that don't run. | |
+| `packages[].rulesets.<name>.severity` | each rule's own | The severity of every rule in the ruleset, including rules the package adds later. A rule's own override wins. | `warning` trials a ruleset: its findings print without blocking. |
+| `packages[].rulesets.<name>.rules.<id>` | the binding's | Overrides a rule's `paths`, `exclude_paths` or `severity`. | |
+| `judge.calls_at_once` | one per CPU for `claude-cli`, `2` for `gemini` | How many judge calls run at once. | A `claude` call mostly waits on the network, so the limit follows the machine. Gemini's pay-as-you-go capacity is shared, so fewer calls keep a review under its tokens-per-minute limit. |
+| `judge.project`, `judge.location` | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Where Gemini runs; see [Judge with Gemini on Google Cloud](#judge-with-gemini-on-google-cloud). | |
+
+Two things have no setting on purpose:
+
+- **Judge errors fail the review.** A judge call that couldn't complete, including one
+  cut off by the time limit, is reported at its rule's severity, so for an `error` rule
+  it fails CI. A rule the judge couldn't check is code nobody checked, and a warning in
+  a passing check goes unseen: if a setting could turn these into warnings for a
+  project, a broken judge, an expired token or a codeguard bug would let every PR
+  through. A bypass is always for one PR: the `codeguard-allow-judge-errors` label
+  ([CI](#ci)), which shows in the PR's history. The Stop hook always passes
+  `--judge-errors-as-warnings`, because the agent can't fix a judge failure. It shows
+  the failure to you, and CI still fails on it.
+- **A rule's judge model.** A judge rule is judged with the model its binding names, the
+  one its rule eval passed on. A project can't switch it to a model the eval never ran
+  on.
+
+Settings that decide what a review reports belong in the committed config, not in the
+environment, so CI and every machine review a commit the same way. Environment variables
+only choose the config file or the codeguard to run, sign the judge in, or turn on
+telemetry:
+
+| Variable | Default | What it does |
+|---|---|---|
+| `CODEGUARD_CONFIG` | `.codeguard/config.yaml` | The config file to load, relative to the repository root, such as a gitignored `codeguard.local.yaml` for working on a local package. |
+| `CODEGUARD_SOURCE` | the latest `v0` release | The uv source the hooks run codeguard from when no `codeguard` is on PATH, such as a local checkout. |
+| `CODEGUARD_REF` | `v0` | The ref `install.sh` installs. |
+| `CLAUDE_CODE_OAUTH_TOKEN` | the `claude` CLI's own sign-in | The subscription token the judge runs with, in CI. |
+| `LOGFIRE_TOKEN` | none: nothing is sent | Sends a trace of each run to Logfire; see [Telemetry](#telemetry). |
 
 ## CLI
 

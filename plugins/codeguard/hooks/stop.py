@@ -12,15 +12,16 @@ object, which both hosts read the same way.
 """
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass
 
-INSTALL = (
-    "curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh"
-)
+# Without an installed codeguard, uv runs this release, so nobody has to install it first.
+RELEASE = "git+https://github.com/betterwithranch/codeguard@v0"
+SOURCE_ENV_VAR = "CODEGUARD_SOURCE"
 NOT_REVIEWED = "codeguard review failed, so these changes were not reviewed."
 REQUIRED_FIXES = (
     "These errors are required fixes, not suggestions. Fix the code. If the fix needs a "
@@ -35,14 +36,8 @@ def main() -> None:
 
 
 def response(host: str) -> dict[str, str]:
-    codeguard = shutil.which("codeguard")
-    if codeguard is None:
-        return {
-            "systemMessage": "codeguard is not on PATH, so these changes were not reviewed. "
-            f"Install it:\n{INSTALL}"
-        }
     review = subprocess.run(
-        [codeguard, "review", "--format", "json", "--judge-errors-as-warnings", "--host", host],
+        [*codeguard(), "review", "--format", "json", "--judge-errors-as-warnings", "--host", host],
         capture_output=True,
         text=True,
         check=False,
@@ -55,6 +50,14 @@ def response(host: str) -> dict[str, str]:
             pass
     output = (review.stdout + review.stderr).rstrip()
     return {"systemMessage": f"{NOT_REVIEWED}\n{output}"}
+
+
+def codeguard() -> list[str]:
+    installed = shutil.which("codeguard")
+    if installed is not None:
+        return [installed]
+    source = os.environ.get(SOURCE_ENV_VAR, RELEASE)
+    return ["uv", "tool", "run", "--quiet", "--from", source, "codeguard"]
 
 
 @dataclass(frozen=True)

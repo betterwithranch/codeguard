@@ -19,9 +19,6 @@ REQUIRED_FIXES = (
     "decision, ask the user. Don't change .codeguard/config.yaml to silence them."
 )
 NOT_REVIEWED = "codeguard review failed, so these changes were not reviewed."
-INSTALL = (
-    "curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh"
-)
 
 
 def commands(config: Path, event: str) -> list[str]:
@@ -69,6 +66,7 @@ def run_stop_hook(
     hook_input: dict,
     command: str = CLAUDE_CODE_COMMAND,
     path: list[Path | str] | None = None,
+    env: dict[str, str] | None = None,
 ) -> dict:
     """Run a hook config's command and return the one JSON object it must print."""
     directories = path_with() if path is None else path
@@ -83,6 +81,7 @@ def run_stop_hook(
             "CLAUDE_PLUGIN_ROOT": str(PLUGIN),
             "CLAUDE_PROJECT_DIR": str(PROJECT),
             "PATH": os.pathsep.join(str(directory) for directory in directories),
+            **(env or {}),
         },
     )
     assert result.returncode == 0, result.stderr
@@ -248,13 +247,33 @@ class TestStopHook:
             "broken.yml\n"
         )
 
-    def test_missing_codeguard_goes_to_the_user_with_the_install_command(self, repo, uv_only):
-        response = run_stop_hook(repo, stop(), path=[uv_only, "/usr/bin", "/bin"])
+    def test_without_an_installed_codeguard_uv_runs_it(self, repo, uv_only, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+
+        response = run_stop_hook(
+            repo,
+            stop(),
+            path=[uv_only, "/usr/bin", "/bin"],
+            env={"CODEGUARD_SOURCE": str(PROJECT)},
+        )
 
         assert response == {
-            "systemMessage": "codeguard is not on PATH, so these changes were not reviewed. "
-            f"Install it:\n{INSTALL}"
+            "decision": "block",
+            "reason": f"{make_diagnostic()}\n{REQUIRED_FIXES}",
         }
+
+    def test_a_codeguard_uv_cannot_run_goes_to_the_user(self, repo, uv_only, tmp_path):
+        repo.write("a.py", "print(1)\n")
+
+        response = run_stop_hook(
+            repo,
+            stop(),
+            path=[uv_only, "/usr/bin", "/bin"],
+            env={"CODEGUARD_SOURCE": str(tmp_path / "missing")},
+        )
+
+        assert list(response) == ["systemMessage"]
+        assert response["systemMessage"].startswith(f"{NOT_REVIEWED}\n")
 
     def test_claude_code_and_codex_get_the_same_response(self, repo):
         repo.write("a.py", "print(1)\nbreakpoint()\n")
