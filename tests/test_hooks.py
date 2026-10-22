@@ -118,6 +118,37 @@ class TestHookConfig:
             "reason": f"{make_diagnostic()}\n{REQUIRED_FIXES}",
         }
 
+    def test_a_session_installs_the_development_version_before_any_review(self, tmp_path):
+        project = tmp_path / "project"
+        project.mkdir()
+        (project / "pyproject.toml").write_text(
+            "[project]\n"
+            'name = "tool"\n'
+            'version = "0"\n'
+            "[project.scripts]\n"
+            'tool = "tool:main"\n'
+            "[build-system]\n"
+            'requires = ["uv_build>=0.10.11,<0.13"]\n'
+            'build-backend = "uv_build"\n'
+        )
+        (project / "src" / "tool").mkdir(parents=True)
+        (project / "src" / "tool" / "__init__.py").write_text("def main() -> None: ...\n")
+        offline = {**os.environ, "UV_OFFLINE": "1"}
+        subprocess.run([UV, "lock", "--quiet"], cwd=project, env=offline, check=True)
+        [command] = commands(PROJECT / ".claude" / "settings.json", "SessionStart")
+
+        result = subprocess.run(
+            ["sh", "-c", command],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+            env={**offline, "CLAUDE_PROJECT_DIR": str(project)},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout == ""
+        assert (project / ".venv" / "bin" / "tool").exists()
+
     def test_codex_reviews_when_an_agent_stops(self):
         assert commands(PLUGIN / "hooks" / "codex.json", "Stop") == [CODEX_COMMAND]
 
