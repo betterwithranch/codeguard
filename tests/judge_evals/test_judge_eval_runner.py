@@ -503,11 +503,13 @@ def flagging(text: str) -> JudgeFactory:
 class TestRepeats:
     def test_judges_each_case_once_per_repeat(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
-        judges = RecordingJudges(RecordingJudge())
+        judge = RecordingJudge()
 
-        JudgeEvalRunner(repo.root, RulesetLoader.local(repo.root), judges, 0.9, repeat=3).run()
+        JudgeEvalRunner(
+            repo.root, RulesetLoader.local(repo.root), RecordingJudges(judge), 0.9, repeat=3
+        ).run()
 
-        assert len(judges.created) == 3
+        assert [request.file for request in judge.received] == ["module.py"] * 3
 
     def test_failing_run_is_numbered(self, repo):
         repo.write(EVAL_FILE, dataset(case("passes a string", "valid")))
