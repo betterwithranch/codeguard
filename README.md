@@ -393,9 +393,10 @@ ignore.
    classifies the diff the way a review does. Fix the triggers until it passes.
 2. `codeguard eval` reviews every case with the binding's model, the way
    `codeguard review` would. Fix the skill, or the case, until it passes.
-3. `codeguard eval --repeat 3` reviews each case three times, so an unstable verdict
-   shows up as a failing run, named like `adds a second class [2/3]`. A rule is ready
-   when every case passes all three runs.
+3. `codeguard eval --repeat 20` reviews each case twenty times, so an unstable verdict
+   shows up as a failing run, named like `adds a second class [2/20]`. A new or changed
+   rule is ready when every case passes all twenty runs. CI can repeat fewer times to
+   save calls, since the twenty-run check comes before the rule is added.
 
 Each case is a clear violation, a clear non-violation, or clearly outside the triggers.
 A case a reviewer could argue either way doesn't belong in a rule eval. A case that
@@ -450,7 +451,7 @@ A project tests the rules in its `.codeguard/` the same way a package does.
 |---|---|---|---|---|
 | A pattern rule or gate | `rule-tests/<id>-test.yml` | the rule matches its `invalid` cases and none of its `valid` ones | `codeguard test` | no |
 | A judge rule's skill, binding or `triggers` | `rule-evals/<id>.yaml` | the triggers fire on each edit but the `skipped` ones | `codeguard test` | no |
-| | | each edit gets its expected review, 3 runs of 3 | `codeguard eval --repeat 3` | yes |
+| | | each edit gets its expected review, 20 runs of 20 | `codeguard eval --repeat 20` | yes |
 
 Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
 releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.

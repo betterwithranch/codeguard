@@ -33,6 +33,10 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
   elsewhere. The judge skips a file whose changes miss every trigger.
 - Give every judge rule an eval with an `invalid` case. `codeguard eval` fails a rule
   without one, and a violation outside the triggers.
+- Before writing or changing a judge rule, and whenever its eval or a judged review
+  fails, flips between runs or reports a warning, follow `references/judge-rules.md`:
+  how to state the criterion, gate every form of the violation, write eval cases at the
+  boundary, and verify.
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.
@@ -59,7 +63,7 @@ Verify:
 
 ```sh
 codeguard test                 # rule tests and eval triggers; --update-all regenerates snapshots
-codeguard eval --repeat 3      # judge rules: every case passes 3 runs of 3; calls the model
+codeguard eval --repeat 20     # judge rules: every case passes 20 runs of 20; calls the model
 codeguard review --all --dry-run  # existing violations of pattern rules; calls no model
 ```
 
