@@ -19,12 +19,6 @@ class ParsedFile:
     def definitions(self) -> tuple[str, ...]:
         return tuple(node.text for node in self.of_kind(NodeKind.DEFINITION))
 
-    def enclosing_starts(self, lines: Iterable[int]) -> frozenset[int]:
-        scopes = self.of_kind(NodeKind.SCOPE)
-        return frozenset(
-            scope.start_line for line in lines for scope in scopes if scope.spans(line)
-        )
-
     def judged_lines(self, points: frozenset[int]) -> frozenset[int]:
         scopes = self.of_kind(NodeKind.SCOPE)
         return frozenset(line for point in points for line in _innermost_scope_lines(scopes, point))

@@ -36,3 +36,120 @@ cases:
         RETRIES = 2
     expected_output:
       outcome: skipped
+  - name: edits the clause of a handler that already discarded its exception
+    inputs:
+      file: payments/charge.py
+      before: |
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except:
+                pass
+      after: |
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+    expected_output:
+      outcome: invalid
+  - name: edits a condition in a function whose untouched handler discards its exception
+    inputs:
+      file: payments/charge.py
+      before: |
+        def charge(gateway, amount: int) -> None:
+            if amount <= 0:
+                return
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+      after: |
+        def charge(gateway, amount: int) -> None:
+            if amount < 0:
+                return
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+    expected_output:
+      outcome: valid
+  - name: adds a re-raising handler beside a function that discards its exception
+    inputs:
+      file: payments/gateway.py
+      before: |
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+
+
+        def refund(gateway, amount: int) -> None:
+            gateway.refund(amount)
+      after: |
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except Exception:
+                pass
+
+
+        def refund(gateway, amount: int) -> None:
+            try:
+                gateway.refund(amount)
+            except gateway.Error:
+                logger.exception("Refund failed")
+                raise
+    expected_output:
+      outcome: valid
+  - name: adds a discarding handler beside a function that re-raises
+    inputs:
+      file: payments/gateway.py
+      before: |
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except gateway.Error:
+                logger.exception("Charge failed")
+                raise
+
+
+        def refund(gateway, amount: int) -> None:
+            gateway.refund(amount)
+      after: |
+        import logging
+
+        logger = logging.getLogger(__name__)
+
+
+        def charge(gateway, amount: int) -> None:
+            try:
+                gateway.charge(amount)
+            except gateway.Error:
+                logger.exception("Charge failed")
+                raise
+
+
+        def refund(gateway, amount: int) -> None:
+            try:
+                gateway.refund(amount)
+            except gateway.Error:
+                pass
+    expected_output:
+      outcome: invalid

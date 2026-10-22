@@ -522,10 +522,19 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
   stop goes through.
 
 The judge gets the code the change touched: each changed function, method or class, and
-each changed line outside them, with the file's line numbers. A new file is sent whole
-but for its blank lines outside a function or class; every file with `--all` is sent
-whole. The judge reads the rest of the file, or any other file in
-the repository, with its read-only tools. A verdict is cached until the changed code, the
+each changed line outside them, with the file's line numbers and the changed lines
+marked. A new file is sent whole but for its blank lines outside a function or class;
+every file with `--all` is sent whole, all of it marked changed. The judge reads the rest
+of the file, or any other file in the repository, with its read-only tools.
+
+A review reports only violations a changed line is part of, on that line. What the line
+held before doesn't matter: editing a line that already broke a rule reports it, so code
+a change touches is left better than it was found. Untouched code isn't reported, even in
+the function or class around the change: adding a line to a method doesn't report the
+method's name, and renaming a variable doesn't report the class's design. A changed line
+that breaks a rule together with the code around it is reported, such as a method that
+gives its class another responsibility. Other functions and classes in the file are read
+as context but never reported. A verdict is cached until the changed code, the
 rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
 is one the judge read, or one its searches returned: a file a grep matched or a glob
 listed. A file a search would only start returning later doesn't count.

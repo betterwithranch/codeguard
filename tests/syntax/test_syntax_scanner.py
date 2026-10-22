@@ -37,22 +37,6 @@ class TestSyntaxScanner:
             (2, 3),
         ]
 
-    def test_enclosing_starts_are_the_first_lines_of_scopes_around_the_lines(self, tmp_path):
-        (tmp_path / "order.py").write_text(
-            "class Order:\n"
-            "    def total(self):\n"
-            "        return 1\n"
-            "\n"
-            "    def name(self):\n"
-            "        return 'order'\n"
-            "\n"
-            "x = 1\n"
-        )
-
-        [parsed] = SyntaxScanner(AstGrep()).scan(tmp_path).values()
-
-        assert parsed.enclosing_starts([3, 8]) == frozenset({1, 2})
-
     def test_scan_skips_files_in_unsupported_languages(self, tmp_path):
         (tmp_path / "order.rb").write_text("total = 1\n")
 

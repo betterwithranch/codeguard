@@ -14,7 +14,6 @@ _BLANK = " \t\r\f\v"
 class ChangedLines:
     lines: Mapping[str, frozenset[int]]
     deletions: Mapping[str, frozenset[int]] = field(default_factory=dict)
-    node_starts: Mapping[str, frozenset[int]] = field(default_factory=dict)
     kinds: Mapping[str, frozenset[str]] = field(default_factory=dict)
     judged: Mapping[str, frozenset[int]] = field(default_factory=dict)
     base: str | None = None
@@ -26,9 +25,6 @@ class ChangedLines:
     def points(self, file: str) -> frozenset[int]:
         return self.lines.get(file, frozenset()) | self.deletions.get(file, frozenset())
 
-    def with_node_starts(self, node_starts: Mapping[str, frozenset[int]]) -> Self:
-        return replace(self, node_starts=node_starts)
-
     def with_kinds(self, kinds: Mapping[str, frozenset[str]]) -> Self:
         return replace(self, kinds=kinds)
 
@@ -37,6 +33,9 @@ class ChangedLines:
 
     def judged_lines(self, file: str) -> frozenset[int] | None:
         return self.judged.get(file, self.points(file))
+
+    def changed_points(self, file: str) -> frozenset[int] | None:
+        return self.points(file)
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
@@ -48,7 +47,7 @@ class ChangedLines:
             return True
         if end_line is not None:
             return any(line <= point <= end_line for point in self.points(file))
-        return line in self.points(file) or line in self.node_starts.get(file, frozenset())
+        return line in self.points(file)
 
 
 @dataclass(frozen=True)
@@ -62,6 +61,9 @@ class AllLines:
         return None
 
     def judged_lines(self, file: str) -> frozenset[int] | None:
+        return None
+
+    def changed_points(self, file: str) -> frozenset[int] | None:
         return None
 
 

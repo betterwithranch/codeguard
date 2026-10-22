@@ -228,12 +228,7 @@ class TestChangedLines:
 
         assert changed.covers("a.py", 2, end_line=4)
 
-    def test_covers_a_line_without_a_range_on_the_first_line_of_an_enclosing_node(self):
-        changed = ChangedLines({"a.py": frozenset({3})}).with_node_starts({"a.py": frozenset({1})})
+    def test_covers_a_deletion_point(self):
+        changed = ChangedLines(lines={}, deletions={"a.py": frozenset({3})})
 
-        assert changed.covers("a.py", 1)
-
-    def test_does_not_cover_a_range_on_the_first_line_of_an_enclosing_node(self):
-        changed = ChangedLines({"a.py": frozenset({5})}).with_node_starts({"a.py": frozenset({1})})
-
-        assert not changed.covers("a.py", 1, end_line=1)
+        assert changed.covers("a.py", 3)

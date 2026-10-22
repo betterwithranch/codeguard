@@ -110,7 +110,7 @@ class TestJudgeCheck:
 
         assert set(judge.received) == {
             make_judge_request(),
-            make_judge_request(file="b.py", changes="     1\tx = 1\n"),
+            make_judge_request(file="b.py", changes="+     1\tx = 1\n"),
         }
 
     def test_judge_gets_the_changed_function_of_the_file(
@@ -129,7 +129,7 @@ class TestJudgeCheck:
         assert judge.received == [
             make_judge_request(
                 file="pricing.py",
-                changes="     4\tdef discounted(total):\n     5\t    return total - DISCOUNT\n",
+                changes="      4\tdef discounted(total):\n+     5\t    return total - DISCOUNT\n",
             )
         ]
 
@@ -174,7 +174,7 @@ class TestJudgeCheck:
 
         JudgeCheck(tmp_path, binding, judge, THRESHOLD, scope).check(["a.md"])
 
-        assert judge.received == [make_judge_request(file="a.md", changes="     1\t# A\n")]
+        assert judge.received == [make_judge_request(file="a.md", changes="+     1\t# A\n")]
 
     def test_binding_without_triggers_judges_every_changed_file(
         self, tmp_path, make_binding, make_judge_request

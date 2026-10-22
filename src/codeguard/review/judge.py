@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from codeguard.review.binding import Binding
 from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severity
 from codeguard.review.skill import Skill
+from codeguard.working_tree import AllLines, ChangedLines
 
 INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
 
@@ -18,12 +19,17 @@ class JudgeRequest:
     changes: str
 
     @classmethod
-    def of_change(cls, skill: Skill, root: Path, file: str, lines: frozenset[int] | None) -> Self:
+    def of_change(cls, skill: Skill, root: Path, file: str, scope: ChangedLines | AllLines) -> Self:
         raw = (root / file).read_bytes().splitlines()
         content = [line.decode(errors="replace") for line in raw]
+        lines = scope.judged_lines(file)
         shown = range(1, len(content) + 1) if lines is None else sorted(lines)
+        changed = scope.changed_points(file)
         changes = "".join(
-            f"{number:>6}\t{content[number - 1]}\n" for number in shown if number <= len(content)
+            f"{'+' if changed is None or number in changed else ' '}{number:>6}\t"
+            f"{content[number - 1]}\n"
+            for number in shown
+            if number <= len(content)
         )
         return cls(skill, file, changes)
 

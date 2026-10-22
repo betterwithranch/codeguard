@@ -200,3 +200,17 @@ class TestChangeClassifier:
         git_repo.write("a.py", "RATE = 2\n\n\ndef tax():\n    return 0\n")
 
         assert classified_judged_lines(git_repo, "a.py") == {1, 4, 5}
+
+    def test_body_edit_does_not_cover_the_untouched_first_line_of_its_function(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "class Order:\n    def total(self):\n        return 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "class Order:\n    def total(self):\n        return 2\n")
+        working_tree = WorkingTree(git_repo.root)
+        classifier = ChangeClassifier(SyntaxScanner(AstGrep(), {}), working_tree)
+
+        scope = classifier.classify(working_tree.changed_lines("HEAD"))
+
+        assert scope.covers("a.py", 3)
+        assert not scope.covers("a.py", 1)
+        assert not scope.covers("a.py", 2)
