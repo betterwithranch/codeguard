@@ -51,11 +51,11 @@ class ClaudeJudge:
                     f"{self.executable} exited with {process.returncode}.\n"
                     f"stdout:\n{process.stdout}\nstderr:\n{process.stderr}"
                 )
-            result = ClaudeResult.from_stream(process.stdout)
+            result = ClaudeResult.from_stream(process.stdout, self.root)
             span.set_attributes(result.telemetry)
             if result.structured_output is None:
                 raise JudgeNoVerdict(f"{self.executable} returned no verdict:\n{process.stdout}")
-            return Judgement(result.structured_output, result.loaded_files(self.root))
+            return Judgement(result.structured_output, result.loaded_files)
 
     def _run(self, instructions: str, prompt: str) -> subprocess.CompletedProcess[str]:
         if self.deadline is None:

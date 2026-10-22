@@ -27,29 +27,6 @@ class UsageWindow(BaseModel):
     utilization: float
 
 
-class ToolUse(BaseModel):
-    model_config = ConfigDict(frozen=True)
-
-    name: str
-    input: dict[str, object]
-    result: object = None
-
-    def loaded_files(self, root: Path) -> list[str]:
-        if self.name == "Read":
-            path = self.input.get("file_path")
-            files = [path] if isinstance(path, str) else []
-        elif self.name in _SEARCHES and isinstance(self.result, dict):
-            searched = self.input.get("path")
-            files = [
-                *([searched] if isinstance(searched, str) and (root / searched).is_file() else []),
-                *_strings(self.result.get("filenames")),
-                *_files_in_lines(root, self.result.get("content")),
-            ]
-        else:
-            files = []
-        return [_relative(root, file) for file in files]
-
-
 class ClaudeResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -62,10 +39,10 @@ class ClaudeResult(BaseModel):
     model_usage: dict[str, ModelUsage] = Field(alias="modelUsage")
     usage_windows: dict[str, UsageWindow] = Field(alias="usageWindows")
     structured_output: Verdict | None = None
-    tool_uses: tuple[ToolUse, ...] = ()
+    loaded_files: tuple[str, ...] = ()
 
     @classmethod
-    def from_stream(cls, stream: str) -> Self:
+    def from_stream(cls, stream: str, root: Path) -> Self:
         messages = [json.loads(line) for line in stream.splitlines() if line.strip()]
         results = [message for message in messages if message["type"] == "result"]
         if not results:
@@ -82,24 +59,20 @@ class ClaudeResult(BaseModel):
             for content in _contents(message)
             if content.get("type") == "tool_result"
         }
-        tool_uses = [
-            {**content, "result": tool_results.get(content.get("id"))}
+        loaded_files = (
+            file
             for message in messages
             if message["type"] == "assistant"
             for content in _contents(message)
             if content.get("type") == "tool_use"
-        ]
+            for file in _loaded_files(root, content, tool_results.get(content.get("id")))
+        )
         return cls.model_validate(
             {
                 **results[-1],
                 "usageWindows": windows[-1] if windows else {},
-                "tool_uses": tool_uses,
+                "loaded_files": tuple(dict.fromkeys(loaded_files)),
             }
-        )
-
-    def loaded_files(self, root: Path) -> tuple[str, ...]:
-        return tuple(
-            dict.fromkeys(file for use in self.tool_uses for file in use.loaded_files(root))
         )
 
     @property
@@ -131,6 +104,25 @@ def _contents(message: dict[str, object]) -> list[dict[str, object]]:
     body = message.get("message")
     content = body.get("content") if isinstance(body, dict) else None
     return [part for part in content if isinstance(part, dict)] if isinstance(content, list) else []
+
+
+def _loaded_files(root: Path, call: dict[str, object], result: object) -> list[str]:
+    """The files a tool call loaded: the file it read, or the files its search showed."""
+    given = call.get("input")
+    arguments = given if isinstance(given, dict) else {}
+    if call.get("name") == "Read":
+        path = arguments.get("file_path")
+        files = [path] if isinstance(path, str) else []
+    elif call.get("name") in _SEARCHES and isinstance(result, dict):
+        searched = arguments.get("path")
+        files = [
+            *([searched] if isinstance(searched, str) and (root / searched).is_file() else []),
+            *_strings(result.get("filenames")),
+            *_files_in_lines(root, result.get("content")),
+        ]
+    else:
+        files = []
+    return [_relative(root, file) for file in files]
 
 
 def _strings(values: object) -> list[str]:
