@@ -397,6 +397,11 @@ class TestJudgeEvalRunner:
                 "cases: Value error, cases share a name: passes a string",
             ),
             ("declares-evaluators.yaml", "evaluators: Extra inputs are not permitted"),
+            (
+                "expects-uncertain.yaml",
+                "cases.0.expected_output: Value error, a case expects invalid, valid or "
+                "skipped; one the judge can't decide isn't clear enough for a rule eval",
+            ),
         ],
     )
     def test_invalid_eval_file_is_an_error(self, enum_rule, repo, rule_eval, error):
