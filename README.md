@@ -521,13 +521,16 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
 - If the review crashes or uv can't build codeguard's environment, you see why, and the
   stop goes through.
 
-The judge gets the code the change touched: each changed function, method or class, and
-each changed line outside them, with the file's line numbers and the changed lines
-marked. A new file is sent whole but for its blank lines outside a function or class;
-every file with `--all` is sent whole, all of it marked changed. The judge reads the rest
-of the file, or any other file in the repository, with its read-only tools.
+The judge gets the code the change touched: each changed function, method or class, each
+changed line outside them, and, for each of the rule's triggers, the whole of each node
+of that kind around a changed line, so the judge sees the code that made the rule apply.
+Lines carry the file's line numbers; added and changed lines are marked `+`, and the
+lines git's diff shows the change removed are marked `-`. A new file is sent whole but
+for its blank lines outside a function or class; every file with `--all` is sent whole,
+all of it marked changed. The judge reads the rest of the file, or any other file in the
+repository, with its read-only tools.
 
-A review reports only violations a changed line is part of, on that line. What the line
+A review reports only violations a changed or removed line is part of, on that line. What the line
 held before doesn't matter: editing a line that already broke a rule reports it, so code
 a change touches is left better than it was found. Untouched code isn't reported, even in
 the function or class around the change: adding a line to a method doesn't report the

@@ -135,7 +135,9 @@ class TestJudgeEvalRunner:
             JudgeRequest(
                 Skill(name="enum-usage", text=ENUM_SKILL),
                 "status.py",
-                "      5\tdef cancel_order():\n+     6\t    cancel(status='cancelled')\n",
+                "      5\tdef cancel_order():\n"
+                "-     6\t    cancel(status=Status.CANCELLED)\n"
+                "+     6\t    cancel(status='cancelled')\n",
             )
         ]
 

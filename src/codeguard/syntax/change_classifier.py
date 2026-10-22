@@ -25,13 +25,19 @@ class ChangeClassifier:
     def classify(self, scope: ChangedLines) -> ChangedLines:
         head = self.scanner.scan_files(self.working_tree.root, scope.files)
         base = self._base(scope)
-        return scope.with_kinds(
-            {
-                file: parsed.touched_kinds(scope.points(file), base.get(file))
-                for file, parsed in head.items()
-            }
-        ).with_judged_lines(
-            {file: parsed.judged_lines(scope.points(file)) for file, parsed in head.items()}
+        return (
+            scope.with_kinds(
+                {
+                    file: parsed.touched_kinds(scope.points(file), base.get(file))
+                    for file, parsed in head.items()
+                }
+            )
+            .with_judged_lines(
+                {file: parsed.judged_lines(scope.points(file)) for file, parsed in head.items()}
+            )
+            .with_kind_lines(
+                {file: parsed.kind_lines(scope.points(file)) for file, parsed in head.items()}
+            )
         )
 
     def _base(self, scope: ChangedLines) -> dict[str, ParsedFile]:

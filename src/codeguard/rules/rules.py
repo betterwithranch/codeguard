@@ -71,7 +71,7 @@ class Rules:
                     rule=binding.rule,
                     file=file,
                     cached=self.judges.cached(root, binding.model).has(
-                        JudgeRequest.of_change(binding.skill, root, file, classified)
+                        JudgeRequest.of_change(binding, root, file, classified)
                     ),
                     triggered=binding.is_triggered(classified, file),
                 )

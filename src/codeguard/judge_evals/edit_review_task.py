@@ -23,7 +23,7 @@ class EditReviewTask:
             ):
                 return EditReview(outcome=Outcome.SKIPPED)
             judge = self.judges(repo.root, self.binding.model)
-            request = JudgeRequest.of_change(self.binding.skill, repo.root, inputs.file, changed)
+            request = JudgeRequest.of_change(self.binding, repo.root, inputs.file, changed)
             verdict = judge.judge(request).verdict
             parsed = self.scanner.scan_files(repo.root, [inputs.file]).get(inputs.file)
         violations = tuple(

@@ -214,3 +214,17 @@ class TestChangeClassifier:
         assert scope.covers("a.py", 3)
         assert not scope.covers("a.py", 1)
         assert not scope.covers("a.py", 2)
+
+    def test_judged_lines_for_a_trigger_take_in_its_node_around_the_change(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "try:\n    import fast\nexcept ImportError:\n    fast = None\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("fast = None", "fast = False"))
+        working_tree = WorkingTree(git_repo.root)
+        classifier = ChangeClassifier(SyntaxScanner(AstGrep(), {}), working_tree)
+
+        scope = classifier.classify(working_tree.changed_lines("HEAD"))
+
+        assert scope.judged_lines("a.py") == {4}
+        assert scope.judged_lines("a.py", frozenset({ChangeKind.CONTROL_FLOW})) == {1, 2, 3, 4}

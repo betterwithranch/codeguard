@@ -11,11 +11,23 @@ _BLANK = " \t\r\f\v"
 
 
 @dataclass(frozen=True)
+class Removal:
+    """Rows a change removed, shown before the new line `before`; a violation in them is
+    reported on `line`."""
+
+    before: int
+    line: int
+    rows: tuple[str, ...]
+
+
+@dataclass(frozen=True)
 class ChangedLines:
     lines: Mapping[str, frozenset[int]]
     deletions: Mapping[str, frozenset[int]] = field(default_factory=dict)
     kinds: Mapping[str, frozenset[str]] = field(default_factory=dict)
     judged: Mapping[str, frozenset[int]] = field(default_factory=dict)
+    kind_lines: Mapping[str, Mapping[str, frozenset[int]]] = field(default_factory=dict)
+    removals: Mapping[str, tuple[Removal, ...]] = field(default_factory=dict)
     base: str | None = None
 
     @property
@@ -31,11 +43,21 @@ class ChangedLines:
     def with_judged_lines(self, judged: Mapping[str, frozenset[int]]) -> Self:
         return replace(self, judged=judged)
 
-    def judged_lines(self, file: str) -> frozenset[int] | None:
-        return self.judged.get(file, self.points(file))
+    def with_kind_lines(self, kind_lines: Mapping[str, Mapping[str, frozenset[int]]]) -> Self:
+        return replace(self, kind_lines=kind_lines)
 
-    def changed_points(self, file: str) -> frozenset[int] | None:
-        return self.points(file)
+    def judged_lines(
+        self, file: str, triggers: frozenset[str] = frozenset()
+    ) -> frozenset[int] | None:
+        spans = self.kind_lines.get(file, {})
+        triggered = (spans.get(kind, frozenset()) for kind in triggers)
+        return self.judged.get(file, self.points(file)).union(*triggered)
+
+    def added_lines(self, file: str) -> frozenset[int] | None:
+        return self.lines.get(file, frozenset())
+
+    def removals_in(self, file: str) -> tuple[Removal, ...]:
+        return self.removals.get(file, ())
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
@@ -60,11 +82,16 @@ class AllLines:
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return None
 
-    def judged_lines(self, file: str) -> frozenset[int] | None:
+    def judged_lines(
+        self, file: str, triggers: frozenset[str] = frozenset()
+    ) -> frozenset[int] | None:
         return None
 
-    def changed_points(self, file: str) -> frozenset[int] | None:
+    def added_lines(self, file: str) -> frozenset[int] | None:
         return None
+
+    def removals_in(self, file: str) -> tuple[Removal, ...]:
+        return ()
 
 
 @dataclass(frozen=True)
@@ -89,11 +116,13 @@ class WorkingTree:
             merge_base,
         )
         untracked = self._git_paths("ls-files", "--others", "--exclude-standard")
-        added, deletions = _changed_points(diff)
+        hunks = _hunks(diff)
+        added, deletions = _changed_points(hunks)
         lines = {**added, **{file: self._code_lines(file) for file in untracked}}
         return ChangedLines(
             lines={file: numbers for file, numbers in lines.items() if numbers},
             deletions={file: numbers for file, numbers in deletions.items() if numbers},
+            removals=_removals(hunks),
             base=merge_base,
         )
 
@@ -132,15 +161,25 @@ class WorkingTree:
         ).stdout
 
 
-def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
+def _changed_points(
+    hunks: Sequence["_Hunk"],
+) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
     added: dict[str, set[int]] = {}
     deletions: dict[str, set[int]] = {}
-    for hunk in _hunks(diff):
+    for hunk in hunks:
         added.setdefault(hunk.file, set()).update(hunk.points)
         deletions.setdefault(hunk.file, set())
-        if not hunk.points and hunk.removes_code:
-            deletions[hunk.file].add(max(hunk.start - 1 if hunk.added_rows else hunk.start, 1))
+        if not hunk.points and hunk.removed:
+            deletions[hunk.file].add(hunk.deletion_point)
     return _frozen(added), _frozen(deletions)
+
+
+def _removals(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Removal, ...]]:
+    removals: dict[str, list[Removal]] = {}
+    for hunk in hunks:
+        if hunk.removed:
+            removals.setdefault(hunk.file, []).append(hunk.removal)
+    return {file: tuple(found) for file, found in removals.items()}
 
 
 @dataclass
@@ -149,7 +188,18 @@ class _Hunk:
     start: int
     points: set[int] = field(default_factory=set)
     added_rows: int = 0
-    removes_code: bool = False
+    removed: list[str] = field(default_factory=list)
+
+    @property
+    def deletion_point(self) -> int:
+        return max(self.start - 1 if self.added_rows else self.start, 1)
+
+    @property
+    def removal(self) -> Removal:
+        # git numbers a hunk that only removes rows by the line before them.
+        before = self.start if self.added_rows else self.start + 1
+        line = min(self.points) if self.points else self.deletion_point
+        return Removal(before, line, tuple(self.removed))
 
     def add(self, text: str) -> None:
         # A blank line changes nothing in any language, so only lines holding code count.
@@ -158,7 +208,8 @@ class _Hunk:
         self.added_rows += 1
 
     def remove(self, text: str) -> None:
-        self.removes_code = self.removes_code or _holds_code(text)
+        if _holds_code(text):
+            self.removed.append(text)
 
 
 def _hunks(diff: str) -> list[_Hunk]:

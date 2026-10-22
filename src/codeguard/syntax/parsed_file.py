@@ -23,6 +23,13 @@ class ParsedFile:
         scopes = self.of_kind(NodeKind.SCOPE)
         return frozenset(line for point in points for line in _innermost_scope_lines(scopes, point))
 
+    def kind_lines(self, points: frozenset[int]) -> dict[str, frozenset[int]]:
+        spans: dict[str, set[int]] = {}
+        for node in self.nodes:
+            if not isinstance(node.kind, NodeKind) and any(node.spans(point) for point in points):
+                spans.setdefault(node.kind, set()).update(range(node.start_line, node.end_line + 1))
+        return {kind: frozenset(lines) for kind, lines in spans.items()}
+
     def touched_kinds(self, points: frozenset[int], base: Self | None) -> frozenset[str]:
         kinds = {kind for point in points for kind in self._kinds_spanning(point)}
         if points:

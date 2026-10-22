@@ -1,6 +1,6 @@
 from git_repo import GitRepo
 
-from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
+from codeguard.working_tree import AllLines, ChangedLines, Removal, WorkingTree
 
 
 class TestWorkingTree:
@@ -51,7 +51,11 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({2, 4})}, base=git_repo.head())
+        assert changed == ChangedLines(
+            {"a.py": frozenset({2, 4})},
+            removals={"a.py": (Removal(before=2, line=2, rows=("b = 1",)),)},
+            base=git_repo.head(),
+        )
 
     def test_added_blank_lines_are_not_changed_lines(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -87,7 +91,10 @@ class TestWorkingTree:
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
         assert changed == ChangedLines(
-            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+            lines={},
+            deletions={"a.py": frozenset({1})},
+            removals={"a.py": (Removal(before=2, line=1, rows=("b = 1",)),)},
+            base=git_repo.head(),
         )
 
     def test_removed_blank_lines_are_not_a_deletion_point(self, tmp_path):
@@ -109,7 +116,10 @@ class TestWorkingTree:
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
         assert changed == ChangedLines(
-            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+            lines={},
+            deletions={"a.py": frozenset({1})},
+            removals={"a.py": (Removal(before=1, line=1, rows=("import os",)),)},
+            base=git_repo.head(),
         )
 
     def test_only_a_newline_ends_a_changed_line(self, tmp_path):
@@ -145,7 +155,11 @@ class TestWorkingTree:
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"x y.py": frozenset({1})}, base=git_repo.head())
+        assert changed == ChangedLines(
+            {"x y.py": frozenset({1})},
+            removals={"x y.py": (Removal(before=1, line=1, rows=("a = 1",)),)},
+            base=git_repo.head(),
+        )
 
     def test_untracked_file_has_every_line_with_code_changed(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
@@ -164,7 +178,10 @@ class TestWorkingTree:
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
         assert changed == ChangedLines(
-            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+            lines={},
+            deletions={"a.py": frozenset({1})},
+            removals={"a.py": (Removal(before=2, line=1, rows=("b = 1",)),)},
+            base=git_repo.head(),
         )
 
     def test_base_contents_are_the_files_that_exist_in_the_base(self, tmp_path):
@@ -194,6 +211,16 @@ class TestWorkingTree:
 
 
 class TestChangedLines:
+    def test_judged_lines_take_in_the_lines_of_the_triggers_kinds(self):
+        changed = (
+            ChangedLines({"a.py": frozenset({3})})
+            .with_judged_lines({"a.py": frozenset({2, 3})})
+            .with_kind_lines({"a.py": {"control-flow": frozenset({1, 2, 3, 4})}})
+        )
+
+        assert changed.judged_lines("a.py", frozenset({"control-flow"})) == {1, 2, 3, 4}
+        assert changed.judged_lines("a.py", frozenset({"call"})) == {2, 3}
+
     def test_unclassified_file_judges_its_changed_points(self):
         changed = ChangedLines({"a.py": frozenset({3})}, deletions={"a.py": frozenset({7})})
 
