@@ -326,7 +326,16 @@ class TestClaudeJudge:
             tool_use("Grep", "toolu_grep", pattern="DISCOUNT", path="orders"),
             {
                 "type": "user",
-                "message": {"content": "Error: Path does not exist: orders"},
+                "message": {
+                    "content": [
+                        {
+                            "type": "tool_result",
+                            "tool_use_id": "toolu_grep",
+                            "content": "<tool_use_error>No such path</tool_use_error>",
+                            "is_error": True,
+                        }
+                    ]
+                },
                 "tool_use_result": "Error: Path does not exist: orders",
             },
         )
