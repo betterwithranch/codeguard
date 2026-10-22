@@ -57,7 +57,10 @@ def codeguard() -> list[str]:
     if installed is not None:
         return [installed]
     source = os.environ.get(SOURCE_ENV_VAR, RELEASE)
-    return ["uv", "tool", "run", "--quiet", "--from", source, "codeguard"]
+    # uv caches a local checkout's build by its pyproject.toml, so edits to the code would
+    # not run; an editable install runs the checkout as it is now.
+    editable = ["--with-editable", source] if os.path.isdir(source) else []
+    return ["uv", "tool", "run", "--quiet", "--from", source, *editable, "codeguard"]
 
 
 @dataclass(frozen=True)

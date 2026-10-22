@@ -12,6 +12,9 @@ PROJECT = Path(__file__).resolve().parent.parent
 PLUGIN = PROJECT / "plugins" / "codeguard"
 SCRIPTS = sysconfig.get_path("scripts")
 UV = Path(shutil.which("uv") or "uv")
+UV_CACHE_OUTSIDE_TEST_HOME = subprocess.run(
+    [UV, "cache", "dir"], capture_output=True, text=True, check=True
+).stdout.strip()
 CLAUDE_CODE_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" claude-code'
 CODEX_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" codex'
 REQUIRED_FIXES = (
@@ -254,7 +257,7 @@ class TestStopHook:
             repo,
             stop(),
             path=[uv_only, "/usr/bin", "/bin"],
-            env={"CODEGUARD_SOURCE": str(PROJECT)},
+            env={"CODEGUARD_SOURCE": str(PROJECT), "UV_CACHE_DIR": UV_CACHE_OUTSIDE_TEST_HOME},
         )
 
         assert response == {
@@ -274,6 +277,7 @@ class TestStopHook:
 
         assert list(response) == ["systemMessage"]
         assert response["systemMessage"].startswith(f"{NOT_REVIEWED}\n")
+        assert str(tmp_path / "missing") in response["systemMessage"]
 
     def test_claude_code_and_codex_get_the_same_response(self, repo):
         repo.write("a.py", "print(1)\nbreakpoint()\n")
