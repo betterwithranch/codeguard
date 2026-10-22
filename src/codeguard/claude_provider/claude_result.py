@@ -3,7 +3,14 @@ from collections.abc import Iterator
 from pathlib import Path
 from typing import Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    ValidationError,
+    ValidatorFunctionWrapHandler,
+    field_validator,
+)
 
 from codeguard.review import JudgeNoVerdict, Verdict
 
@@ -27,6 +34,83 @@ class UsageWindow(BaseModel):
     utilization: float
 
 
+class _RateLimitInfo(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    unified_windows: dict[str, UsageWindow] = Field(default_factory=dict, alias="unifiedWindows")
+
+
+class _SearchResult(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    filenames: tuple[str, ...] = ()
+    content: str | None = None
+
+
+class _ToolInput(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    file_path: str | None = None
+    path: str | None = None
+
+
+class _ContentPart(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    type: str
+    id: str | None = None
+    name: str | None = None
+    input: _ToolInput = _ToolInput()
+    tool_use_id: str | None = None
+
+    def loaded_files(self, root: Path, result: _SearchResult | None) -> list[str]:
+        """The files this tool call loaded: the file it read, or the files its search showed."""
+        if self.name == "Read":
+            files = [] if self.input.file_path is None else [self.input.file_path]
+        elif self.name in _SEARCHES and result is not None:
+            searched = self.input.path
+            files = [
+                *([searched] if searched is not None and (root / searched).is_file() else []),
+                *result.filenames,
+                *_files_in_lines(root, result.content),
+            ]
+        else:
+            files = []
+        return [_relative(root, file) for file in files]
+
+
+class _MessageBody(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
+    content: tuple[_ContentPart, ...] = ()
+
+    @field_validator("content", mode="before")
+    @classmethod
+    def _text_has_no_parts(cls, content: object) -> object:
+        return content if isinstance(content, list) else ()
+
+
+class _StreamMessage(BaseModel):
+    """One line of claude's stream-json output, holding only the fields the judge reads."""
+
+    model_config = ConfigDict(frozen=True)
+
+    type: str
+    message: _MessageBody = _MessageBody()
+    tool_use_result: _SearchResult | None = None
+    rate_limit_info: _RateLimitInfo | None = None
+
+    @field_validator("tool_use_result", mode="wrap")
+    @classmethod
+    def _only_search_results(
+        cls, result: object, handler: ValidatorFunctionWrapHandler
+    ) -> _SearchResult | None:
+        try:
+            return handler(result)
+        except ValidationError:
+            return None
+
+
 class ClaudeResult(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -43,29 +127,32 @@ class ClaudeResult(BaseModel):
 
     @classmethod
     def from_stream(cls, stream: str, root: Path) -> Self:
-        messages = [json.loads(line) for line in stream.splitlines() if line.strip()]
-        results = [message for message in messages if message["type"] == "result"]
+        lines = [json.loads(line) for line in stream.splitlines() if line.strip()]
+        messages = [_StreamMessage.model_validate(line) for line in lines]
+        results = [
+            line for line, message in zip(lines, messages, strict=True) if message.type == "result"
+        ]
         if not results:
             raise JudgeNoVerdict(f"claude printed no result:\n{stream}")
         windows = [
-            message["rate_limit_info"].get("unifiedWindows", {})
+            message.rate_limit_info.unified_windows
             for message in messages
-            if message["type"] == "rate_limit_event"
+            if message.rate_limit_info is not None
         ]
         tool_results = {
-            content["tool_use_id"]: message.get("tool_use_result")
+            part.tool_use_id: message.tool_use_result
             for message in messages
-            if message["type"] == "user"
-            for content in _contents(message)
-            if content.get("type") == "tool_result"
+            if message.type == "user"
+            for part in message.message.content
+            if part.type == "tool_result"
         }
         loaded_files = (
             file
             for message in messages
-            if message["type"] == "assistant"
-            for content in _contents(message)
-            if content.get("type") == "tool_use"
-            for file in _loaded_files(root, content, tool_results.get(content.get("id")))
+            if message.type == "assistant"
+            for part in message.message.content
+            if part.type == "tool_use"
+            for file in part.loaded_files(root, tool_results.get(part.id))
         )
         return cls.model_validate(
             {
@@ -100,37 +187,8 @@ class ClaudeResult(BaseModel):
         }
 
 
-def _contents(message: dict[str, object]) -> list[dict[str, object]]:
-    body = message.get("message")
-    content = body.get("content") if isinstance(body, dict) else None
-    return [part for part in content if isinstance(part, dict)] if isinstance(content, list) else []
-
-
-def _loaded_files(root: Path, call: dict[str, object], result: object) -> list[str]:
-    """The files a tool call loaded: the file it read, or the files its search showed."""
-    given = call.get("input")
-    arguments = given if isinstance(given, dict) else {}
-    if call.get("name") == "Read":
-        path = arguments.get("file_path")
-        files = [path] if isinstance(path, str) else []
-    elif call.get("name") in _SEARCHES and isinstance(result, dict):
-        searched = arguments.get("path")
-        files = [
-            *([searched] if isinstance(searched, str) and (root / searched).is_file() else []),
-            *_strings(result.get("filenames")),
-            *_files_in_lines(root, result.get("content")),
-        ]
-    else:
-        files = []
-    return [_relative(root, file) for file in files]
-
-
-def _strings(values: object) -> list[str]:
-    return [value for value in values if isinstance(value, str)] if isinstance(values, list) else []
-
-
-def _files_in_lines(root: Path, content: object) -> Iterator[str]:
-    if not isinstance(content, str):
+def _files_in_lines(root: Path, content: str | None) -> Iterator[str]:
+    if content is None:
         return
     for line in content.splitlines():
         prefixes = (line[:end] for end, char in enumerate(line) if char in ":-")
