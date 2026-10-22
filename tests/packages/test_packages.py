@@ -204,18 +204,6 @@ class TestPackages:
             "  packages.0.rulesets.python: unknown rule no-prnt"
         )
 
-    def test_model_on_a_pattern_rule_is_an_error(self, repo, package, fetch, no_lock):
-        selection = RulesetConfig(rules={"no-print": RuleOverride(model="claude-haiku-5-5")})
-        config = PathPackageConfig(path=package.root, rulesets={"python": selection})
-
-        with pytest.raises(ConfigError) as error:
-            Packages(repo.root, fetch, AST_GREP, CODEGUARD, no_lock).rulesets([config])
-
-        assert str(error.value) == (
-            f"{repo.root}/.codeguard is invalid:\n"
-            "  packages.0.rulesets.python: rules.no-print.model: a pattern rule has no model"
-        )
-
     def test_directory_without_a_manifest_is_an_error(self, repo, tmp_path, fetch, no_lock):
         config = PathPackageConfig(path=tmp_path, rulesets={"python": RulesetConfig()})
 

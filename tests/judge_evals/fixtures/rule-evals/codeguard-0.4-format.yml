@@ -1,0 +1,4 @@
+id: enum-usage
+invalid:
+  - after: |
+      ship(status='shipped')

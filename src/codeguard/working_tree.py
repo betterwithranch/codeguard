@@ -6,6 +6,8 @@ from pathlib import Path
 from typing import Self
 
 _HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
+# ASCII whitespace, the same set git treats as blank.
+_BLANK = " \t\r\f\v"
 
 
 @dataclass(frozen=True)
@@ -73,7 +75,7 @@ class WorkingTree:
 
     def changed_lines(self, base: str) -> ChangedLines:
         merge_base = self._git("merge-base", base, "HEAD").strip()
-        diff = self._git(
+        diff = self._git_text(
             "-c",
             "core.quotePath=false",
             "diff",
@@ -86,7 +88,7 @@ class WorkingTree:
         )
         untracked = self._git_paths("ls-files", "--others", "--exclude-standard")
         added, deletions = _changed_points(diff)
-        lines = {**added, **{file: self._every_line(file) for file in untracked}}
+        lines = {**added, **{file: self._code_lines(file) for file in untracked}}
         return ChangedLines(
             lines={file: numbers for file, numbers in lines.items() if numbers},
             deletions={file: numbers for file, numbers in deletions.items() if numbers},
@@ -108,15 +110,19 @@ class WorkingTree:
     def git_path(self, name: str) -> Path:
         return self.root / self._git("rev-parse", "--git-path", name).strip()
 
-    def _every_line(self, file: str) -> frozenset[int]:
-        count = len((self.root / file).read_bytes().splitlines())
-        return frozenset(range(1, count + 1))
+    def _code_lines(self, file: str) -> frozenset[int]:
+        lines = _rows((self.root / file).read_bytes())
+        return frozenset(number for number, text in enumerate(lines, 1) if _holds_code(text))
 
     def _git_paths(self, command: str, *args: str) -> set[str]:
         return set(self._git(command, "-z", *args).split("\0")) - {""}
 
     def _git(self, *args: str) -> str:
         return _run_git(self.root, *args)
+
+    def _git_text(self, *args: str) -> str:
+        # Decoded without newline translation, so only "\n" ends a row, as it does for git.
+        return self._git_bytes(*args).decode(errors="surrogateescape")
 
     def _git_bytes(self, *args: str) -> bytes:
         return subprocess.run(
@@ -127,23 +133,59 @@ class WorkingTree:
 def _changed_points(diff: str) -> tuple[dict[str, frozenset[int]], dict[str, frozenset[int]]]:
     added: dict[str, set[int]] = {}
     deletions: dict[str, set[int]] = {}
+    for hunk in _hunks(diff):
+        added.setdefault(hunk.file, set()).update(hunk.points)
+        deletions.setdefault(hunk.file, set())
+        if not hunk.points and hunk.removes_code:
+            deletions[hunk.file].add(max(hunk.start - 1 if hunk.added_rows else hunk.start, 1))
+    return _frozen(added), _frozen(deletions)
+
+
+@dataclass
+class _Hunk:
+    file: str
+    start: int
+    points: set[int] = field(default_factory=set)
+    added_rows: int = 0
+    removes_code: bool = False
+
+    def add(self, text: str) -> None:
+        # A blank line changes nothing in any language, so only lines holding code count.
+        if _holds_code(text):
+            self.points.add(self.start + self.added_rows)
+        self.added_rows += 1
+
+    def remove(self, text: str) -> None:
+        self.removes_code = self.removes_code or _holds_code(text)
+
+
+def _hunks(diff: str) -> list[_Hunk]:
+    hunks: list[_Hunk] = []
     file = ""
     in_header = False
-    for row in diff.splitlines():
+    for row in _rows(diff):
         if row.startswith("diff --git "):
             in_header = True
         elif in_header and row.startswith("+++ "):
-            file = row.removeprefix("+++ ")
-            added[file] = set()
-            deletions[file] = set()
+            # git ends the name with a tab when it holds a space.
+            file = row.removeprefix("+++ ").removesuffix("\t")
         elif match := _HUNK.match(row):
             in_header = False
-            start, count = int(match[1]), int(match[2] or 1)
-            if count:
-                added[file].update(range(start, start + count))
-            else:
-                deletions[file].add(max(start, 1))
-    return _frozen(added), _frozen(deletions)
+            hunks.append(_Hunk(file, int(match[1])))
+        elif not in_header and hunks and row.startswith("-"):
+            hunks[-1].remove(row[1:])
+        elif not in_header and hunks and row.startswith("+"):
+            hunks[-1].add(row[1:])
+    return hunks
+
+
+def _rows(text: str | bytes) -> list[str]:
+    decoded = text if isinstance(text, str) else text.decode(errors="surrogateescape")
+    return decoded.split("\n")
+
+
+def _holds_code(text: str) -> bool:
+    return bool(text.strip(_BLANK))
 
 
 def _frozen(points: dict[str, set[int]]) -> dict[str, frozenset[int]]:

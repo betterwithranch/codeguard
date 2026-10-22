@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.4.0"
+version = "0.5.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }
@@ -13,6 +13,7 @@ dependencies = [
     "logfire>=5.2.0",
     "packaging>=26.3",
     "pydantic>=2.13.5",
+    "pydantic-evals~=2.57.0",
     "pyyaml>=6.0.3",
 ]
 
@@ -31,7 +32,6 @@ addopts = ["--import-mode=importlib"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
-extend-exclude = ["evals/fixtures"]
 
 [tool.ruff.lint]
 select = [
@@ -59,8 +59,7 @@ extend-immutable-calls = ["codeguard.config.RulesetConfig"]
 "typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."
 
 [tool.basedpyright]
-include = ["src", "evals"]
-exclude = ["evals/fixtures"]
+include = ["src"]
 typeCheckingMode = "standard"
 reportExplicitAny = "error"
 reportMissingTypeArgument = "error"
@@ -69,6 +68,7 @@ reportUnnecessaryComparison = "error"
 
 [tool.importlinter]
 root_packages = ["codeguard"]
+include_external_packages = true
 
 [[tool.importlinter.contracts]]
 name = "codeguard packages depend one way"
@@ -87,12 +87,32 @@ layers = [
     "config | working_tree | file_lock",
 ]
 
+[[tool.importlinter.contracts]]
+name = "only judge_evals runs pydantic-evals"
+type = "forbidden"
+source_modules = [
+    "codeguard.cli",
+    "codeguard.rules",
+    "codeguard.claude_provider",
+    "codeguard.gemini_provider",
+    "codeguard.pattern_rules",
+    "codeguard.rule_tests",
+    "codeguard.review",
+    "codeguard.packages",
+    "codeguard.syntax",
+    "codeguard.ast_grep",
+    "codeguard.config",
+    "codeguard.working_tree",
+    "codeguard.file_lock",
+]
+forbidden_modules = ["pydantic_evals"]
+allow_indirect_imports = true
+
 [dependency-groups]
 dev = [
     "basedpyright>=1.40.2",
     "factory-boy>=3.3.3",
     "import-linter>=2.15",
-    "pydantic-evals>=2.57.0",
     "pytest>=9.1.1",
     "pytest-factoryboy>=2.8.1",
     "ruff>=0.17.1",

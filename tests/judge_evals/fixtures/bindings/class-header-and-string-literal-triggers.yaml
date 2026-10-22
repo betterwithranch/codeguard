@@ -1,0 +1,3 @@
+skill: .codeguard/skills/enum-usage
+paths: ["**/*.py"]
+triggers: [class-header, string-literal]

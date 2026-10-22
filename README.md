@@ -103,6 +103,23 @@ jobs:
 `v0` moves to each 0.x release, so the plugin and the action update together with no
 project edits. A release that breaks the rule format starts `v1`.
 
+### Run formatters first
+
+Format code before codeguard reviews it. A formatter that runs after the review changes
+code that was never reviewed, and it changes the file, so the next review can't reuse
+the cached verdict: it calls the model again and can reach a different verdict.
+
+- In Claude Code, format each file when it's edited, in a `PostToolUse` hook on `Edit`
+  and `Write`, not in a `Stop` hook: hooks on the same event run in parallel, so a
+  formatter there can run after codeguard's review.
+- In CI, run the format check before the codeguard step.
+- Format an unformatted codebase in a commit of its own. Reformatted lines are changed
+  lines, so formatting inside a feature change sends every one of them to the judge.
+
+codeguard ignores added and removed blank lines, which change nothing in any language.
+Other whitespace can change meaning, such as indentation in Python, so codeguard
+leaves it to the formatter.
+
 ### Rules
 
 A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
@@ -138,8 +155,9 @@ packages:
 - Only the listed rulesets run.
 - `include` lists the only rules that run, pattern and judged; rules the package adds
   later stay off. `exclude` turns rules off. Set one or the other.
-- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`, and a judge
-  rule's `model`. `exclude_paths: []` brings back the files its binding leaves out.
+- `rules.<id>` overrides a rule's `paths`, `exclude_paths` or `severity`.
+  `exclude_paths: []` brings back the files its binding leaves out. A judge rule's
+  model can't be overridden: its evals pass on the model its binding names.
 - `severity` on the ruleset sets every rule in it, including rules the package adds
   later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
   so `severity: warning` trials a package: its findings print without blocking. A
@@ -204,27 +222,18 @@ python/
   gates/<id>.yml             # ast-grep rules that gate judge rules
   rule-tests/<id>-test.yml   # tests for both, with __snapshots__/
   skills/<id>/SKILL.md       # judge rules
-  bindings/<id>.yaml         # skill and default paths
-  rule-evals/<id>-eval.yml   # judge rule evals
+  bindings/<id>.yaml         # a rule's paths; a judge rule's triggers and model
+  rule-evals/<id>.yaml       # rule evals: test cases for judge rules
 ```
 
-Pattern rule tests in `rule-tests/pattern/`, the old layout, still run. codeguard
-rejects anything else in a ruleset directory, and in `.codeguard/` anything
-else but `config.yaml` and `lock.yaml`, so a rule moves between a project and a package unchanged.
+A binding or rule eval may end in `.yaml` or `.yml`. Pattern rule tests in
+`rule-tests/pattern/`, the old layout, still run. codeguard rejects anything else in a
+ruleset directory, and in `.codeguard/` anything else but `config.yaml` and
+`lock.yaml`, so a rule moves between a project and a package unchanged.
 
-A binding's `skill` path starts at the package root (`skill: python/skills/<id>`). A
-judge rule's id is its skill's directory name. Rule and gate ids are unique within a
-ruleset.
+### Bindings
 
-A binding applies a rule to the files that match `paths` and none of `exclude_paths`. A
-judge rule's binding names its `skill`:
-
-```yaml
-skill: python/skills/names-match-behavior
-paths: ["**/*.py"]
-exclude_paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
-```
-
+A binding applies a rule to the files that match `paths` and none of `exclude_paths`.
 A pattern rule's binding names its `rule`. A pattern rule without one runs on every file
 in its language:
 
@@ -235,18 +244,52 @@ paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
 
 Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a project can
 change it. The exception is a file name that is the convention itself, like
-`all-only-in-init` skipping `__init__.py`.
+`all-only-in-init` skipping `__init__.py`. Rule and gate ids are unique within a
+ruleset.
 
-A judge rule's binding lists `triggers`: the code its violations need. A binding without
-`triggers` gets `[any]`, so packages written before triggers still load. The judge
-skips a changed file whose changed lines fall inside none of it. Gate on where a
-violation appears, not on the rule's topic:
+### Judge rules
+
+A judge rule is three files, all named by its id:
+
+```
+python/
+  skills/<id>/SKILL.md       # the convention the judge checks
+  bindings/<id>.yaml         # where it runs, when it runs, and the model that judges it
+  rule-evals/<id>.yaml       # the rule eval: edits and the review each should get
+```
+
+The rule eval is what makes a rule trustworthy. It shows the rule flags the edits it
+should and passes the ones it should, on the model that will judge it in reviews. That
+model is the binding's, and nothing overrides it: a project can't switch a rule to a
+model its rule eval never passed on. To move a rule to another model, change its
+binding and pass its rule eval again.
+
+#### The binding
+
+A judge rule's binding names its `skill`, from the package root, and where and when it
+runs:
 
 ```yaml
 skill: python/skills/mock-only-at-boundary
 paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
 triggers: [mock-use]
 ```
+
+`provider` and `model` are optional. A binding that leaves them out is judged with
+`claude-sonnet-5-5` through the `claude` CLI. Set them only to judge the rule with
+something else:
+
+```yaml
+provider: gemini                  # default: claude-cli
+model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
+```
+
+A judge rule's id is its skill's directory name.
+
+`triggers` names the code the rule's violations need. The judge skips a changed file
+whose changed lines fall inside none of it, so a narrow trigger saves judge calls. Gate
+on where a violation appears, not on the rule's topic. A binding without `triggers`
+gets `[any]`, so packages written before triggers still load.
 
 A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
 `<ruleset>/gates/<id>.yml`, tested like a pattern rule by `rule-tests/<id>-test.yml`
@@ -261,10 +304,12 @@ rule:
 ```
 
 A file touches a trigger when a changed line falls inside a node it matches. A new file
-touches every trigger it matches. A rule that needs every change says `triggers: [any]`;
-`codeguard test` warns on `any`, `code`, `function-body` and `function-signature`. The
-built-in kinds are `comment`, `docstring`, `import`,
-`function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
+touches every trigger it matches. A blank line is never a changed line, in any language:
+adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic,
+so the blank line before a new method doesn't make its class part of the change. A rule
+that needs every change says `triggers: [any]`; `codeguard test` warns on `any`, `code`,
+`function-body` and `function-signature`. The built-in kinds are `comment`, `docstring`,
+`import`, `function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
 `class-header`, `class-attribute`, `module-statement`, `annotation`, `call`,
 `control-flow`, `return-yield`, `collection-literal`, `string-literal`,
 `number-literal`, `attribute-access`, `subscript`, `conditional-expression`,
@@ -273,65 +318,131 @@ built-in kinds are `comment`, `docstring`, `import`,
 that is not only a comment or docstring) and `any`. The syntax table in
 `src/codeguard/syntax/languages/` defines each kind as an ast-grep rule.
 
-A judge rule's eval, `rule-evals/<id>-eval.yml`, lists edits. Each is a `before` (left
-out for a new file), an `after` and a `file` (default `module.py`), which must match the
-binding's paths:
+#### The rule eval
+
+`rule-evals/<id>.yaml` (or `<id>.yml`, but not both) lists cases. Each case is an edit and
+the review it should get:
+
+- `name`: what the edit does, unique in the file.
+- `inputs`: the edit. `before` is the file before it (leave it out for a new file),
+  `after` is the file after it, and `file` is its path (default `module.py`), which
+  must match the binding's paths. `unchanged` maps the path of each other file the
+  edit needs, such as a package's `__init__.py`, to its text; the judge can read them,
+  but they aren't part of the change, and can't include `file`. Every path is relative
+  to the repository root, with no `..` or `./`, and outside `.git`.
+- `expected_output`: the review's `outcome`, one of:
+  - `invalid`: the triggers fire and the judge reports a violation;
+  - `valid`: the triggers fire and the judge reports none;
+  - `uncertain`: the judge reports a violation below the confidence threshold;
+  - `skipped`: the triggers don't fire, so the judge never sees the edit.
 
 ```yaml
-id: one-concept-per-module
-invalid:                         # the triggers fire and the judge reports a violation
-  - before: |
-      class Order:
-          pass
-    after: |
-      class Order:
-          pass
+cases:
+  - name: adds a second class
+    inputs:
+      before: |
+        class Order:
+            pass
+      after: |
+        class Order:
+            pass
 
 
-      class Invoice:
-          pass
-valid:                           # the judge reports no violation
-  - after: |
-      class Order:
-          pass
-skipped:                         # the triggers don't fire, so the judge never sees it
-  - before: |
-      class Order:
-          total = 1
-    after: |
-      class Order:
-          total = 2
+        class Invoice:
+            pass
+    expected_output:
+      outcome: invalid
+  - name: defines one class
+    inputs:
+      after: |
+        class Order:
+            pass
+    expected_output:
+      outcome: valid
+  - name: changes an attribute
+    inputs:
+      before: |
+        class Order:
+            total = 1
+      after: |
+        class Order:
+            total = 2
+    expected_output:
+      outcome: skipped
 ```
 
-`codeguard test` checks the triggers on every case, with no model call. It commits each
-`before` to a scratch repository, writes each `after`, and classifies the diff the way a
-review does. An `invalid` case fails when the triggers miss the change, and a `skipped`
-case fails when they fire. The message lists the kinds the change touches. Narrow a gate
-until a `skipped` case passes, and keep every `invalid` case passing.
+`expected_output` can also list the `violations`, each with a `line`, `confidence` and
+`message`, and optionally the `kinds` on its line; a violation without `kinds` isn't
+checked on them.
+A case that leaves them out checks only the outcome. Besides `cases`, the file may set
+`name`, the rule id, which defaults to the file name; a rule has one eval file. The file
+holds nothing else: codeguard decides how a case is judged and checked, so every rule is
+held to the same bar.
 
-`codeguard eval` judges the file after each `invalid` and `valid` edit with the
-binding's model. An `invalid` case needs a violation at the confidence threshold, on a
-line with one of the rule's `triggers`; the message lists the kinds on that line. A
-`valid` case needs no violation. Verdicts are cached like reviews, so only changed cases
-and skills call Claude again.
+Every judge rule needs at least one `invalid` case. Give it `valid` cases for the
+nearby code it must not flag, and `skipped` cases for the changes its triggers should
+ignore.
 
-`codeguard eval` also fails a judge rule with no eval that has an `invalid` case.
+#### Test a judge rule
 
-A case whose judge call fails, such as a quota error that outlasts the provider's retries,
-fails too, so a passing eval means every case was judged. The other cases still run.
+1. `codeguard test` checks the triggers on every case, with no model call. It commits
+   each `before` and `unchanged` file to a scratch repository, writes each `after`, and
+   classifies the diff the way a review does. Fix the triggers until it passes.
+2. `codeguard eval` reviews every case with the binding's model, the way
+   `codeguard review` would. Fix the skill, or the case, until it passes.
+3. `codeguard eval --repeat 3` reviews each case three times, so an unstable verdict
+   shows up as a failing run, named like `adds a second class [2/3]`. A rule is ready
+   when every case passes all three runs.
 
-`codeguard eval --repeat 3` judges each case three times. Runs after the first skip the
-cache, so an unstable verdict shows up as a failing run.
+Both take a package directory, so `codeguard eval path/to/package` evaluates a package
+outside the current repository. An eval tests the rule, not the code, so it never uses
+the verdict cache: every run calls the model. With a Logfire token each rule's run is
+also in Logfire.
+
+#### What makes a case fail
+
+`codeguard test` fails a case when:
+
+- its `file` is outside the binding's paths;
+- its edit changes no code;
+- it expects `invalid`, `uncertain` or `valid` but the triggers miss the change, since a
+  review would never judge it. The message lists the kinds the change touches;
+- it expects `skipped` but the triggers fire. Narrow the gate until it passes, and keep
+  every other case passing.
+
+`codeguard eval` fails a case when:
+
+- the review's outcome, or its violations when the case lists them, differ from
+  `expected_output`. The message shows what the judge reported;
+- it expects `invalid` and the judge flags only lines outside the triggers. Reviews
+  would miss that violation, so the message lists the kinds on those lines to add to
+  `triggers`;
+- the judge call fails, such as a quota error that outlasts the provider's retries. The
+  other cases still run, so a passing eval means every case was judged.
+
+`codeguard eval` also fails a judge rule with no `invalid` case, and a rule eval whose
+id matches no judge rule. `codeguard eval` prints a table per rule, then one line per
+failure.
+
+#### Where an eval's inputs come from
+
+| Input | From |
+|---|---|
+| The edits, the files around them and their expected reviews | the rule eval, `rule-evals/<id>.yaml` |
+| The convention | the skill |
+| Paths, triggers, provider and model | the binding |
+| The confidence threshold, and the Google Cloud project, location and calls at once | the caller's `.codeguard/config.yaml` |
+| The judge prompt and how each case is checked | codeguard |
 
 ### Which test to write
 
 A project tests the rules in its `.codeguard/` the same way a package does.
 
-| You add or change | Write | It checks | Run | Calls Claude |
+| You add or change | Write | It checks | Run | Calls the model |
 |---|---|---|---|---|
 | A pattern rule or gate | `rule-tests/<id>-test.yml` | the rule matches its `invalid` cases and none of its `valid` ones | `codeguard test` | no |
-| A judge rule's skill or `triggers` | `rule-evals/<id>-eval.yml` | the triggers fire on each `invalid` edit and on no `skipped` edit | `codeguard test` | no |
-| | | the judge finds a violation after each `invalid` edit and none after a `valid` one | `codeguard eval` | yes |
+| A judge rule's skill, binding or `triggers` | `rule-evals/<id>.yaml` | the triggers fire on each edit but the `skipped` ones | `codeguard test` | no |
+| | | each edit gets its expected review, 3 runs of 3 | `codeguard eval --repeat 3` | yes |
 
 Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
 releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
@@ -373,8 +484,9 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   goes through.
 
 The judge gets the code the change touched: each changed function, method or class, and
-each changed line outside them, with the file's line numbers. A new file, and every file
-with `--all`, is sent whole. The judge reads the rest of the file, or any other file in
+each changed line outside them, with the file's line numbers. A new file is sent whole
+but for its blank lines outside a function or class; every file with `--all` is sent
+whole. The judge reads the rest of the file, or any other file in
 the repository, with its read-only tools. A verdict is cached until the changed code, the
 rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
 is one the judge read, or one its searches returned: a file a grep matched or a glob
@@ -404,23 +516,27 @@ limit in `.codeguard/config.yaml`:
 review_time_limit_minutes: 10
 ```
 
-Each binding judges with `claude-sonnet-5-5` unless it sets `model`:
+Each judge rule is judged with its binding's provider and model, the same ones its rule
+eval passed on; see [Judge rules](#judge-rules). A binding that sets neither is judged
+with `claude-sonnet-5-5` through the `claude` CLI.
+
+### Judge with Gemini on Google Cloud
+
+By default the judge runs `claude -p`. A judge rule whose binding sets
+`provider: gemini` is judged with Gemini on Google Cloud (Vertex AI) instead, in reviews
+and in its rule eval, so its rule eval has to pass on Gemini:
 
 ```yaml
 skill: .claude/skills/responsibility-placement
 paths: ["app/**/*.py"]
-model: claude-haiku-5-5
+provider: gemini
+model: gemini-3.1-pro-preview
 ```
 
-### Judge with Gemini on Google Cloud
-
-By default the judge runs `claude -p`. To judge with Gemini on Google Cloud (Vertex AI)
-instead, set `judge` in `.codeguard/config.yaml`:
+`judge` in `.codeguard/config.yaml` sets where Gemini runs and how many calls run at once:
 
 ```yaml
 judge:
-  provider: gemini                # default: claude-cli
-  model: gemini-3.1-pro-preview   # replaces every rule's model
   project: my-project             # default: GOOGLE_CLOUD_PROJECT
   location: global                # default: GOOGLE_CLOUD_LOCATION
   calls_at_once: 2                # default: 2 for gemini, one per CPU for claude-cli
@@ -432,11 +548,12 @@ takes the same verdict schema as Claude. Verdicts are cached per provider and mo
 so switching providers doesn't reuse Claude's verdicts.
 
 Gemini's pay-as-you-go capacity is shared and limited by tokens per minute, so the
-gemini provider makes 2 calls at once. A call that Gemini turns away with a 429 is
-retried for about 15 seconds, and then the rule is reported as not judged.
+gemini provider makes 2 calls at once. Each provider has its own limit, so Claude and
+Gemini rules in one review don't wait on each other. A call that Gemini turns away with
+a 429 is retried for about 15 seconds, and then the rule is reported as not judged.
 
-Use `gemini-3.1-pro-preview`, the Gemini model the judge evals were run against.
-Flash was unreliable in testing.
+Use `gemini-3.1-pro-preview`, the Gemini model codeguard was tested with. Flash was
+unreliable in testing.
 
 codeguard signs in with Application Default Credentials. Set it up once per project:
 
@@ -509,13 +626,14 @@ Tests:
 uv run pytest
 ```
 
-Judge evals run the real `claude` CLI against fixture skills and cost tokens. Run them
-after changing the judge's instructions, request, model or tools:
+`evals/judge` is a rule package whose rule evals check the judge itself, on the model
+each of its bindings names. They run the real `claude` CLI and cost tokens. CI runs
+them; run them after changing the judge's instructions, request or tools:
 
 ```sh
-uv run evals/judge_eval.py              # each case once
-uv run evals/judge_eval.py --repeat 5   # pass rate over 5 runs per case
-uv run evals/judge_eval.py --gemini gemini-3.1-pro-preview  # a Gemini model instead of Claude
+codeguard test evals/judge     # its triggers; no model call
+codeguard eval evals/judge
+codeguard eval evals/judge --repeat 5
 ```
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits

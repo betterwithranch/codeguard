@@ -1,6 +1,7 @@
 import json
 import os
 import subprocess
+import sys
 import sysconfig
 from importlib import metadata
 from pathlib import Path
@@ -706,15 +707,30 @@ class TestReviewWithVersionedPackages:
 
 
 class TestEvalCommand:
+    def test_other_commands_do_not_load_pydantic_evals(self):
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import sys, codeguard.cli; print('pydantic_evals' in sys.modules)",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+
+        assert result.stdout == "False\n"
+
+    @pytest.mark.parametrize("from_package", [True, False], ids=["in-package", "package-path"])
     def test_invalid_case_below_the_confidence_threshold_is_reported_and_exits_1(
-        self, tmp_path, tmp_path_factory
+        self, tmp_path, tmp_path_factory, from_package
     ):
         package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
         write_package(package)
         package.write(
-            "python/rule-evals/responsibility-placement-eval.yml",
-            "id: responsibility-placement\ninvalid:\n  - file: invoice.py\n    after: |\n"
-            "      x = 1\n",
+            "python/rule-evals/responsibility-placement.yaml",
+            "cases:\n  - name: assigns in the invoice\n    inputs:\n      file: invoice.py\n"
+            "      after: |\n        x = 1\n    expected_output:\n      outcome: invalid\n",
         )
         violation = {"file": "invoice.py", "line": 1, "message": "Move it."}
         bin_dir = tmp_path / "bin"
@@ -724,19 +740,41 @@ class TestEvalCommand:
         claude.chmod(0o755)
 
         result = subprocess.run(
-            [CODEGUARD, "eval"],
-            cwd=package.root,
+            [CODEGUARD, "eval"] if from_package else [CODEGUARD, "eval", str(package.root)],
+            cwd=package.root if from_package else tmp_path,
             capture_output=True,
             text=True,
             env={**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"},
         )
 
-        assert result.stderr == (
-            "python/rule-evals/responsibility-placement-eval.yml invalid case 1: "
-            "responsibility-placement expected a violation with confidence 0.90, got:\n"
-            "  line 1 (0.40): Move it.\n"
+        assert "Evaluation Summary: responsibility-placement on claude-sonnet-5-5" in result.stdout
+        assert result.stdout.endswith(
+            "responsibility-placement assigns in the invoice: expected outcome invalid, got "
+            "outcome uncertain\n  line 1 (0.40): Move it.\n"
         )
         assert result.returncode == 1
+
+    def test_each_run_calls_the_model_again(self, tmp_path, tmp_path_factory):
+        package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
+        write_package(package)
+        package.write(
+            "python/rule-evals/responsibility-placement.yaml",
+            "cases:\n  - name: assigns in the invoice\n    inputs:\n      file: invoice.py\n"
+            "      after: |\n        x = 1\n    expected_output:\n      outcome: invalid\n",
+        )
+        bin_dir = tmp_path / "bin"
+        bin_dir.mkdir()
+        calls = tmp_path / "calls"
+        claude = bin_dir / "claude"
+        violation = {"file": "invoice.py", "line": 1, "message": "Move it.", "confidence": 0.95}
+        claude.write_text(fake_claude_script([violation], before=f"echo called >> {calls}\n"))
+        claude.chmod(0o755)
+        env = {**os.environ, "HOME": str(tmp_path), "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+
+        for _ in range(2):
+            subprocess.run([CODEGUARD, "eval"], cwd=package.root, check=True, env=env)
+
+        assert calls.read_text() == "called\ncalled\n"
 
 
 class TestTestCommand:
@@ -787,7 +825,10 @@ class TestTestCommand:
             [CODEGUARD, "test"], cwd=package.root, capture_output=True, text=True
         )
 
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
+            "warning: responsibility-placement: broad triggers any; "
+            "a gate on the code its violations need skips more files\n"
+        )
         assert result.returncode == 0
 
     def test_passing_rule_tests_exit_0(self, repo):
@@ -809,7 +850,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
+        assert result.stdout.endswith(
             ".codeguard/rule-tests/__snapshots__/no-print-snapshot.yml: stale snapshot "
             "entries for no-print. Run codeguard test --update-all.\n"
         )
@@ -830,8 +871,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
-        assert result.stderr == (
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
             f"warning: triggers not checked: {repo.root}/.codeguard is invalid:\n"
             "  bindings.broken.yaml.skill: Field required\n"
             "  bindings.broken.yaml.paths: Field required\n"
@@ -849,7 +889,7 @@ class TestTestCommand:
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
             "warning: placement: broad triggers any; "
             "a gate on the code its violations need skips more files\n"
         )
@@ -880,18 +920,18 @@ class TestTestCommand:
             'skill: .claude/skills/placement\npaths: ["**/*.py"]\ntriggers: [comment]\n',
         )
         repo.write(
-            ".codeguard/rule-evals/placement-eval.yml",
-            "id: placement\ninvalid:\n  - after: |\n      count = 1\n",
+            ".codeguard/rule-evals/placement.yaml",
+            "cases:\n  - name: assigns a count\n    inputs:\n      after: |\n        count = 1\n"
+            "    expected_output:\n      outcome: invalid\n",
         )
 
         result = subprocess.run([CODEGUARD, "test"], cwd=repo.root, capture_output=True, text=True)
 
-        assert result.stderr == (
-            ".codeguard/rule-evals/placement-eval.yml invalid case 1: placement "
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + (
+            ".codeguard/rule-evals/placement.yaml assigns a count: placement "
             "triggers comment miss the change, which touches code, module-statement, "
             "number-literal\n"
         )
-        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT
         assert result.returncode == 1
 
     def test_failing_rule_tests_exit_1(self, repo):

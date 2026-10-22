@@ -6,10 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Self
 
-from codeguard.ast_grep import AstGrep
-from codeguard.config import Ruleset
-from codeguard.rule_tests.judge_eval import EditCase
-from codeguard.syntax import ChangeClassifier
+from codeguard.rule_tests.rule_eval import EditCase
+from codeguard.syntax import ChangeClassifier, SyntaxScanner
 from codeguard.working_tree import ChangedLines, WorkingTree
 
 
@@ -31,10 +29,9 @@ class EditRepo:
             repo._write({path: edit.after for path, edit in edits.items()})
             yield repo
 
-    def classified(self, ast_grep: AstGrep, ruleset: Ruleset) -> ChangedLines:
+    def classified(self, scanner: SyntaxScanner) -> ChangedLines:
         working_tree = WorkingTree(self.root)
-        classifier = ChangeClassifier.for_rulesets(ast_grep, [ruleset], working_tree)
-        return classifier.classify(working_tree.changed_lines("HEAD"))
+        return ChangeClassifier(scanner, working_tree).classify(working_tree.changed_lines("HEAD"))
 
     def _write(self, files: Mapping[str, str]) -> None:
         for path, text in files.items():

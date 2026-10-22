@@ -10,7 +10,7 @@ import logfire
 from codeguard.config import ConfigLoader
 from codeguard.file_lock import exclusive_lock
 from codeguard.packages import PackageUpdate
-from codeguard.rules import Rules
+from codeguard.rules import Rules, check_installed_evals
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
 _EXIT_PASSED = 0
@@ -69,6 +69,12 @@ def main() -> int:
 
     test_command = commands.add_parser("test", help="Run the project's rule tests.")
     test_command.add_argument(
+        "package",
+        nargs="?",
+        type=Path,
+        help="Test the rule package in this directory. Default: the current repository.",
+    )
+    test_command.add_argument(
         "--update-all",
         "-U",
         action="store_true",
@@ -80,10 +86,16 @@ def main() -> int:
         "eval", help="Check that each judge rule flags its invalid cases and passes its valid ones."
     )
     eval_command.add_argument(
+        "package",
+        nargs="?",
+        type=Path,
+        help="Evaluate the rule package in this directory. Default: the current repository.",
+    )
+    eval_command.add_argument(
         "--repeat",
         type=_positive_int,
         default=1,
-        help="Judge each case this many times. Runs after the first skip the cache. Default: 1.",
+        help="Judge each case this many times. Default: 1.",
     )
     eval_command.set_defaults(run=_eval)
 
@@ -171,16 +183,24 @@ def _scope(working_tree: WorkingTree, args: argparse.Namespace) -> ChangedLines 
 
 
 def _test(args: argparse.Namespace) -> int:
-    tests = Rules(WorkingTree.containing(Path.cwd())).tests
+    tests = Rules(_working_tree(args.package)).tests
     result = tests.update_snapshots() if args.update_all else tests.run()
-    result.write(sys.stderr)
+    result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
 
 
 def _eval(args: argparse.Namespace) -> int:
-    result = Rules(WorkingTree.containing(Path.cwd())).evaluate(args.repeat)
-    result.write(sys.stderr)
+    check_installed_evals()
+    # pydantic-evals takes about 0.4s to import, so only codeguard eval loads it.
+    from codeguard.rules.rule_evaluation import RuleEvaluation  # noqa: PLC0415
+
+    result = RuleEvaluation(Rules(_working_tree(args.package))).run(args.repeat)
+    result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
+
+
+def _working_tree(package: Path | None) -> WorkingTree:
+    return WorkingTree(package.resolve()) if package else WorkingTree.containing(Path.cwd())
 
 
 def _config(args: argparse.Namespace) -> int:

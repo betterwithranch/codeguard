@@ -18,6 +18,7 @@ from codeguard.config.ruleset_config import RulesetConfig
 from codeguard.config.ruleset_structure import RulesetStructure
 
 _PATTERN_BINDING_KEY = "rule"
+_BINDING_FILE_SUFFIXES = (".yaml", ".yml")
 
 
 @dataclass(frozen=True)
@@ -44,7 +45,8 @@ class RulesetLoader:
         bindings_dir = self.root / BINDINGS_DIR
         documents = {
             str(path.relative_to(bindings_dir)): yaml.safe_load(path.read_text())
-            for path in sorted(bindings_dir.rglob("*.yaml"))
+            for path in sorted(bindings_dir.rglob("*"))
+            if path.suffix in _BINDING_FILE_SUFFIXES
         }
         pattern_documents = {
             file: document

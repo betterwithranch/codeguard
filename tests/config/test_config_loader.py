@@ -8,6 +8,7 @@ from codeguard.config import (
     ConfigError,
     ConfigLoader,
     JudgeConfig,
+    JudgeModel,
     JudgeProvider,
     PathPackageConfig,
     PatternBindingConfig,
@@ -65,50 +66,24 @@ class TestConfigLoader:
 
         assert ConfigLoader(repo.root).load().review_time_limit_minutes == 20
 
-    def test_judge_defaults_to_the_claude_cli(self, repo):
-        assert ConfigLoader(repo.root).load().judge == JudgeConfig(
-            provider=JudgeProvider.CLAUDE_CLI
-        )
-
-    def test_loads_a_gemini_judge(self, repo):
-        repo.write(
-            CONFIG,
-            "judge:\n  provider: gemini\n  model: gemini-3.1-pro-preview\n"
-            "  project: my-project\n  location: global\n",
-        )
+    def test_loads_the_gemini_project_and_location(self, repo):
+        repo.write(CONFIG, "judge:\n  project: my-project\n  location: global\n")
 
         assert ConfigLoader(repo.root).load().judge == JudgeConfig(
-            provider=JudgeProvider.GEMINI,
-            model="gemini-3.1-pro-preview",
-            project="my-project",
-            location="global",
+            project="my-project", location="global"
         )
 
-    def test_gemini_judge_without_a_model_is_an_error(self, repo):
-        repo.write(CONFIG, "judge:\n  provider: gemini\n")
+    def test_judge_model_is_an_error(self, repo):
+        repo.write(CONFIG, "judge:\n  provider: gemini\n  model: gemini-3.1-pro-preview\n")
 
         with pytest.raises(ConfigError) as error:
             ConfigLoader(repo.root).load()
 
         assert str(error.value) == (
             f"{repo.root}/.codeguard is invalid:\n"
-            "  judge: Value error, the gemini provider needs a model, "
-            "such as gemini-3.1-pro-preview"
+            "  judge: Value error, judge.provider: a rule's binding names its provider; "
+            "judge.model: a rule's binding names its model"
         )
-
-    def test_claude_judge_with_a_project_is_an_error(self, repo):
-        repo.write(CONFIG, "judge:\n  project: my-project\n")
-
-        with pytest.raises(ConfigError, match="project and location apply to the gemini"):
-            ConfigLoader(repo.root).load()
-
-    def test_judge_model_replaces_the_rule_model(self):
-        judge = JudgeConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
-
-        assert judge.model_for("claude-sonnet-5-5") == "gemini-3.1-pro-preview"
-
-    def test_rule_model_stays_without_a_judge_model(self):
-        assert JudgeConfig().model_for("claude-haiku-5-5") == "claude-haiku-5-5"
 
     def test_loads_a_path_package(self, repo):
         repo.write("rules/codeguard-package.yaml", "name: example\nrulesets: [python]\n")
@@ -180,6 +155,32 @@ class TestRulesetLoader:
 
         assert ruleset.bindings.root["placement.yaml"].model == "claude-sonnet-5-5"
 
+    def test_binding_file_may_end_in_yml(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        repo.write(
+            ".codeguard/bindings/placement.yml",
+            'skill: .claude/skills/responsibility-placement\npaths: ["**"]\ntriggers: [any]\n',
+        )
+
+        ruleset = RulesetLoader.local(repo.root).load()
+
+        assert ruleset.judged_rule_ids() == {"responsibility-placement"}
+
+    def test_skill_bound_in_a_yaml_and_a_yml_file_is_an_error(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        binding = 'skill: .claude/skills/responsibility-placement\npaths: ["**"]\ntriggers: [any]\n'
+        repo.write(BINDING, binding)
+        repo.write(".codeguard/bindings/placement.yml", binding)
+
+        with pytest.raises(ConfigError) as error:
+            RulesetLoader.local(repo.root).load()
+
+        assert str(error.value) == (
+            f"{repo.root}/.codeguard is invalid:\n"
+            f"  bindings: Value error, skill {repo.root}/.claude/skills/responsibility-placement "
+            "is bound more than once: placement.yaml, placement.yml"
+        )
+
     def test_loads_the_binding_model(self, repo, make_skill):
         repo.write(SKILL, make_skill().text)
         repo.write(
@@ -191,6 +192,20 @@ class TestRulesetLoader:
         ruleset = RulesetLoader.local(repo.root).load()
 
         assert ruleset.bindings.root["placement.yaml"].model == "claude-haiku-5-5"
+
+    def test_loads_the_binding_provider(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        repo.write(
+            BINDING,
+            'skill: .claude/skills/responsibility-placement\npaths: ["**"]\ntriggers: [any]\n'
+            "provider: gemini\nmodel: gemini-3.1-pro-preview\n",
+        )
+
+        ruleset = RulesetLoader.local(repo.root).load()
+
+        assert ruleset.bindings.root["placement.yaml"].judge_model == JudgeModel(
+            provider=JudgeProvider.GEMINI, name="gemini-3.1-pro-preview"
+        )
 
     def test_loads_the_binding_triggers(self, repo, make_skill):
         repo.write(SKILL, make_skill().text)

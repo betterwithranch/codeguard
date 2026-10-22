@@ -6,29 +6,33 @@ from codeguard.ast_grep import AstGrep
 from codeguard.config import ChangeKind, ConfigError, Ruleset, RulesetLoader
 from codeguard.review import Binding, Bindings
 from codeguard.rule_tests.edit_repo import EditRepo
-from codeguard.rule_tests.judge_eval import JudgeEval, NumberedCase, Outcome
+from codeguard.rule_tests.rule_eval import Outcome, RuleEvalCase, rule_evals
 from codeguard.rule_tests.rule_test_result import RuleTestResult
+from codeguard.syntax import SyntaxScanner
 from codeguard.working_tree import ChangedLines
 
 
 @dataclass(frozen=True)
 class _CaseCheck:
     binding: Binding
-    case: NumberedCase
+    case: RuleEvalCase
     name: str
-    path: str
+    prefix: str
+
+    @property
+    def path(self) -> str:
+        return f"{self.prefix}{self.case.inputs.file}"
 
     def problem(self, changed: ChangedLines) -> str | None:
         rule = self.binding.skill.name
-        file = self.case.edit.file
+        file = self.case.inputs.file
+        expected = self.case.expected_output
         if not self.binding.files([file]):
             return f"{self.name}: {file} is outside the {rule} paths"
         kinds = changed.kinds_of(self.path)
         if kinds is None:
             return f"{self.name}: the case changes no code in {file}"
-        if self.case.outcome == Outcome.VALID:
-            return None
-        should_fire = self.case.outcome == Outcome.INVALID
+        should_fire = expected.outcome is not Outcome.SKIPPED
         if self.binding.is_triggered(changed, self.path) == should_fire:
             return None
         touched = ", ".join(sorted(kinds - {ChangeKind.ANY}))
@@ -44,7 +48,7 @@ class TriggerTestRunner:
     ast_grep: AstGrep = AstGrep()
 
     def run(self) -> RuleTestResult:
-        evals = JudgeEval.in_ruleset(self.ruleset.root)
+        evals = rule_evals(self.ruleset.root)
         if not evals:
             return RuleTestResult()
         try:
@@ -52,22 +56,22 @@ class TriggerTestRunner:
         except ConfigError as error:
             return RuleTestResult(warnings=(f"trigger tests not run: {error}",))
         bindings = {binding.skill.name: binding for binding in Bindings.from_rulesets([ruleset])}
-        named = [(file.relative_to(self.root), judge_eval) for file, judge_eval in evals]
+        named = [(file.relative_to(self.root), dataset) for file, dataset in evals]
         unknown = [
-            f"{where}: no judge rule {judge_eval.id}"
-            for where, judge_eval in named
-            if judge_eval.id not in bindings
+            f"{where}: no judge rule {dataset.name}"
+            for where, dataset in named
+            if dataset.name not in bindings
         ]
         checks = [
             _CaseCheck(
-                bindings[judge_eval.id],
+                bindings[dataset.name],
                 case,
                 name=f"{where} {case.name}",
-                path=f"{judge_eval.id}/{case.directory}/{case.edit.file}",
+                prefix=f"{dataset.name}/{number}/",
             )
-            for where, judge_eval in named
-            if judge_eval.id in bindings
-            for case in judge_eval.cases()
+            for where, dataset in named
+            if dataset.name in bindings
+            for number, case in enumerate(dataset.cases, start=1)
         ]
         changed = _classify_changes(checks, self.ast_grep, ruleset)
         failed = [problem for check in checks if (problem := check.problem(changed))]
@@ -77,5 +81,10 @@ class TriggerTestRunner:
 def _classify_changes(
     checks: Sequence[_CaseCheck], ast_grep: AstGrep, ruleset: Ruleset
 ) -> ChangedLines:
-    with EditRepo.of({check.path: check.case.edit for check in checks}) as repo:
-        return repo.classified(ast_grep, ruleset)
+    edits = {
+        path: edit
+        for check in checks
+        for path, edit in check.case.inputs.edits(check.prefix).items()
+    }
+    with EditRepo.of(edits) as repo:
+        return repo.classified(SyntaxScanner.for_rulesets(ast_grep, [ruleset]))

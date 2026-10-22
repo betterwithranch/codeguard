@@ -1,0 +1,61 @@
+cases:
+  - name: imports a module of a package whose root exports the name
+    inputs:
+      file: reports/summary.py
+      after: |
+        from ledger.entry import Entry
+
+
+        def summarize(amounts):
+            return Entry(amount=sum(amounts))
+      unchanged:
+        ledger/__init__.py: |
+          from ledger.entry import Entry
+
+          __all__ = ["Entry"]
+        ledger/entry.py: |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class Entry:
+              amount: int
+        reports/__init__.py: ''
+    expected_output:
+      outcome: invalid
+  - name: imports a module because the package root imports this one
+    inputs:
+      file: statements/summary.py
+      after: |
+        from billing.invoice_total import InvoiceTotal
+
+
+        def summarize(amounts):
+            return InvoiceTotal(amount=sum(amounts))
+      unchanged:
+        billing/__init__.py: |
+          from billing.invoice_total import InvoiceTotal
+          from statements.summary import summarize
+
+          __all__ = ["InvoiceTotal", "summarize"]
+        billing/invoice_total.py: |
+          from dataclasses import dataclass
+
+
+          @dataclass(frozen=True)
+          class InvoiceTotal:
+              amount: int
+        statements/__init__.py: ''
+    expected_output:
+      outcome: valid
+  - name: changes a function body, with no import
+    inputs:
+      file: reports/totals.py
+      before: |
+        def total(amounts):
+            return sum(amounts)
+      after: |
+        def total(amounts):
+            return sum(amounts, start=0)
+    expected_output:
+      outcome: skipped

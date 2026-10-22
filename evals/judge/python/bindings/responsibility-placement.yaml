@@ -1,0 +1,3 @@
+skill: python/skills/responsibility-placement
+paths: ["**/*.py"]
+triggers: [attribute-access]

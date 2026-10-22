@@ -1,0 +1,3 @@
+skill: python/skills/package-public-interface
+paths: ["**/*.py"]
+triggers: [import]

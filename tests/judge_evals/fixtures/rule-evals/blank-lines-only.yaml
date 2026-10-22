@@ -1,0 +1,10 @@
+cases:
+  - name: adds blank lines
+    inputs:
+      before: |
+        ship(status='shipped')
+      after: |
+        ship(status='shipped')
+
+
+    expected_output: {outcome: skipped}

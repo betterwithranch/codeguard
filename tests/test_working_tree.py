@@ -53,13 +53,107 @@ class TestWorkingTree:
 
         assert changed == ChangedLines({"a.py": frozenset({2, 4})}, base=git_repo.head())
 
-    def test_untracked_file_has_every_line_changed(self, tmp_path):
+    def test_added_blank_lines_are_not_changed_lines(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
-        git_repo.write("a.py", "a = 1\nb = 1\n")
+        git_repo.write("a.py", "class A:\n    x = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "class A:\n    x = 1\n\n    def y(self):\n        pass\n")
 
         changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
 
-        assert changed == ChangedLines({"a.py": frozenset({1, 2})}, base=git_repo.head())
+        assert changed == ChangedLines({"a.py": frozenset({4, 5})}, base=git_repo.head())
+
+    def test_change_of_only_blank_lines_changes_no_file(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n\nb = 1\n")
+        git_repo.write("b.py", "a = 1\nb = 1\n")
+        git_repo.commit("Add a and b")
+        git_repo.write("a.py", "a = 1\n\n\n  \nb = 1\n")
+        git_repo.write("b.py", "a = 1\n\nb = 1\n")
+        git_repo.write("c.py", "\n\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines({}, base=git_repo.head())
+
+    def test_code_replaced_by_blank_lines_is_a_deletion_point_after_the_line_before_it(
+        self, tmp_path
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\nb = 1\nc = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 1\n\nc = 1\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines(
+            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+        )
+
+    def test_removed_blank_lines_are_not_a_deletion_point(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n\n\nb = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 1\n\nb = 1\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines({}, base=git_repo.head())
+
+    def test_code_replaced_by_a_blank_first_line_is_a_deletion_point_on_line_1(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "import os\nb = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "\nb = 1\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines(
+            lines={}, deletions={"a.py": frozenset({1})}, base=git_repo.head()
+        )
+
+    def test_only_a_newline_ends_a_changed_line(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 1\n\x0cdef f():\n    s = 'p\u2028+q\r+r'\n    return 2\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines({"a.py": frozenset({2, 3, 4})}, base=git_repo.head())
+
+    def test_line_of_non_ascii_space_is_a_changed_line_in_tracked_and_untracked_files(
+        self, tmp_path
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "a = 1\n\u00a0\n")
+        git_repo.write("b.py", "\u00a0\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines(
+            {"a.py": frozenset({2}), "b.py": frozenset({1})}, base=git_repo.head()
+        )
+
+    def test_changed_file_whose_name_holds_a_space_keeps_its_name(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("x y.py", "a = 1\n")
+        git_repo.commit("Add x y")
+        git_repo.write("x y.py", "a = 2\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines({"x y.py": frozenset({1})}, base=git_repo.head())
+
+    def test_untracked_file_has_every_line_with_code_changed(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n\nb = 1\n")
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed == ChangedLines({"a.py": frozenset({1, 3})}, base=git_repo.head())
 
     def test_removed_lines_are_a_deletion_point_after_the_line_before_them(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
