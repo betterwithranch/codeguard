@@ -16,7 +16,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.py\" claude-code"
+            "command": "CODEGUARD=\"$CLAUDE_PROJECT_DIR/.venv/bin/codeguard\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/hooks/stop.py\" claude-code"
           }
         ]
       }
@@ -26,7 +26,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "PATH=\"$CLAUDE_PROJECT_DIR/.venv/bin:$PATH\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/plugins/codeguard/hooks/stop.py\" claude-code"
+            "command": "CODEGUARD=\"$CLAUDE_PROJECT_DIR/.venv/bin/codeguard\" uv run --quiet --script \"$CLAUDE_PROJECT_DIR/hooks/stop.py\" claude-code"
           }
         ]
       }

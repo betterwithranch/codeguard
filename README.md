@@ -41,9 +41,8 @@ List the plugin in the project's `.agents/plugins/marketplace.json`:
     {
       "name": "codeguard",
       "source": {
-        "source": "git-subdir",
+        "source": "url",
         "url": "https://github.com/betterwithranch/codeguard.git",
-        "path": "plugins/codeguard",
         "ref": "v0"
       }
     }
@@ -458,12 +457,10 @@ an example.
 
 ## Setup
 
-Once the project has codeguard, everyone working in it runs the installer, then starts
-a new agent session. Rerun it to upgrade.
-
-```sh
-curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh
-```
+The plugin is codeguard: it ships the CLI and runs it with
+[uv](https://docs.astral.sh/uv/getting-started/installation/), so uv is all anyone
+working in the project installs. The first review after an install or upgrade takes a
+little longer while uv builds codeguard's environment in the plugin's data directory.
 
 In Claude Code, install the plugin. Project settings enable it but don't install it.
 
@@ -471,14 +468,27 @@ In Claude Code, install the plugin. Project settings enable it but don't install
 claude plugin install codeguard@codeguard --scope project
 ```
 
-In Codex, trust codeguard's hooks in `/hooks`.
+In Claude Code, the plugin also puts `codeguard` on the PATH of the commands Claude
+runs, for skills such as writing a rule.
+
+In Codex, trust codeguard's hooks in `/hooks`. Codex doesn't give plugins a command, so
+writing rules there needs the CLI on its own.
+
+### The CLI on its own
+
+To run codeguard from a terminal, or to write rules in Codex, install the CLI with uv.
+It doesn't need the plugin, and the plugin doesn't need it.
+
+```sh
+uv tool install git+https://github.com/betterwithranch/codeguard@v0
+```
 
 ### Upgrade
 
 Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
 A commit on `main` reaches no one until it is released. After a release:
 
-- Rerun the installer to upgrade the CLI.
+- Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 - Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
   ```sh
   claude plugin marketplace update codeguard
@@ -495,9 +505,8 @@ When an agent or subagent stops, the hook runs `codeguard review` in its working
 directory: the uncommitted and untracked files, whoever changed them and however. Start
 the session in the repository's directory and make changes from there. Claude Code reads a
 project's hooks only from the directory a session starts in, and a cloud session over several
-repositories starts above them, where no repository's hooks run. It runs
-the `codeguard` the installer put on your PATH, the same one you run from the command
-line, through `uv`. Claude Code and Codex get the same behaviour.
+repositories starts above them, where no repository's hooks run. It runs the codeguard
+the plugin ships, not one on your PATH. Claude Code and Codex get the same behaviour.
 
 - An error blocks the stop, and only errors reach the agent. It blocks every time the
   agent stops until the errors are fixed. When the agent can't fix one, interrupt it
@@ -506,8 +515,8 @@ line, through `uv`. Claude Code and Codex get the same behaviour.
   threshold, and rules the judge couldn't check (a failed `claude` call or the time
   limit). The hook passes `--judge-errors-as-warnings`, since the agent can't fix those;
   CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
-- If the review crashes or `codeguard` isn't on your PATH, you see why, and the stop
-  goes through.
+- If the review crashes or uv can't build codeguard's environment, you see why, and the
+  stop goes through.
 
 The judge gets the code the change touched: each changed function, method or class, and
 each changed line outside them, with the file's line numbers. A new file is sent whole
@@ -684,6 +693,9 @@ Point a project's hooks at this clone.
   ```
   Python edits apply on the next hook run. Edits to `hooks.json` or `plugin.json`
   need `/reload-plugins`.
+
+  This clone's own `.claude/settings.json` runs its hooks with `.venv/bin/codeguard`, the
+  build `uv sync` keeps current. `CODEGUARD=<path>` makes the hook run any other build.
 - Codex:
   ```sh
   codex plugin marketplace add /path/to/codeguard
@@ -701,15 +713,14 @@ version). Engineers get only released versions; see [Upgrade](#upgrade).
    change or in a PR of its own:
    - `version` in `pyproject.toml`, which rule packages' `codeguard` ranges are checked
      against;
-   - `version` in `plugins/codeguard/.claude-plugin/plugin.json` and
-     `plugins/codeguard/.codex-plugin/plugin.json`. Claude Code installs a plugin
-     update only when this changes, so a release with the old version reaches no one.
+   - `version` in `.claude-plugin/plugin.json` and `.codex-plugin/plugin.json`.
+     Claude Code installs a plugin update only when this changes, so a release with
+     the old version reaches no one.
 
    CI fails a PR whose three versions differ.
 2. Validate:
    ```sh
    claude plugin validate .
-   claude plugin validate plugins/codeguard
    ```
 3. Once it is merged, tag the merge commit and push the tag:
    ```sh

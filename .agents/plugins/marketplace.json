@@ -8,7 +8,7 @@
       "name": "codeguard",
       "source": {
         "source": "local",
-        "path": "./plugins/codeguard"
+        "path": "./"
       }
     }
   ]
