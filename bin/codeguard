@@ -1,0 +1,9 @@
+#!/bin/sh
+# Run the codeguard this plugin ships, in an environment uv keeps in the plugin's data
+# directory. Hooks get that directory from the host; the Bash tool doesn't, so commands
+# Claude runs use one under the user's cache.
+set -eu
+root="$(cd "$(dirname "$0")/.." && pwd)"
+data="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/codeguard}"
+unset VIRTUAL_ENV
+UV_PROJECT_ENVIRONMENT="$data/venv" exec uv run --quiet --frozen --no-dev --project "$root" codeguard "$@"

@@ -10,17 +10,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - name: Check the plugin versions match the tag
-        shell: bash
-        run: |
-          version="${GITHUB_REF_NAME#v}"
-          for manifest in plugins/codeguard/.claude-plugin/plugin.json plugins/codeguard/.codex-plugin/plugin.json; do
-            manifest_version="$(jq -r .version "$manifest")"
-            if [ "$manifest_version" != "$version" ]; then
-              echo "::error file=$manifest::version is $manifest_version, but the tag is $GITHUB_REF_NAME"
-              exit 1
-            fi
-          done
+      - name: Check the versions match the tag
+        run: .github/scripts/check-versions.sh "${GITHUB_REF_NAME#v}"
       - name: Move the major tag to this release
         shell: bash
         run: |

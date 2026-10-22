@@ -33,7 +33,7 @@ rule:
           - has: { field: body, stopBy: end, pattern: abstract = True }
 ```
 
-### `.codeguard/rule-tests/pattern/models-inherit-base-model-test.yml`
+### `.codeguard/rule-tests/models-inherit-base-model-test.yml`
 
 ```yaml
 id: models-inherit-base-model
@@ -82,7 +82,7 @@ rule:
     - pattern: $PROMISE.catch($$$ARGS)
 ```
 
-### `.codeguard/rule-tests/pattern/await-promises-test.yml`
+### `.codeguard/rule-tests/await-promises-test.yml`
 
 ```yaml
 id: await-promises
@@ -139,7 +139,7 @@ rule:
         - has: { field: name, kind: setter }
 ```
 
-### `.codeguard/rule-tests/pattern/ivars-written-in-initialize-test.yml`
+### `.codeguard/rule-tests/ivars-written-in-initialize-test.yml`
 
 ```yaml
 id: ivars-written-in-initialize

@@ -6,21 +6,23 @@
 
 Usage: uv run --script stop.py <host>
 
+Runs the codeguard this plugin ships, `bin/codeguard`. `CODEGUARD=<path>` runs another
+build instead, such as a checkout's `.venv/bin/codeguard`.
+
 Blocking diagnostics go to the agent in `reason`; everything else, codeguard's own
 failures included, goes to the user in `systemMessage`. Always exits 0 with one JSON
 object, which both hosts read the same way.
 """
 
 import json
-import shutil
+import os
 import subprocess
 import sys
 import textwrap
 from dataclasses import dataclass
+from pathlib import Path
 
-INSTALL = (
-    "curl -LsSf https://raw.githubusercontent.com/betterwithranch/codeguard/v0/install.sh | sh"
-)
+BUNDLED = Path(__file__).resolve().parent.parent / "bin" / "codeguard"
 NOT_REVIEWED = "codeguard review failed, so these changes were not reviewed."
 REQUIRED_FIXES = (
     "These errors are required fixes, not suggestions. Fix the code. If the fix needs a "
@@ -35,18 +37,16 @@ def main() -> None:
 
 
 def response(host: str) -> dict[str, str]:
-    codeguard = shutil.which("codeguard")
-    if codeguard is None:
-        return {
-            "systemMessage": "codeguard is not on PATH, so these changes were not reviewed. "
-            f"Install it:\n{INSTALL}"
-        }
-    review = subprocess.run(
-        [codeguard, "review", "--format", "json", "--judge-errors-as-warnings", "--host", host],
-        capture_output=True,
-        text=True,
-        check=False,
-    )
+    codeguard = os.environ.get("CODEGUARD", str(BUNDLED))
+    try:
+        review = subprocess.run(
+            [codeguard, "review", "--format", "json", "--judge-errors-as-warnings", "--host", host],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as error:
+        return {"systemMessage": f"{NOT_REVIEWED}\n{error}"}
     if review.returncode in (0, 1):
         try:
             raw = json.loads(review.stdout)["diagnostics"]
