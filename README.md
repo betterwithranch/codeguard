@@ -473,6 +473,22 @@ claude plugin install codeguard@codeguard --scope project
 
 In Codex, trust codeguard's hooks in `/hooks`.
 
+### Upgrade
+
+Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
+A commit on `main` reaches no one until it is released. After a release:
+
+- Rerun the installer to upgrade the CLI.
+- Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
+  ```sh
+  claude plugin marketplace update codeguard
+  claude plugin update codeguard@codeguard --scope project
+  ```
+  To get releases without updating by hand, turn on auto-update for the codeguard
+  marketplace in `/plugin` (Marketplaces, then codeguard). Auto-update is off by
+  default for marketplaces outside Anthropic's own. It applies new releases in the
+  background, and they take effect in the next session.
+
 ## What the hooks check
 
 When an agent or subagent stops, the hook runs `codeguard review` in its working
@@ -677,17 +693,34 @@ Point a project's hooks at this clone.
 
 ## Release
 
-1. Bump `version` in `plugins/codeguard/.claude-plugin/plugin.json` and
-   `plugins/codeguard/.codex-plugin/plugin.json`.
+Release when a change on `main` should reach the projects using codeguard, or when a
+rule package needs it (a package's `codeguard` range is checked against the CLI's
+version). Engineers get only released versions; see [Upgrade](#upgrade).
+
+1. Bump the version to the same `<version>` in all three files, in the PR with the
+   change or in a PR of its own:
+   - `version` in `pyproject.toml`, which rule packages' `codeguard` ranges are checked
+     against;
+   - `version` in `plugins/codeguard/.claude-plugin/plugin.json` and
+     `plugins/codeguard/.codex-plugin/plugin.json`. Claude Code installs a plugin
+     update only when this changes, so a release with the old version reaches no one.
+
+   CI fails a PR whose three versions differ.
 2. Validate:
    ```sh
    claude plugin validate .
    claude plugin validate plugins/codeguard
    ```
-3. Commit, then tag the release and push the tag:
+3. Once it is merged, tag the merge commit and push the tag:
    ```sh
-   git tag v<version>
+   git fetch origin main
+   git tag v<version> origin/main
    git push origin v<version>
    ```
-   The release workflow checks the tag matches both manifests' `version`, then moves
-   the major tag (`v0`) to the release.
+   The release workflow checks that the tag matches all three versions, then moves
+   the major tag (`v0`) to the release. If it fails, fix the versions on `main`, then
+   move the tag to the fixed commit and push it again:
+   ```sh
+   git tag --force v<version> origin/main
+   git push --force origin v<version>
+   ```
