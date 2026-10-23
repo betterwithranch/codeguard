@@ -11,13 +11,12 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
 
 - Write one `valid` or `invalid` test case per branch of the rule, so deleting a branch
   fails a case. A comment above each case names its branch.
-- Match a pattern rule's construct only where it breaks the convention, never anywhere
-  in the node: a `len()` compared with a literal, not a `len()` inside a slice.
-  `has` with `stopBy: end` searches every descendant; use it only when the construct
-  breaks the convention in every position.
-- For each construct a pattern rule matches, add a `valid` case with the construct
-  where the convention allows it (building the expected value, nested inside a value),
-  so a rule that matches too widely fails a case.
+- Match a pattern rule's construct only where it breaks the convention: a `len()`
+  compared with a literal, not a `len()` inside a slice. `stopBy: end` on `has` or
+  `inside` searches every descendant or ancestor; in a positive match, use it only when
+  the construct breaks the convention in every position.
+- Give each construct a pattern rule matches a `valid` case where the convention allows
+  it, if it has such a position, so a rule that matches too widely fails a case.
 - Use made-up names in test cases (`ExampleModel`), so the case shows the pattern rather
   than one class in the codebase.
 - Put the reason and the fix in a pattern rule's `note`. codeguard prints it under the
@@ -29,10 +28,10 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
 - Write a pattern rule whenever ast-grep can check the convention, and a judge rule
   (a skill) only when it needs judgment. A pattern rule is fast, free, and gives the
   same answer every time; a judge rule costs a Claude call per changed file.
-- When syntax decides only some forms of a convention, write both: a pattern rule for
-  the forms it decides, and a judge rule whose gate covers every form, those included.
-  The judge skips a file with a blocking diagnostic, so the two don't report the same
-  code, and the judge still covers the forms if a project excludes the pattern rule.
+- When syntax decides only some forms of a convention, write a pattern rule for those
+  forms and a judge rule gated on every form. No judge rule runs on a file with an
+  `error` diagnostic, so the two report the same code only if the pattern rule is a
+  `warning`.
 - A pattern rule runs on every file in its language. Scope it with a binding,
   `bindings/<id>.yaml` with `rule`, `paths` and `exclude_paths`, never with ast-grep's
   `files` or `ignores`, so a project can change the scope. The exception is a file name
