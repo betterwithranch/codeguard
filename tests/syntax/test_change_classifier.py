@@ -350,3 +350,55 @@ class TestChangeClassifier:
         git_repo.write("a.py", "A = 1\nB = 2\nC = 3\n\n\ndef tax():\n    return 0\n")
 
         assert classified_judged_lines(git_repo, "a.py") == {2, 3, 6, 7}
+
+    def test_handler_header_edit_judges_the_handler_and_the_block_it_guards(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "try:\n    load()\nexcept KeyError:\n    pass\n"
+            "except ValueError:\n    retry()\nfinally:\n    close()\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("except ValueError:", "except TypeError:"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 5, 6}
+
+    def test_handler_is_judged_with_its_own_try_block_not_a_nested_one(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "try:\n    load()\nexcept KeyError:\n    try:\n        fetch()\n"
+            "    except OSError:\n        pass\nexcept ValueError:\n    retry()\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("except ValueError:", "except TypeError:"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 8, 9}
+
+    def test_else_header_edit_judges_only_its_clause(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "if fast:\n    run()\nelif slow:\n    wait()\nelse:\n    stop()\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("elif slow:", "elif late:"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {3, 4}
+
+    def test_comment_edit_judges_only_the_comment(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "def tax():\n    # net\n    return 0\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("# net", "# gross"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {2}
+        assert classified_kinds(git_repo, "a.py") == {ChangeKind.COMMENT, ChangeKind.ANY}
+
+    def test_removed_comment_judges_no_code(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "def tax():\n    # net\n    return 0\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "def tax():\n    return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == frozenset()
+        assert classified_kinds(git_repo, "a.py") == {ChangeKind.COMMENT, ChangeKind.ANY}

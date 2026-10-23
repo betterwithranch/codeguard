@@ -1,6 +1,7 @@
 from collections import Counter
 from collections.abc import Iterable
 from dataclasses import dataclass
+from functools import cached_property
 from typing import Self
 
 from codeguard.config import ChangeKind
@@ -24,11 +25,21 @@ class ParsedFile:
     ) -> frozenset[int]:
         scopes = self._standing(NodeKind.SCOPE, removed)
         members = self._standing(NodeKind.MEMBER_LIST, removed)
-        statements = self.of_kind(NodeKind.STATEMENT)
+        statements = _Statements(
+            self.of_kind(NodeKind.STATEMENT),
+            self.of_kind(NodeKind.HANDLER),
+            self.of_kind(NodeKind.GUARDED_BLOCK),
+            removed,
+        )
         return frozenset(
             line
             for point in points
-            for line in _context_lines(scopes, members, statements, removed, point)
+            # A comment breaks no code rule, so the code around it isn't needed.
+            for line in (
+                {point}
+                if point in self._comment_lines
+                else _context_lines(scopes, members, statements, point)
+            )
         )
 
     def kind_lines(
@@ -78,37 +89,81 @@ class ParsedFile:
         return [node for node in self.of_kind(kind) if not _removed(node, removed)]
 
     def _kinds_spanning(self, line: int) -> set[str]:
+        comment = line in self._comment_lines
         found: set[str] = {
             node.kind
             for node in self.nodes
-            if not isinstance(node.kind, NodeKind) and node.spans(line)
+            if not isinstance(node.kind, NodeKind)
+            and node.spans(line)
+            # A line holding only a comment changes none of the code around it.
+            and (not comment or self._comment_lines.issuperset(node.lines))
         }
         if not found or not found <= _PROSE:
             found.add(ChangeKind.CODE)
         return found
+
+    @cached_property
+    def _comment_lines(self) -> frozenset[int]:
+        """Lines that hold only comments."""
+        lines: set[int] = set()
+        for node in self.of_kind(NodeKind.COMMENT):
+            before = self.content[self.content.rfind(b"\n", 0, node.start) + 1 : node.start]
+            after_end = self.content.find(b"\n", node.end)
+            after = self.content[node.end : len(self.content) if after_end < 0 else after_end]
+            first = node.start_line + (1 if before.strip() else 0)
+            last = node.end_line - (1 if after.strip() else 0)
+            lines.update(range(first, last + 1))
+        return frozenset(lines)
 
     @property
     def _scope_names(self) -> Counter[str]:
         return Counter(node.text for node in self.of_kind(NodeKind.SCOPE_NAME))
 
 
+@dataclass(frozen=True)
+class _Statements:
+    nodes: list[SyntaxNode]
+    handlers: list[SyntaxNode]
+    guarded: list[SyntaxNode]
+    removed: frozenset[int]
+
+    def lines_around(self, point: int, scope: SyntaxNode | None) -> set[int]:
+        around = [
+            node
+            for node in self.nodes
+            if node.spans(point) and (scope is None or _within(node, scope))
+        ]
+        statement = min(around, key=_length) if around else None
+        # A statement the change removed whole shows only its rows, as one it added shows
+        # itself.
+        if statement is None or _removed(statement, self.removed):
+            return {point}
+        return {*statement.lines, *self._guarded_by(statement)}
+
+    def _guarded_by(self, statement: SyntaxNode) -> range:
+        """A handler's `try` and the block it guards, without the other handlers."""
+        if not any(_same(statement, handler) for handler in self.handlers):
+            return range(0)
+        owners = [node for node in self.nodes if _encloses(node, statement)]
+        if not owners:
+            return range(0)
+        owner = min(owners, key=_length)
+        blocks = [
+            block
+            for block in self.guarded
+            if _encloses(owner, block) and not _removed(block, self.removed)
+        ]
+        if not blocks:
+            return range(0)
+        return range(owner.start_line, min(blocks, key=lambda block: block.start).end_line + 1)
+
+
 def _context_lines(
-    scopes: list[SyntaxNode],
-    members: list[SyntaxNode],
-    statements: list[SyntaxNode],
-    removed: frozenset[int],
-    point: int,
+    scopes: list[SyntaxNode], members: list[SyntaxNode], statements: _Statements, point: int
 ) -> set[int]:
     enclosing = [scope for scope in scopes if scope.spans(point)]
     innermost = min(enclosing, key=_size) if enclosing else None
-    around = [
-        node
-        for node in statements
-        if node.spans(point) and (innermost is None or _within(node, innermost))
-    ]
-    statement = min(around, key=_size) if around else None
-    # A statement the change removed whole shows only its rows, as one it added shows itself.
-    lines = {point} if statement is None or _removed(statement, removed) else set(statement.lines)
+    lines = statements.lines_around(point, innermost)
     if innermost is None:
         return lines
     body = next((node for node in members if node.spans(point) and _holds(innermost, node)), None)
@@ -120,6 +175,18 @@ def _context_lines(
 
 def _size(node: SyntaxNode) -> int:
     return node.end_line - node.start_line
+
+
+def _length(node: SyntaxNode) -> int:
+    return node.end - node.start
+
+
+def _same(node: SyntaxNode, other: SyntaxNode) -> bool:
+    return (node.start, node.end) == (other.start, other.end)
+
+
+def _encloses(outer: SyntaxNode, inner: SyntaxNode) -> bool:
+    return outer.start <= inner.start and inner.end <= outer.end and not _same(outer, inner)
 
 
 def _within(node: SyntaxNode, scope: SyntaxNode) -> bool:

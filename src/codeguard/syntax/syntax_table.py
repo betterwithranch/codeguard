@@ -23,6 +23,8 @@ class NodeKind(StrEnum):
     SCOPE_NAME = "scope_names"
     MEMBER_LIST = "member_lists"
     STATEMENT = "statements"
+    HANDLER = "handlers"
+    GUARDED_BLOCK = "guarded_blocks"
 
 
 class SyntaxTable(BaseModel):
@@ -38,6 +40,8 @@ class SyntaxTable(BaseModel):
     scope_names: AstGrepRule
     member_lists: AstGrepRule
     statements: AstGrepRule
+    handlers: AstGrepRule
+    guarded_blocks: AstGrepRule
     change_kinds: dict[ChangeKind, AstGrepRule]
 
     @field_validator("change_kinds")

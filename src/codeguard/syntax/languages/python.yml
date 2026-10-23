@@ -52,6 +52,16 @@ statements:
     - kind: try_statement
     - kind: with_statement
     - kind: match_statement
+    - kind: elif_clause
+    - kind: else_clause
+    - kind: except_clause
+    - kind: finally_clause
+    - kind: case_clause
+handlers:
+  kind: except_clause
+guarded_blocks:
+  kind: block
+  inside: {kind: try_statement, field: body}
 change_kinds:
   comment:
     kind: comment
