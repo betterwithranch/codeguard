@@ -205,14 +205,16 @@ def _context_lines(
 ) -> set[int]:
     enclosing = [scope for scope in scopes if scope.spans(point)]
     innermost = min(enclosing, key=_size) if enclosing else None
-    lines = statements.lines_around(point, innermost)
     if innermost is None:
-        return lines
+        return statements.lines_around(point, None)
     body = next((node for node in members if node.spans(point) and _holds(innermost, node)), None)
     if body is None:
         return set(innermost.lines)
     # A change among a scope's members shows the scope's header, not its other members.
-    return {*range(innermost.start_line, max(body.start_line, innermost.start_line + 1)), *lines}
+    return {
+        *range(innermost.start_line, max(body.start_line, innermost.start_line + 1)),
+        *statements.lines_around(point, body),
+    }
 
 
 def _size(node: SyntaxNode) -> int:

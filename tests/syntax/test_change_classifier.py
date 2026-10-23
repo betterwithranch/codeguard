@@ -512,3 +512,14 @@ class TestChangeClassifier:
         git_repo.write("a.py", source.replace("    def f():\n        load()\n", ""))
 
         assert classified_judged_lines(git_repo, "a.py") == {1}
+
+    def test_class_body_edit_no_statement_holds_judges_the_class_header_and_the_line(
+        self, tmp_path
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "class A:\n    x = 1\n    y = 2\n\n    def g(self):\n        pass\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("    y = 2\n", "    y =\n"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 3}
