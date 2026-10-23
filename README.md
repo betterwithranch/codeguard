@@ -288,9 +288,10 @@ model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
 A judge rule's id is its skill's directory name.
 
 `triggers` names the code the rule's violations need. The judge skips a changed file
-whose changed lines fall inside none of it, so a narrow trigger saves judge calls. Gate
-on where a violation appears, not on the rule's topic. A binding without `triggers`
-gets `[any]`, so packages written before triggers still load.
+whose changed lines fall inside none of it, so a narrow trigger saves judge calls. The
+judge is sent the whole of each trigger node around a change, so a narrow trigger saves
+tokens too. Gate on where a violation appears, not on the rule's topic. A binding
+without `triggers` gets `[any]`, so packages written before triggers still load.
 
 A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
 `<ruleset>/gates/<id>.yml`, tested like a pattern rule by `rule-tests/<id>-test.yml`
@@ -307,7 +308,9 @@ rule:
 A file touches a trigger when a changed line falls inside a node it matches. A new file
 touches every trigger it matches. A blank line is never a changed line, in any language:
 adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic,
-so the blank line before a new method doesn't make its class part of the change. A rule
+so the blank line before a new method doesn't make its class part of the change. A line
+holding only comments and docstrings touches only `comment` and `docstring`, not the
+function or class around it: prose breaks no code rule. A rule
 that needs every change says `triggers: [any]`; `codeguard test` warns on `any`, `code`,
 `function-body` and `function-signature`. The built-in kinds are `comment`, `docstring`,
 `import`, `function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
@@ -429,6 +432,9 @@ also in Logfire.
 - the judge call fails, such as a quota error that outlasts the provider's retries. The
   other cases still run, so a passing eval means every case was judged.
 
+A case counts only the violations a review would report: those on a changed or removed
+line of the case's file.
+
 `codeguard eval` also fails a judge rule with no `invalid` case, and a rule eval whose
 id matches no judge rule. `codeguard eval` prints a table per rule, then one line per
 failure.
@@ -521,11 +527,35 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
 - If the review crashes or uv can't build codeguard's environment, you see why, and the
   stop goes through.
 
-The judge gets the code the change touched: each changed function, method or class, and
-each changed line outside them, with the file's line numbers. A new file is sent whole
-but for its blank lines outside a function or class; every file with `--all` is sent
-whole. The judge reads the rest of the file, or any other file in
-the repository, with its read-only tools. A verdict is cached until the changed code, the
+The judge gets the code the change touched: each changed function or method, with its
+decorators; each changed statement outside them, whole, with the header and decorators of
+the class it's in; for a changed `elif`, `else`, `except` or `finally` line, just that
+clause, with the `try` block an `except` guards; each class whose header changed, whole;
+each changed comment or docstring line alone; and, for each of the rule's
+triggers, the whole of each node of that kind around a changed line of code, so the judge
+sees the code that made the rule apply. Removed lines are sent with the code the change
+kept around them, the same way: the function or method they were in, the header of their
+class, the rest of a statement they were part of, or the header of the statement whose
+block they were in (for a removed `except`, its `try` and the block it guarded), never the
+code beside them. A renamed file is compared with the file it was renamed from. Unless
+a class's header changed, its other members aren't sent, though the judge can read them.
+What is sent is what the judge has to read to decide; anything it only might need, it
+reads itself.
+Lines carry the file's line numbers; added and changed lines are marked `+`, and the
+lines git's diff shows the change removed are marked `-`. A new file is sent whole but
+for its blank lines outside a function or method; every file with `--all` is sent whole,
+all of it marked changed. The judge reads the rest of the file, or any other file in the
+repository, with its read-only tools.
+
+A review reports only violations a changed or removed line is part of, on that line. What the line
+held before doesn't matter: editing a line that already broke a rule reports it, so code
+a change touches is left better than it was found. Untouched code isn't reported, even in
+the function or class around the change: adding a line to a method doesn't report the
+method's name, and renaming a variable doesn't report the class's design. A changed line
+that breaks a rule together with the code around it is reported, such as a method that
+gives its class another responsibility. Other functions and classes in the file, and the
+other blocks of a statement around the change, such as the `except` of a `try` whose
+body changed, are read as context but never reported. A verdict is cached until the changed code, the
 rest of the file, the rule, the model, or a file the judge loaded changes. A loaded file
 is one the judge read, or one its searches returned: a file a grep matched or a glob
 listed. A file a search would only start returning later doesn't count.

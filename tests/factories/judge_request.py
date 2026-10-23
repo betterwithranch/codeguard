@@ -10,4 +10,4 @@ class MakeJudgeRequest(factory.Factory):
 
     skill = factory.SubFactory(MakeSkill)
     file = "a.py"
-    changes = "     1\tprint(1)\n"
+    changes = "+     1\tprint(1)\n"

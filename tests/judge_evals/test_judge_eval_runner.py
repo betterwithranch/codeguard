@@ -102,7 +102,7 @@ class TestJudgeEvalRunner:
             JudgeRequest(
                 Skill(name="enum-usage", text=ENUM_SKILL),
                 "module.py",
-                "     1\tship(status='shipped')\n",
+                "+     1\tship(status='shipped')\n",
             )
         ]
 
@@ -135,7 +135,9 @@ class TestJudgeEvalRunner:
             JudgeRequest(
                 Skill(name="enum-usage", text=ENUM_SKILL),
                 "status.py",
-                "     5\tdef cancel_order():\n     6\t    cancel(status='cancelled')\n",
+                "      5\tdef cancel_order():\n"
+                "-     6\t    cancel(status=Status.CANCELLED)\n"
+                "+     6\t    cancel(status='cancelled')\n",
             )
         ]
 
@@ -233,6 +235,19 @@ class TestJudgeEvalRunner:
         enum_rule.evaluate("string-is-invalid.yaml")
 
         result = enum_rule.judged_with(Verdict(violations=()))
+
+        assert result.failures == (
+            "enum-usage passes a string: expected outcome invalid, got outcome valid",
+        )
+
+    def test_violation_on_an_unchanged_line_is_dropped_as_a_review_drops_it(
+        self, enum_rule, make_violation
+    ):
+        enum_rule.evaluate("edit-in-the-second-function.yaml")
+
+        result = enum_rule.judged_with(
+            Verdict(violations=(make_violation(file="status.py", line=2, confidence=0.9),))
+        )
 
         assert result.failures == (
             "enum-usage passes a string: expected outcome invalid, got outcome valid",

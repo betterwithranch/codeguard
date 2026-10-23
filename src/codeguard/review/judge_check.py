@@ -49,6 +49,4 @@ class JudgeCheck:
         return verdict.diagnostics_for(self.binding, file, self.confidence_threshold)
 
     def _request(self, file: str) -> JudgeRequest:
-        return JudgeRequest.of_change(
-            self.binding.skill, self.root, file, self.scope.judged_lines(file)
-        )
+        return JudgeRequest.of_change(self.binding, self.root, file, self.scope)
