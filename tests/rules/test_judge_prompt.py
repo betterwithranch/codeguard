@@ -1,0 +1,80 @@
+from pathlib import Path
+
+import pytest
+import yaml
+
+from codeguard.review import Category, Review
+from codeguard.rule_tests import EditCase, EditRepo, Outcome, RuleEvalCase, rule_evals
+from codeguard.rules import Rules, judges
+from codeguard.working_tree import WorkingTree
+
+EVALS = Path(__file__).parents[2] / "evals" / "judge"
+CASES = [
+    pytest.param(rule_eval.name, case, id=f"{rule_eval.name}: {case.name}")
+    for _, rule_eval in rule_evals(EVALS / "python")
+    for case in rule_eval.cases
+]
+JUDGED_CASES = [
+    case for case in CASES if case.values[1].expected_output.outcome is not Outcome.SKIPPED
+]
+
+
+def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
+    if "run" in metafunc.fixturenames:
+        runs: int = metafunc.config.getoption("llm_runs")
+        metafunc.parametrize("run", range(1, runs + 1), ids=lambda run: f"{run}/{runs}")
+
+
+@pytest.fixture(autouse=True)
+def judgement_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(judges, "_JUDGEMENT_CACHE_DIR", tmp_path / "judgements")
+
+
+class TestJudgePrompt:
+    @pytest.mark.parametrize(("rule", "case"), CASES)
+    def test_triggers_fire_on_each_case_the_judge_sees(self, rule: str, case: RuleEvalCase):
+        with EditRepo.of(_edits(rule, case.inputs)) as repo:
+            working_tree = WorkingTree(repo.root)
+            plan = Rules(working_tree).plan(working_tree.changed_lines("HEAD"))
+
+        triggered = [call.file for call in plan.calls if call.triggered]
+        judged = case.expected_output.outcome is not Outcome.SKIPPED
+        assert triggered == ([case.inputs.file] if judged else [])
+
+    @pytest.mark.llm
+    @pytest.mark.parametrize(("rule", "case"), JUDGED_CASES)
+    def test_review_reaches_each_case_verdict(self, rule: str, case: RuleEvalCase, run: int):
+        with EditRepo.of(_edits(rule, case.inputs)) as repo:
+            working_tree = WorkingTree(repo.root)
+            review = Rules(working_tree).review(working_tree.changed_lines("HEAD"))
+
+        listing = "\n".join(map(str, review.diagnostics))
+        errors = [
+            diagnostic
+            for diagnostic in review.diagnostics
+            if diagnostic.category is Category.JUDGE_ERROR
+        ]
+        assert errors == [], listing
+        assert _outcome(review) is case.expected_output.outcome, listing
+
+
+def _edits(rule: str, inputs: EditCase) -> dict[str, EditCase]:
+    config = yaml.safe_dump(
+        {
+            "packages": [
+                {"kind": "path", "path": str(EVALS), "rulesets": {"python": {"include": [rule]}}}
+            ]
+        }
+    )
+    return {
+        ".codeguard/config.yaml": EditCase(
+            file=".codeguard/config.yaml", before=config, after=config
+        ),
+        **inputs.edits(),
+    }
+
+
+def _outcome(review: Review) -> Outcome:
+    if review.blocks:
+        return Outcome.INVALID
+    return Outcome.UNCERTAIN if review.diagnostics else Outcome.VALID

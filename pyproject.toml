@@ -27,7 +27,8 @@ build-backend = "uv_build"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["tests"]
-addopts = ["--import-mode=importlib"]
+addopts = ["--import-mode=importlib", "-m", "not llm"]
+markers = ["llm: calls the real claude CLI; run with pytest -m llm"]
 
 [tool.ruff]
 line-length = 100
@@ -115,5 +116,6 @@ dev = [
     "import-linter>=2.15",
     "pytest>=9.1.1",
     "pytest-factoryboy>=2.8.1",
+    "pytest-xdist>=3.8.0",
     "ruff>=0.17.1",
 ]
