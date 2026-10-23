@@ -163,7 +163,7 @@ class TestChangeClassifier:
 
         assert classified_judged_lines(git_repo, "a.py") == {5, 6}
 
-    def test_class_body_edit_outside_a_method_judges_the_class(self, tmp_path):
+    def test_class_body_edit_outside_a_method_judges_the_class_header_and_the_line(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
         git_repo.write(
             "a.py", "class Order:\n    rate = 1\n\n    def tax(self):\n        return 0\n"
@@ -173,7 +173,26 @@ class TestChangeClassifier:
             "a.py", "class Order:\n    rate = 2\n\n    def tax(self):\n        return 0\n"
         )
 
-        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 4, 5}
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2}
+
+    def test_class_body_edit_judges_every_line_of_a_class_header(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "class Order(\n    Base,\n):\n    def tax(self):\n        return 0\n\n    rate = 1\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("rate = 1", "rate = 2"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 7}
+
+    def test_class_header_edit_judges_the_class(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "class Order:\n    def tax(self):\n        return 0\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "class Order(Base):\n    def tax(self):\n        return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3}
 
     def test_module_level_edit_judges_the_changed_line(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())

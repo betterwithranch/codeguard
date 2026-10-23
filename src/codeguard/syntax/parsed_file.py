@@ -21,7 +21,10 @@ class ParsedFile:
 
     def judged_lines(self, points: frozenset[int]) -> frozenset[int]:
         scopes = self.of_kind(NodeKind.SCOPE)
-        return frozenset(line for point in points for line in _innermost_scope_lines(scopes, point))
+        members = self.of_kind(NodeKind.MEMBER_LIST)
+        return frozenset(
+            line for point in points for line in _innermost_scope_lines(scopes, members, point)
+        )
 
     def kind_lines(self, points: frozenset[int]) -> dict[str, frozenset[int]]:
         spans: dict[str, set[int]] = {}
@@ -71,9 +74,19 @@ class ParsedFile:
         return Counter(node.text for node in self.of_kind(NodeKind.SCOPE_NAME))
 
 
-def _innermost_scope_lines(scopes: list[SyntaxNode], point: int) -> range:
+def _innermost_scope_lines(
+    scopes: list[SyntaxNode], members: list[SyntaxNode], point: int
+) -> set[int]:
     enclosing = [scope for scope in scopes if scope.spans(point)]
     if not enclosing:
-        return range(point, point + 1)
+        return {point}
     innermost = min(enclosing, key=lambda scope: scope.end_line - scope.start_line)
-    return range(innermost.start_line, innermost.end_line + 1)
+    body = next((node for node in members if node.spans(point) and _within(node, innermost)), None)
+    if body is None:
+        return set(range(innermost.start_line, innermost.end_line + 1))
+    # A change among a scope's members shows the scope's header, not its other members.
+    return {*range(innermost.start_line, max(body.start_line, innermost.start_line + 1)), point}
+
+
+def _within(node: SyntaxNode, scope: SyntaxNode) -> bool:
+    return scope.start_line <= node.start_line and node.end_line <= scope.end_line

@@ -26,6 +26,9 @@ scope_names:
   any:
     - inside: {kind: function_definition, field: name}
     - inside: {kind: class_definition, field: name}
+member_lists:
+  kind: block
+  inside: {kind: class_definition, field: body}
 change_kinds:
   comment:
     kind: comment

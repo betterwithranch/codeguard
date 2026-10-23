@@ -288,9 +288,10 @@ model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
 A judge rule's id is its skill's directory name.
 
 `triggers` names the code the rule's violations need. The judge skips a changed file
-whose changed lines fall inside none of it, so a narrow trigger saves judge calls. Gate
-on where a violation appears, not on the rule's topic. A binding without `triggers`
-gets `[any]`, so packages written before triggers still load.
+whose changed lines fall inside none of it, so a narrow trigger saves judge calls. The
+judge is sent the whole of each trigger node around a change, so a narrow trigger saves
+tokens too. Gate on where a violation appears, not on the rule's topic. A binding
+without `triggers` gets `[any]`, so packages written before triggers still load.
 
 A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
 `<ruleset>/gates/<id>.yml`, tested like a pattern rule by `rule-tests/<id>-test.yml`
@@ -524,12 +525,15 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
 - If the review crashes or uv can't build codeguard's environment, you see why, and the
   stop goes through.
 
-The judge gets the code the change touched: each changed function, method or class, each
-changed line outside them, and, for each of the rule's triggers, the whole of each node
-of that kind around a changed line, so the judge sees the code that made the rule apply.
+The judge gets the code the change touched: each changed function or method, each
+changed line outside them with the header of the class it's in, and, for each of the
+rule's triggers, the whole of each node of that kind around a changed line, so the judge
+sees the code that made the rule apply. A class's other members aren't sent, though the
+judge can read them. What is sent is what the judge has to read to decide; anything it
+only might need, it reads itself.
 Lines carry the file's line numbers; added and changed lines are marked `+`, and the
 lines git's diff shows the change removed are marked `-`. A new file is sent whole but
-for its blank lines outside a function or class; every file with `--all` is sent whole,
+for its blank lines outside a function or method; every file with `--all` is sent whole,
 all of it marked changed. The judge reads the rest of the file, or any other file in the
 repository, with its read-only tools.
 
