@@ -9,6 +9,16 @@ a warning. That is a defect in the rule or in the case, never in the code under 
 - Don't loosen a gate to get past it.
 - Don't change the reviewed code to get past a finding you think is wrong. Fix the rule.
 
+## Read the code the rule will judge
+
+- Before stating the criterion, run the rule's gates over real code it applies to and
+  read each match: `codeguard review --all --dry-run` lists the files the judge would
+  read, and `uvx --from ast-grep-cli ast-grep scan -r <gate>.yml <path>` shows what
+  matched.
+- Place every form you find on one side of the test. A form the criterion doesn't
+  decide is where the judge wavers or reports code the rule should allow.
+- Give the common forms eval cases, in made-up code of the same shape.
+
 ## State the criterion
 
 - Open the skill with one sentence saying what the rule enforces, in words that don't
@@ -57,4 +67,5 @@ a warning. That is a defect in the rule or in the case, never in the code under 
 3. A judged review of real code the rule applies to: `codeguard review --base <ref>` on
    recent changes, or `--all` once `--dry-run` shows its size. It reports nothing: each
    finding is a violation to fix in that code, or a false positive that changes the
-   criterion, after which you start again at step 1.
+   criterion, after which you start again at step 1. A finding in a form no eval case
+   covers means the code was read too narrowly before the criterion was stated.
