@@ -173,6 +173,19 @@ class TestWorkingTree:
             base=git_repo.head(),
         )
 
+    def test_renamed_file_keeps_its_base_path(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "".join(f"x{i} = {i}\n" for i in range(10))
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.git("mv", "a.py", "b.py")
+        git_repo.write("b.py", source.replace("x9 = 9", "x9 = 10"))
+
+        changed = WorkingTree(root=git_repo.root).changed_lines("HEAD")
+
+        assert changed.sources == {"b.py": "a.py"}
+        assert changed.base_path("b.py") == "a.py"
+
     def test_untracked_file_has_every_line_with_code_changed(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
         git_repo.write("a.py", "a = 1\n\nb = 1\n")

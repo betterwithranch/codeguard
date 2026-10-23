@@ -62,6 +62,8 @@ handlers:
 guarded_blocks:
   kind: block
   inside: {kind: try_statement, field: body}
+blocks:
+  kind: block
 change_kinds:
   comment:
     kind: comment
@@ -69,7 +71,8 @@ change_kinds:
     kind: string
     inside:
       kind: expression_statement
-      nthChild: 1
+      # A shebang, coding line or licence comment can come before a docstring.
+      nthChild: {position: 1, ofRule: {not: {kind: comment}}}
       inside:
         any:
           - kind: module

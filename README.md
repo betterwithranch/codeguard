@@ -532,10 +532,12 @@ decorators; each changed statement outside them, whole, with the header and deco
 the class it's in; for a changed `elif`, `else`, `except` or `finally` line, just that
 clause, with the `try` block an `except` guards; each class whose header changed, whole;
 each changed comment or docstring line alone; and, for each of the rule's
-triggers, the whole of each node of that kind around a changed line, so the judge sees
-the code that made the rule apply. Removed lines are sent with the code the change kept
-around them, the same way: the function or method they were in, or the header of their
-class, or the rest of a statement they were part of, never the code beside them. Unless
+triggers, the whole of each node of that kind around a changed line of code, so the judge
+sees the code that made the rule apply. Removed lines are sent with the code the change
+kept around them, the same way: the function or method they were in, the header of their
+class, the rest of a statement they were part of, or the header of the statement whose
+block they were in (for a removed `except`, its `try` and the block it guarded), never the
+code beside them. A renamed file is compared with the file it was renamed from. Unless
 a class's header changed, its other members aren't sent, though the judge can read them.
 What is sent is what the judge has to read to decide; anything it only might need, it
 reads itself.

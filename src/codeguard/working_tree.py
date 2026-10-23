@@ -49,6 +49,7 @@ class ChangedLines:
     kind_lines: Mapping[str, Mapping[str, frozenset[int]]] = field(default_factory=dict)
     removals: Mapping[str, tuple[Removal, ...]] = field(default_factory=dict)
     edits: Mapping[str, tuple[Edit, ...]] = field(default_factory=dict)
+    sources: Mapping[str, str] = field(default_factory=dict)
     base: str | None = None
 
     @property
@@ -60,6 +61,9 @@ class ChangedLines:
 
     def with_edits(self, edits: Mapping[str, tuple[Edit, ...]]) -> Self:
         return replace(self, edits=edits)
+
+    def with_sources(self, sources: Mapping[str, str]) -> Self:
+        return replace(self, sources=sources)
 
     def with_kinds(self, kinds: Mapping[str, frozenset[str]]) -> Self:
         return replace(self, kinds=kinds)
@@ -85,6 +89,10 @@ class ChangedLines:
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
+
+    def base_path(self, file: str) -> str:
+        """The file's path in the base, which a rename changes."""
+        return self.sources.get(file, file)
 
     def removed_base_lines(self, file: str) -> frozenset[int]:
         return frozenset(line for edit in self.edits.get(file, ()) for line in edit.base_rows)
@@ -163,7 +171,10 @@ class WorkingTree:
             base=merge_base,
         )
         edits = _edits(hunks)
-        return changed.with_edits({file: edits[file] for file in changed.files if file in edits})
+        sources = _sources(hunks)
+        return changed.with_edits(
+            {file: edits[file] for file in changed.files if file in edits}
+        ).with_sources({file: sources[file] for file in changed.files if file in sources})
 
     def base_contents(self, base: str, files: Sequence[str]) -> dict[str, bytes]:
         if not files:
@@ -221,6 +232,10 @@ def _removals(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Removal, ...]]:
     return {file: tuple(found) for file, found in removals.items()}
 
 
+def _sources(hunks: Sequence["_Hunk"]) -> dict[str, str]:
+    return {hunk.file: hunk.base_file for hunk in hunks if hunk.base_file not in {hunk.file, ""}}
+
+
 def _edits(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Edit, ...]]:
     edits: dict[str, list[Edit]] = {}
     for hunk in hunks:
@@ -231,6 +246,7 @@ def _edits(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Edit, ...]]:
 @dataclass
 class _Hunk:
     file: str
+    base_file: str
     base_start: int
     base_count: int
     start: int
@@ -274,18 +290,29 @@ class _Hunk:
 def _hunks(diff: str) -> list[_Hunk]:
     hunks: list[_Hunk] = []
     file = ""
+    base_file = ""
     in_header = False
     for row in _rows(diff):
         if row.startswith("diff --git "):
             in_header = True
-        elif in_header and row.startswith("+++ "):
+        elif in_header and row.startswith("--- "):
             # git ends the name with a tab when it holds a space.
+            name = row.removeprefix("--- ").removesuffix("\t")
+            base_file = "" if name == "/dev/null" else name
+        elif in_header and row.startswith("+++ "):
             file = row.removeprefix("+++ ").removesuffix("\t")
         elif match := _HUNK.match(row):
             in_header = False
             base_start, base_count, start, count = match.groups()
             hunks.append(
-                _Hunk(file, int(base_start), _count(base_count), int(start), _count(count))
+                _Hunk(
+                    file,
+                    base_file,
+                    int(base_start),
+                    _count(base_count),
+                    int(start),
+                    _count(count),
+                )
             )
         elif not in_header and hunks and row.startswith("-"):
             hunks[-1].remove(row[1:])

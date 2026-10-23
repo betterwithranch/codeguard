@@ -51,13 +51,15 @@ class ChangeClassifier:
     def _base(self, scope: ChangedLines) -> dict[str, ParsedFile]:
         if scope.base is None:
             return {}
-        contents = self.working_tree.base_contents(scope.base, scope.files)
+        paths = {scope.base_path(file): file for file in scope.files}
+        contents = self.working_tree.base_contents(scope.base, list(paths))
         with tempfile.TemporaryDirectory() as directory:
-            for file, content in contents.items():
-                path = Path(directory) / file
+            # A renamed file's base is parsed under its new name, to be found by it.
+            for base_path, content in contents.items():
+                path = Path(directory) / paths[base_path]
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_bytes(content)
-            return self.scanner.scan_files(Path(directory), list(contents))
+            return self.scanner.scan_files(Path(directory), [paths[path] for path in contents])
 
 
 def _in_head(scope: ChangedLines, file: str, base_lines: Iterable[int]) -> frozenset[int]:

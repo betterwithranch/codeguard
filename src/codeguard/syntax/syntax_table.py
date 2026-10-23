@@ -25,6 +25,7 @@ class NodeKind(StrEnum):
     STATEMENT = "statements"
     HANDLER = "handlers"
     GUARDED_BLOCK = "guarded_blocks"
+    BLOCK = "blocks"
 
 
 class SyntaxTable(BaseModel):
@@ -42,6 +43,7 @@ class SyntaxTable(BaseModel):
     statements: AstGrepRule
     handlers: AstGrepRule
     guarded_blocks: AstGrepRule
+    blocks: AstGrepRule
     change_kinds: dict[ChangeKind, AstGrepRule]
 
     @field_validator("change_kinds")

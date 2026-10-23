@@ -245,7 +245,7 @@ class TestChangeClassifier:
 
         scope = classifier.classify(working_tree.changed_lines("HEAD"))
 
-        assert scope.judged_lines("a.py") == {4}
+        assert scope.judged_lines("a.py") == {3, 4}
         assert scope.judged_lines("a.py", frozenset({ChangeKind.CONTROL_FLOW})) == {1, 2, 3, 4}
 
     def test_decorator_edit_judges_the_decorated_method(self, tmp_path):
@@ -422,3 +422,59 @@ class TestChangeClassifier:
 
         assert classified_judged_lines(git_repo, "a.py") == {3}
         assert classified_kinds(git_repo, "a.py") == {ChangeKind.DOCSTRING, ChangeKind.ANY}
+
+    def test_docstring_after_a_shebang_is_a_docstring(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = '#!/usr/bin/env python\n"""Pricing.\n\nRates.\n"""\nRATE = 1\n'
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("Rates.", "Tax rates."))
+
+        assert classified_judged_lines(git_repo, "a.py") == {4}
+        assert classified_kinds(git_repo, "a.py") == {ChangeKind.DOCSTRING, ChangeKind.ANY}
+
+    def test_comment_edit_takes_in_no_trigger_node_around_it(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "if fast:\n    # net\n    run()\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("net", "gross"))
+        working_tree = WorkingTree(git_repo.root)
+        classifier = ChangeClassifier(SyntaxScanner(AstGrep(), {}), working_tree)
+
+        scope = classifier.classify(working_tree.changed_lines("HEAD"))
+
+        assert scope.judged_lines("a.py", frozenset({ChangeKind.CONTROL_FLOW})) == {2}
+
+    def test_removed_statement_in_a_module_level_block_judges_the_block_header(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "if debug:\n    log()\n    run()\nelse:\n    stop()\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("    log()\n", ""))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1}
+
+    def test_removed_handler_judges_its_try_and_the_block_it_guarded(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "try:\n    load()\nexcept KeyError:\n    pass\nfinally:\n    close()\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("except KeyError:\n    pass\n", ""))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2}
+
+    def test_removal_in_a_renamed_file_judges_its_context(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "".join(f"X{i} = {i}\n" for i in range(20)) + "def tax():\n    log()\n    return 0\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.git("mv", "a.py", "b.py")
+        git_repo.write("b.py", source.replace("    log()\n", ""))
+
+        assert classified_judged_lines(git_repo, "b.py") == {21, 22}
+        assert ChangeKind.DEFINITION_ADDED_OR_REMOVED not in (
+            classified_kinds(git_repo, "b.py") or ()
+        )
