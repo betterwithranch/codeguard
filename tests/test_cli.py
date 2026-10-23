@@ -7,6 +7,7 @@ from importlib import metadata
 from pathlib import Path
 
 import pytest
+import yaml
 from claude_output import fake_claude_script, tool_result, tool_use
 from git_repo import GitRepo
 from rules_package import write_package
@@ -775,6 +776,153 @@ class TestEvalCommand:
             subprocess.run([CODEGUARD, "eval"], cwd=package.root, check=True, env=env)
 
         assert calls.read_text() == "called\ncalled\n"
+
+
+INVOICE_BEFORE = (
+    "class Invoice:\n"
+    "    def total(self, order):\n"
+    "        return order.subtotal\n"
+    "\n"
+    "    def label(self):\n"
+    "        return 'invoice'\n"
+)
+INVOICE_AFTER = (
+    "class Invoice:\n"
+    "    def total(self, order):\n"
+    "        return sum(line.price for line in order.lines)\n"
+    "\n"
+    "    def label(self):\n"
+    "        return 'invoice'\n"
+)
+RECORDED_OPTIONS = {
+    "--system-prompt": "system prompt",
+    "--model": "model",
+    "--tools": "tools",
+    "--json-schema": "json schema",
+}
+
+
+class TestEvalMatchesReview:
+    def test_eval_and_review_send_claude_the_same_request(self, tmp_path, tmp_path_factory):
+        package = invoice_package(tmp_path_factory)
+        project = GitRepo.init(tmp_path_factory.mktemp("project").resolve())
+        project.write(".codeguard/config.yaml", path_package_config(package))
+        project.write("invoice.py", INVOICE_BEFORE)
+        project.commit("Add the invoice")
+        project.write("invoice.py", INVOICE_AFTER)
+        bin_dir = recording_claude(tmp_path, [])
+
+        subprocess.run(
+            [CODEGUARD, "eval"],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+        )
+        subprocess.run(
+            [CODEGUARD, "review"],
+            cwd=project.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "review"),
+            capture_output=True,
+        )
+
+        assert recorded_call(tmp_path / "eval") == recorded_call(tmp_path / "review")
+
+    @pytest.mark.parametrize(
+        ("violations", "failure", "returncode"),
+        [
+            ([{"confidence": 1.0}], "", 0),
+            (
+                [{"confidence": 0.4}],
+                "responsibility-placement totals the order lines: expected outcome invalid, got "
+                "outcome uncertain\n  line 3 (0.40): Move it.\n",
+                1,
+            ),
+            (
+                [],
+                "responsibility-placement totals the order lines: expected outcome invalid, got "
+                "outcome valid\n",
+                1,
+            ),
+        ],
+        ids=["invalid", "uncertain", "valid"],
+    )
+    def test_eval_reports_the_outcome_of_claude_verdict(
+        self, tmp_path, tmp_path_factory, violations, failure, returncode
+    ):
+        package = invoice_package(tmp_path_factory)
+        verdict = [
+            {"file": "invoice.py", "line": 3, "message": "Move it.", **violation}
+            for violation in violations
+        ]
+        bin_dir = recording_claude(tmp_path, verdict)
+
+        result = subprocess.run(
+            [CODEGUARD, "eval"],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+            text=True,
+        )
+
+        _, failures = result.stdout.rsplit("┘\n", 1)
+        assert failures == failure
+        assert result.returncode == returncode
+
+
+def invoice_package(tmp_path_factory) -> GitRepo:
+    package = GitRepo.init(tmp_path_factory.mktemp("package").resolve())
+    write_package(package)
+    case = {
+        "name": "totals the order lines",
+        "inputs": {"file": "invoice.py", "before": INVOICE_BEFORE, "after": INVOICE_AFTER},
+        "expected_output": {"outcome": "invalid"},
+    }
+    package.write(
+        "python/rule-evals/responsibility-placement.yaml", yaml.safe_dump({"cases": [case]})
+    )
+    return package
+
+
+def path_package_config(package: GitRepo) -> str:
+    return (
+        f"packages:\n  - kind: path\n    path: {package.root}\n    rulesets:\n"
+        "      python:\n        include: [responsibility-placement]\n"
+    )
+
+
+def recording_claude(tmp_path: Path, violations: list[dict]) -> Path:
+    """Put a claude on PATH that saves its arguments and stdin to $CLAUDE_RECORD."""
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    claude = bin_dir / "claude"
+    claude.write_text(
+        fake_claude_script(
+            violations,
+            before='mkdir -p "$CLAUDE_RECORD"\n'
+            'printf \'%s\\0\' "$@" > "$CLAUDE_RECORD/args"\n'
+            'cat > "$CLAUDE_RECORD/stdin"\n',
+        )
+    )
+    claude.chmod(0o755)
+    return bin_dir
+
+
+def recording_env(home: Path, bin_dir: Path, record: Path) -> dict[str, str]:
+    return {
+        **os.environ,
+        "HOME": str(home),
+        "PATH": f"{bin_dir}:{os.environ['PATH']}",
+        "CLAUDE_RECORD": str(record),
+    }
+
+
+def recorded_call(record: Path) -> dict[str, str]:
+    arguments = (record / "args").read_text().split("\0")[:-1]
+    values = dict(zip(arguments, arguments[1:], strict=False))
+    return {
+        "prompt": (record / "stdin").read_text(),
+        **{name: values[option] for option, name in RECORDED_OPTIONS.items()},
+    }
 
 
 class TestTestCommand:
