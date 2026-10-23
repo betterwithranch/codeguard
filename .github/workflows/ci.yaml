@@ -36,6 +36,6 @@ jobs:
       - uses: actions/checkout@v7
       - uses: astral-sh/setup-uv@v10.2.0
       - run: npm install --global @anthropic-ai/claude-code
-      - run: uv run --frozen pytest -m llm
+      - run: uv run --frozen pytest -m llm -n 8
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
