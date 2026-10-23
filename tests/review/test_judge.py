@@ -3,6 +3,7 @@ from pydantic import ValidationError
 
 from codeguard.review import JudgeRequest, Severity, Verdict
 from codeguard.review.judge import INSTRUCTIONS, Violation
+from codeguard.working_tree import AllLines, ChangedLines, Removal
 
 THRESHOLD = 0.9
 
@@ -13,41 +14,109 @@ class TestJudgeRequest:
 
         assert make_judge_request(skill=skill).prompt == skill.text
 
-    def test_changed_lines_are_numbered_with_their_file_line_numbers(self, tmp_path, make_skill):
+    def test_judged_lines_are_numbered_with_their_file_line_numbers(
+        self, tmp_path, make_binding, make_skill
+    ):
         (tmp_path / "pricing.py").write_text(
             "DISCOUNT = 5\n\n\ndef discounted(total):\n    return total - DISCOUNT\n"
         )
+        scope = ChangedLines({"pricing.py": frozenset({5})}).with_judged_lines(
+            {"pricing.py": frozenset({4, 5})}
+        )
 
-        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({4, 5}))
+        request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
 
         assert request == JudgeRequest(
             make_skill(),
             "pricing.py",
-            "     4\tdef discounted(total):\n     5\t    return total - DISCOUNT\n",
+            "      4\tdef discounted(total):\n+     5\t    return total - DISCOUNT\n",
         )
 
-    def test_no_changed_lines_is_the_whole_file(self, tmp_path, make_skill):
-        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\nTAX = 2")
+    def test_removed_rows_come_before_the_line_after_them_with_their_reported_line(
+        self, tmp_path, make_binding, make_skill
+    ):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\nTAX = 2\n")
+        scope = ChangedLines(
+            {},
+            deletions={"pricing.py": frozenset({1})},
+            removals={
+                "pricing.py": (Removal(before=2, line=1, rows=("FEE = 1",), base_lines=(2,)),)
+            },
+        ).with_judged_lines({"pricing.py": frozenset({1, 2})})
 
-        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", None)
+        request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
 
         assert request == JudgeRequest(
-            make_skill(), "pricing.py", "     1\tDISCOUNT = 5\n     2\tTAX = 2\n"
+            make_skill(),
+            "pricing.py",
+            "      1\tDISCOUNT = 5\n-     1\tFEE = 1\n      2\tTAX = 2\n",
         )
 
-    def test_changed_point_past_the_end_of_the_file_is_left_out(self, tmp_path, make_skill):
+    def test_rows_removed_from_the_end_of_the_file_come_last(
+        self, tmp_path, make_binding, make_skill
+    ):
         (tmp_path / "pricing.py").write_text("DISCOUNT = 5\n")
+        scope = ChangedLines(
+            {},
+            deletions={"pricing.py": frozenset({1})},
+            removals={
+                "pricing.py": (Removal(before=2, line=1, rows=("TAX = 2",), base_lines=(2,)),)
+            },
+        )
 
-        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({1, 2}))
+        request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
 
-        assert request == JudgeRequest(make_skill(), "pricing.py", "     1\tDISCOUNT = 5\n")
+        assert request == JudgeRequest(
+            make_skill(), "pricing.py", "      1\tDISCOUNT = 5\n-     1\tTAX = 2\n"
+        )
 
-    def test_lines_are_numbered_as_git_numbers_them(self, tmp_path, make_skill):
+    def test_shown_lines_take_in_the_nodes_of_the_rule_triggers(
+        self, tmp_path, make_binding, make_skill
+    ):
+        (tmp_path / "pricing.py").write_text("try:\n    x = 1\nexcept:\n    pass\n")
+        scope = (
+            ChangedLines({"pricing.py": frozenset({2})})
+            .with_judged_lines({"pricing.py": frozenset({2})})
+            .with_kind_lines({"pricing.py": {"control-flow": frozenset({1, 2, 3, 4})}})
+        )
+        binding = make_binding(triggers=frozenset({"control-flow"}))
+
+        request = JudgeRequest.of_change(binding, tmp_path, "pricing.py", scope)
+
+        assert request == JudgeRequest(
+            make_skill(),
+            "pricing.py",
+            "      1\ttry:\n+     2\t    x = 1\n      3\texcept:\n      4\t    pass\n",
+        )
+
+    def test_all_lines_is_the_whole_file_changed(self, tmp_path, make_binding, make_skill):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\nTAX = 2")
+
+        request = JudgeRequest.of_change(
+            make_binding(), tmp_path, "pricing.py", AllLines(("pricing.py",))
+        )
+
+        assert request == JudgeRequest(
+            make_skill(), "pricing.py", "+     1\tDISCOUNT = 5\n+     2\tTAX = 2\n"
+        )
+
+    def test_changed_point_past_the_end_of_the_file_is_left_out(
+        self, tmp_path, make_binding, make_skill
+    ):
+        (tmp_path / "pricing.py").write_text("DISCOUNT = 5\n")
+        scope = ChangedLines({"pricing.py": frozenset({1, 2})})
+
+        request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
+
+        assert request == JudgeRequest(make_skill(), "pricing.py", "+     1\tDISCOUNT = 5\n")
+
+    def test_lines_are_numbered_as_git_numbers_them(self, tmp_path, make_binding, make_skill):
         (tmp_path / "pricing.py").write_text("DISCOUNT = 5\f\nTAX = 2\n")
+        scope = ChangedLines({"pricing.py": frozenset({2})})
 
-        request = JudgeRequest.of_change(make_skill(), tmp_path, "pricing.py", frozenset({2}))
+        request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
 
-        assert request == JudgeRequest(make_skill(), "pricing.py", "     2\tTAX = 2\n")
+        assert request == JudgeRequest(make_skill(), "pricing.py", "+     2\tTAX = 2\n")
 
     def test_instructions_end_with_the_changes(self, make_judge_request):
         request = make_judge_request(file="pricing.py", changes="     4\tdef discounted(total):\n")

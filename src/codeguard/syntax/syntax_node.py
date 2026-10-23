@@ -12,5 +12,9 @@ class SyntaxNode:
     start_line: int
     end_line: int
 
+    @property
+    def lines(self) -> range:
+        return range(self.start_line, self.end_line + 1)
+
     def spans(self, line: int) -> bool:
         return self.start_line <= line <= self.end_line

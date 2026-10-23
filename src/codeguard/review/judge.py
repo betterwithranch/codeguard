@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from codeguard.review.binding import Binding
 from codeguard.review.diagnostic import Category, Diagnostic, ErrorType, Severity
 from codeguard.review.skill import Skill
+from codeguard.working_tree import AllLines, ChangedLines
 
 INSTRUCTIONS = (Path(__file__).parent / "judge.md").read_text()
 
@@ -18,14 +19,23 @@ class JudgeRequest:
     changes: str
 
     @classmethod
-    def of_change(cls, skill: Skill, root: Path, file: str, lines: frozenset[int] | None) -> Self:
+    def of_change(
+        cls, binding: Binding, root: Path, file: str, scope: ChangedLines | AllLines
+    ) -> Self:
         raw = (root / file).read_bytes().splitlines()
         content = [line.decode(errors="replace") for line in raw]
-        shown = range(1, len(content) + 1) if lines is None else sorted(lines)
-        changes = "".join(
-            f"{number:>6}\t{content[number - 1]}\n" for number in shown if number <= len(content)
-        )
-        return cls(skill, file, changes)
+        lines = scope.judged_lines(file, binding.triggers)
+        shown = set(range(1, len(content) + 1) if lines is None else lines)
+        added = scope.added_lines(file)
+        removals = {removal.before: removal for removal in scope.removals_in(file)}
+        rows: list[str] = []
+        for number in sorted(shown | set(removals)):
+            if removal := removals.get(number):
+                rows.extend(f"-{removal.line:>6}\t{text}\n" for text in removal.rows)
+            if number in shown and number <= len(content):
+                mark = "+" if added is None or number in added else " "
+                rows.append(f"{mark}{number:>6}\t{content[number - 1]}\n")
+        return cls(binding.skill, file, "".join(rows))
 
     @property
     def instructions(self) -> str:

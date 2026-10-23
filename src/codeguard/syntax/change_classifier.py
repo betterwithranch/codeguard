@@ -25,28 +25,45 @@ class ChangeClassifier:
     def classify(self, scope: ChangedLines) -> ChangedLines:
         head = self.scanner.scan_files(self.working_tree.root, scope.files)
         base = self._base(scope)
-        return (
-            scope.with_node_starts(
-                {file: parsed.enclosing_starts(scope.points(file)) for file, parsed in head.items()}
+        kinds: dict[str, frozenset[str]] = {}
+        judged: dict[str, frozenset[int]] = {}
+        kind_lines: dict[str, dict[str, frozenset[int]]] = {}
+        for file, parsed in head.items():
+            added = scope.lines.get(file, frozenset())
+            removed = frozenset(
+                line for removal in scope.removals_in(file) for line in removal.base_lines
             )
-            .with_kinds(
-                {
-                    file: parsed.touched_kinds(scope.points(file), base.get(file))
-                    for file, parsed in head.items()
-                }
-            )
-            .with_judged_lines(
-                {file: parsed.judged_lines(scope.points(file)) for file, parsed in head.items()}
-            )
-        )
+            before = base.get(file)
+            kinds[file] = parsed.touched_kinds(added, before, removed)
+            judged[file] = parsed.judged_lines(added)
+            kind_lines[file] = parsed.kind_lines(added)
+            if before is None:
+                continue
+            # A removal shows the code around it that the change kept, not the code beside it.
+            gone = scope.removed_base_lines(file)
+            judged[file] |= _in_head(scope, file, before.judged_lines(removed, gone))
+            for kind, lines in before.kind_lines(removed, gone).items():
+                kind_lines[file][kind] = kind_lines[file].get(kind, frozenset()) | _in_head(
+                    scope, file, lines
+                )
+        return scope.with_kinds(kinds).with_judged_lines(judged).with_kind_lines(kind_lines)
 
     def _base(self, scope: ChangedLines) -> dict[str, ParsedFile]:
         if scope.base is None:
             return {}
-        contents = self.working_tree.base_contents(scope.base, scope.files)
+        paths = {file: base_path for file in scope.files if (base_path := scope.base_path(file))}
+        contents = self.working_tree.base_contents(scope.base, sorted(set(paths.values())))
+        found = [file for file, base_path in paths.items() if base_path in contents]
         with tempfile.TemporaryDirectory() as directory:
-            for file, content in contents.items():
+            # A renamed file's base is parsed under its new name, to be found by it.
+            for file in found:
                 path = Path(directory) / file
                 path.parent.mkdir(parents=True, exist_ok=True)
-                path.write_bytes(content)
-            return self.scanner.scan_files(Path(directory), list(contents))
+                path.write_bytes(contents[paths[file]])
+            return self.scanner.scan_files(Path(directory), found)
+
+
+def _in_head(scope: ChangedLines, file: str, base_lines: Iterable[int]) -> frozenset[int]:
+    return frozenset(
+        line for base_line in base_lines if (line := scope.head_line(file, base_line)) is not None
+    )

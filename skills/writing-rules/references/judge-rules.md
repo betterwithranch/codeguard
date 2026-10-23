@@ -32,6 +32,9 @@ a warning. That is a defect in the rule or in the case, never in the code under 
   `codeguard test`.
 - Gate on where a violation appears, not on the rule's topic.
 - A wider gate costs judge calls. `codeguard review --dry-run` counts them.
+- A wider gate costs tokens too: the judge is sent the whole node a trigger matched
+  around the change. Gate on the narrowest node that holds the violation, such as the
+  `except` clause rather than the whole `try`.
 
 ## Write eval cases at the boundary
 
