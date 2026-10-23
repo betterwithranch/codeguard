@@ -11,6 +11,13 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
 
 - Write one `valid` or `invalid` test case per branch of the rule, so deleting a branch
   fails a case. A comment above each case names its branch.
+- Match a pattern rule's construct only in the position where it breaks the convention
+  (the actual side of a comparison, the assert's condition), never anywhere in the
+  node. `has` with `stopBy: end` searches every descendant; use it only when the
+  construct breaks the convention in every position.
+- For each construct a pattern rule matches, add a `valid` case with the construct in a
+  position the convention allows (the expected side, nested inside a value), so a rule
+  that matches too widely fails a case.
 - Use made-up names in test cases (`ExampleModel`), so the case shows the pattern rather
   than one class in the codebase.
 - Put the reason and the fix in a pattern rule's `note`. codeguard prints it under the
