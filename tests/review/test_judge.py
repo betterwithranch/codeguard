@@ -39,7 +39,9 @@ class TestJudgeRequest:
         scope = ChangedLines(
             {},
             deletions={"pricing.py": frozenset({1})},
-            removals={"pricing.py": (Removal(before=2, line=1, rows=("FEE = 1",)),)},
+            removals={
+                "pricing.py": (Removal(before=2, line=1, rows=("FEE = 1",), base_lines=(2,)),)
+            },
         ).with_judged_lines({"pricing.py": frozenset({1, 2})})
 
         request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)
@@ -57,7 +59,9 @@ class TestJudgeRequest:
         scope = ChangedLines(
             {},
             deletions={"pricing.py": frozenset({1})},
-            removals={"pricing.py": (Removal(before=2, line=1, rows=("TAX = 2",)),)},
+            removals={
+                "pricing.py": (Removal(before=2, line=1, rows=("TAX = 2",), base_lines=(2,)),)
+            },
         )
 
         request = JudgeRequest.of_change(make_binding(), tmp_path, "pricing.py", scope)

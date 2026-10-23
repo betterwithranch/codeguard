@@ -525,12 +525,16 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
 - If the review crashes or uv can't build codeguard's environment, you see why, and the
   stop goes through.
 
-The judge gets the code the change touched: each changed function or method, each
-changed line outside them with the header of the class it's in, and, for each of the
-rule's triggers, the whole of each node of that kind around a changed line, so the judge
-sees the code that made the rule apply. A class's other members aren't sent, though the
-judge can read them. What is sent is what the judge has to read to decide; anything it
-only might need, it reads itself.
+The judge gets the code the change touched: each changed function or method, with its
+decorators; each changed statement outside them, whole, with the header and decorators of
+the class it's in; each class whose header changed, whole; and, for each of the rule's
+triggers, the whole of each node of that kind around a changed line, so the judge sees
+the code that made the rule apply. Removed lines are sent with the code the change kept
+around them, the same way: the function or method they were in, or the header of their
+class, or the rest of a statement they were part of, never the code beside them. Unless
+a class's header changed, its other members aren't sent, though the judge can read them.
+What is sent is what the judge has to read to decide; anything it only might need, it
+reads itself.
 Lines carry the file's line numbers; added and changed lines are marked `+`, and the
 lines git's diff shows the change removed are marked `-`. A new file is sent whole but
 for its blank lines outside a function or method; every file with `--all` is sent whole,

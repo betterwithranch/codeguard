@@ -22,6 +22,7 @@ class NodeKind(StrEnum):
     SCOPE = "scopes"
     SCOPE_NAME = "scope_names"
     MEMBER_LIST = "member_lists"
+    STATEMENT = "statements"
 
 
 class SyntaxTable(BaseModel):
@@ -36,6 +37,7 @@ class SyntaxTable(BaseModel):
     scopes: AstGrepRule
     scope_names: AstGrepRule
     member_lists: AstGrepRule
+    statements: AstGrepRule
     change_kinds: dict[ChangeKind, AstGrepRule]
 
     @field_validator("change_kinds")

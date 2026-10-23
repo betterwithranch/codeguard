@@ -5,7 +5,7 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Self
 
-_HUNK = re.compile(r"@@ -\S+ \+(\d+)(?:,(\d+))? @@")
+_HUNK = re.compile(r"@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@")
 # ASCII whitespace, the same set git treats as blank.
 _BLANK = " \t\r\f\v"
 
@@ -13,11 +13,31 @@ _BLANK = " \t\r\f\v"
 @dataclass(frozen=True)
 class Removal:
     """Rows a change removed, shown before the new line `before`; a violation in them is
-    reported on `line`."""
+    reported on `line`. `base_lines` are the rows' lines in the base."""
 
     before: int
     line: int
     rows: tuple[str, ...]
+    base_lines: tuple[int, ...]
+
+
+@dataclass(frozen=True)
+class Edit:
+    """A hunk: `base_count` rows from line `base_start` of the base replaced by `count` rows
+    from line `start`. git numbers an empty side by the line before it."""
+
+    base_start: int
+    base_count: int
+    start: int
+    count: int
+
+    @property
+    def base_rows(self) -> range:
+        return range(self.base_start, self.base_start + self.base_count)
+
+    @property
+    def last_base_line(self) -> int:
+        return self.base_start + self.base_count - 1 if self.base_count else self.base_start
 
 
 @dataclass(frozen=True)
@@ -28,6 +48,7 @@ class ChangedLines:
     judged: Mapping[str, frozenset[int]] = field(default_factory=dict)
     kind_lines: Mapping[str, Mapping[str, frozenset[int]]] = field(default_factory=dict)
     removals: Mapping[str, tuple[Removal, ...]] = field(default_factory=dict)
+    edits: Mapping[str, tuple[Edit, ...]] = field(default_factory=dict)
     base: str | None = None
 
     @property
@@ -36,6 +57,9 @@ class ChangedLines:
 
     def points(self, file: str) -> frozenset[int]:
         return self.lines.get(file, frozenset()) | self.deletions.get(file, frozenset())
+
+    def with_edits(self, edits: Mapping[str, tuple[Edit, ...]]) -> Self:
+        return replace(self, edits=edits)
 
     def with_kinds(self, kinds: Mapping[str, frozenset[str]]) -> Self:
         return replace(self, kinds=kinds)
@@ -61,6 +85,19 @@ class ChangedLines:
 
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
+
+    def removed_base_lines(self, file: str) -> frozenset[int]:
+        return frozenset(line for edit in self.edits.get(file, ()) for line in edit.base_rows)
+
+    def head_line(self, file: str, base_line: int) -> int | None:
+        """The line a base line is in the working tree, or None when the change removed it."""
+        line = base_line
+        for edit in self.edits.get(file, ()):
+            if base_line in edit.base_rows:
+                return None
+            if base_line > edit.last_base_line:
+                line += edit.count - edit.base_count
+        return line
 
     def covers(self, file: str, line: int | None, end_line: int | None = None) -> bool:
         if file not in self.files:
@@ -119,12 +156,14 @@ class WorkingTree:
         hunks = _hunks(diff)
         added, deletions = _changed_points(hunks)
         lines = {**added, **{file: self._code_lines(file) for file in untracked}}
-        return ChangedLines(
+        changed = ChangedLines(
             lines={file: numbers for file, numbers in lines.items() if numbers},
             deletions={file: numbers for file, numbers in deletions.items() if numbers},
             removals=_removals(hunks),
             base=merge_base,
         )
+        edits = _edits(hunks)
+        return changed.with_edits({file: edits[file] for file in changed.files if file in edits})
 
     def base_contents(self, base: str, files: Sequence[str]) -> dict[str, bytes]:
         if not files:
@@ -182,13 +221,29 @@ def _removals(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Removal, ...]]:
     return {file: tuple(found) for file, found in removals.items()}
 
 
+def _edits(hunks: Sequence["_Hunk"]) -> dict[str, tuple[Edit, ...]]:
+    edits: dict[str, list[Edit]] = {}
+    for hunk in hunks:
+        edits.setdefault(hunk.file, []).append(hunk.edit)
+    return {file: tuple(found) for file, found in edits.items()}
+
+
 @dataclass
 class _Hunk:
     file: str
+    base_start: int
+    base_count: int
     start: int
+    count: int
     points: set[int] = field(default_factory=set)
     added_rows: int = 0
+    removed_rows: int = 0
     removed: list[str] = field(default_factory=list)
+    removed_lines: list[int] = field(default_factory=list)
+
+    @property
+    def edit(self) -> Edit:
+        return Edit(self.base_start, self.base_count, self.start, self.count)
 
     @property
     def deletion_point(self) -> int:
@@ -199,7 +254,7 @@ class _Hunk:
         # git numbers a hunk that only removes rows by the line before them.
         before = self.start if self.added_rows else self.start + 1
         line = min(self.points) if self.points else self.deletion_point
-        return Removal(before, line, tuple(self.removed))
+        return Removal(before, line, tuple(self.removed), tuple(self.removed_lines))
 
     def add(self, text: str) -> None:
         # A blank line changes nothing in any language, so only lines holding code count.
@@ -209,7 +264,11 @@ class _Hunk:
 
     def remove(self, text: str) -> None:
         if _holds_code(text):
-            self.removed.append(text)
+            # Shown to the judge, so a byte that isn't UTF-8 becomes U+FFFD, as in the file.
+            row = text.removesuffix("\r").encode(errors="surrogateescape")
+            self.removed.append(row.decode(errors="replace"))
+            self.removed_lines.append(self.base_start + self.removed_rows)
+        self.removed_rows += 1
 
 
 def _hunks(diff: str) -> list[_Hunk]:
@@ -224,12 +283,20 @@ def _hunks(diff: str) -> list[_Hunk]:
             file = row.removeprefix("+++ ").removesuffix("\t")
         elif match := _HUNK.match(row):
             in_header = False
-            hunks.append(_Hunk(file, int(match[1])))
+            base_start, base_count, start, count = match.groups()
+            hunks.append(
+                _Hunk(file, int(base_start), _count(base_count), int(start), _count(count))
+            )
         elif not in_header and hunks and row.startswith("-"):
             hunks[-1].remove(row[1:])
         elif not in_header and hunks and row.startswith("+"):
             hunks[-1].add(row[1:])
     return hunks
+
+
+def _count(group: str | None) -> int:
+    # git leaves out a count of 1.
+    return 1 if group is None else int(group)
 
 
 def _rows(text: str | bytes) -> list[str]:

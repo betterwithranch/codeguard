@@ -19,8 +19,11 @@ names:
         - inside: {kind: aliased_import, inside: {kind: import_statement}}
 scopes:
   any:
+    - kind: decorated_definition
     - kind: function_definition
+      not: {inside: {kind: decorated_definition, field: definition}}
     - kind: class_definition
+      not: {inside: {kind: decorated_definition, field: definition}}
 scope_names:
   kind: identifier
   any:
@@ -29,6 +32,26 @@ scope_names:
 member_lists:
   kind: block
   inside: {kind: class_definition, field: body}
+statements:
+  any:
+    - kind: expression_statement
+    - kind: return_statement
+    - kind: assert_statement
+    - kind: raise_statement
+    - kind: delete_statement
+    - kind: pass_statement
+    - kind: import_statement
+    - kind: import_from_statement
+    - kind: future_import_statement
+    - kind: global_statement
+    - kind: nonlocal_statement
+    - kind: type_alias_statement
+    - kind: if_statement
+    - kind: for_statement
+    - kind: while_statement
+    - kind: try_statement
+    - kind: with_statement
+    - kind: match_statement
 change_kinds:
   comment:
     kind: comment

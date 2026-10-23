@@ -247,3 +247,106 @@ class TestChangeClassifier:
 
         assert scope.judged_lines("a.py") == {4}
         assert scope.judged_lines("a.py", frozenset({ChangeKind.CONTROL_FLOW})) == {1, 2, 3, 4}
+
+    def test_decorator_edit_judges_the_decorated_method(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "class Order:\n    @property\n    def total(self):\n        return 1\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("@property", "@cached_property"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {2, 3, 4}
+
+    def test_class_body_edit_judges_the_class_decorators_with_its_header(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "@dataclass\nclass Order:\n    def tax(self):\n        return 0\n\n    rate = 1\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("rate = 1", "rate = 2"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 6}
+
+    def test_multi_line_statement_edit_judges_the_whole_statement(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "RATES = {\n    'net': 1,\n    'gross': 2,\n}\nTAX = 3\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("'gross': 2", "'gross': 4"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 4}
+
+    def test_multi_line_statement_edit_in_a_class_body_judges_the_header_and_statement(
+        self, tmp_path
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "class Order:\n    def tax(self):\n        return 0\n\n"
+            "    rates = (\n        1,\n        2,\n    )\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("        2,", "        4,"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 5, 6, 7, 8}
+
+    def test_removed_method_judges_the_class_header_not_the_method_before_it(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write(
+            "a.py",
+            "class Order:\n    def total(self):\n        raise ValueError\n\n"
+            "    def tax(self):\n        return 0\n",
+        )
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "class Order:\n    def total(self):\n        raise ValueError\n")
+
+        kinds = classified_kinds(git_repo, "a.py")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1}
+        assert kinds is not None
+        assert ChangeKind.RETURN_YIELD in kinds
+        assert ChangeKind.RAISE not in kinds
+
+    def test_removed_first_member_judges_the_class_header_not_the_class(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write(
+            "a.py",
+            "class Order:\n    rate = 1\n\n    def tax(self):\n        return 0\n",
+        )
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "class Order:\n\n    def tax(self):\n        return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1}
+
+    def test_removed_line_in_a_function_judges_the_function(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "def tax():\n    log()\n    return 0\n\n\nRATE = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "def tax():\n    return 0\n\n\nRATE = 1\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2}
+
+    def test_removed_module_level_statement_judges_no_line_beside_it(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "def tax():\n    return 0\n\n\nRATE = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "def tax():\n    return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == frozenset()
+
+    def test_removed_line_of_a_multi_line_statement_judges_the_rest_of_the_statement(
+        self, tmp_path
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "TAX = 3\nRATES = (\n    1,\n    2,\n)\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "TAX = 3\nRATES = (\n    1,\n)\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {2, 3, 4}
+
+    def test_removal_judges_its_context_where_earlier_changes_moved_it(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "A = 1\n\n\ndef tax():\n    log()\n    return 0\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "A = 1\nB = 2\nC = 3\n\n\ndef tax():\n    return 0\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {2, 3, 6, 7}
