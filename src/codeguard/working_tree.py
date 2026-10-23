@@ -90,8 +90,11 @@ class ChangedLines:
     def kinds_of(self, file: str) -> frozenset[str] | None:
         return self.kinds.get(file)
 
-    def base_path(self, file: str) -> str:
-        """The file's path in the base, which a rename changes."""
+    def base_path(self, file: str) -> str | None:
+        """The file's path in the base, which a rename changes; None for a file git's diff
+        doesn't hold, which is untracked, so new."""
+        if file not in self.edits:
+            return None
         return self.sources.get(file, file)
 
     def removed_base_lines(self, file: str) -> frozenset[int]:

@@ -186,6 +186,14 @@ class TestWorkingTree:
         assert changed.sources == {"b.py": "a.py"}
         assert changed.base_path("b.py") == "a.py"
 
+    def test_untracked_file_has_no_base_path(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "a = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("b.py", "b = 1\n")
+
+        assert WorkingTree(root=git_repo.root).changed_lines("HEAD").base_path("b.py") is None
+
     def test_untracked_file_has_every_line_with_code_changed(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
         git_repo.write("a.py", "a = 1\n\nb = 1\n")

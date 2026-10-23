@@ -478,3 +478,37 @@ class TestChangeClassifier:
         assert ChangeKind.DEFINITION_ADDED_OR_REMOVED not in (
             classified_kinds(git_repo, "b.py") or ()
         )
+
+    def test_renamed_file_keeps_its_base_beside_a_new_file_at_its_old_path(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = (
+            "".join(f"X{i} = {i}\n" for i in range(20)) + "def tax():\n    log()\n    return 0\n"
+        )
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.git("mv", "a.py", "0.py")
+        git_repo.write("0.py", source.replace("    log()\n", ""))
+        git_repo.write("a.py", "def rate():\n    return 1\n")
+
+        assert classified_judged_lines(git_repo, "0.py") == {21, 22}
+        assert ChangeKind.DEFINITION_ADDED_OR_REMOVED not in (
+            classified_kinds(git_repo, "0.py") or ()
+        )
+
+    def test_removed_one_line_handler_judges_its_try_and_the_block_it_guarded(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "try:\n    load()\n    run()\nexcept KeyError: pass\nclose()\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("except KeyError: pass\n", ""))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3}
+
+    def test_removed_function_in_a_module_level_block_judges_the_block_header(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = "if typing:\n    def f():\n        load()\n    rate = 1\n"
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("    def f():\n        load()\n", ""))
+
+        assert classified_judged_lines(git_repo, "a.py") == {1}

@@ -57,6 +57,9 @@ statements:
     - kind: except_clause
     - kind: finally_clause
     - kind: case_clause
+    - kind: decorated_definition
+    - kind: function_definition
+    - kind: class_definition
 handlers:
   kind: except_clause
 guarded_blocks:

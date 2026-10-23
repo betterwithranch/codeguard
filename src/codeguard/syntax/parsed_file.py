@@ -155,7 +155,8 @@ class _Statements:
         if statement is None:
             return {point}
         if _removed(statement, self.removed):
-            return self._kept_around(statement, point, scope)
+            gone = max((node for node in around if _removed(node, self.removed)), key=_length)
+            return self._kept_around(gone, point, scope)
         return {*statement.lines, *self._guarded_by(statement)}
 
     def _kept_around(self, gone: SyntaxNode, point: int, scope: SyntaxNode | None) -> set[int]:
