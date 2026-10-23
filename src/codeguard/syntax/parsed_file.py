@@ -34,10 +34,10 @@ class ParsedFile:
         return frozenset(
             line
             for point in points
-            # A comment breaks no code rule, so the code around it isn't needed.
+            # A comment or docstring breaks no code rule, so the code around it isn't needed.
             for line in (
                 {point}
-                if point in self._comment_lines
+                if point in self._prose_lines
                 else _context_lines(scopes, members, statements, point)
             )
         )
@@ -89,30 +89,46 @@ class ParsedFile:
         return [node for node in self.of_kind(kind) if not _removed(node, removed)]
 
     def _kinds_spanning(self, line: int) -> set[str]:
-        comment = line in self._comment_lines
+        prose = line in self._prose_lines
         found: set[str] = {
             node.kind
             for node in self.nodes
             if not isinstance(node.kind, NodeKind)
             and node.spans(line)
-            # A line holding only a comment changes none of the code around it.
-            and (not comment or self._comment_lines.issuperset(node.lines))
+            # A line holding only comments and docstrings changes none of the code around it.
+            and (not prose or self._is_prose(node))
         }
         if not found or not found <= _PROSE:
             found.add(ChangeKind.CODE)
         return found
 
+    def _is_prose(self, node: SyntaxNode) -> bool:
+        if isinstance(node.kind, ChangeKind) and node.kind not in _PROSE:
+            return False
+        return any(_encloses(prose, node) or _same(prose, node) for prose in self._prose)
+
     @cached_property
-    def _comment_lines(self) -> frozenset[int]:
-        """Lines that hold only comments."""
+    def _prose(self) -> list[SyntaxNode]:
+        return [node for node in self.nodes if node.kind in _PROSE]
+
+    @cached_property
+    def _prose_lines(self) -> frozenset[int]:
+        """Lines that hold only comments and docstrings."""
+        starts = [0, *(offset + 1 for offset, byte in enumerate(self.content) if byte == 10)]
+        on_line: dict[int, list[SyntaxNode]] = {}
+        for node in self._prose:
+            for line in node.lines:
+                on_line.setdefault(line, []).append(node)
         lines: set[int] = set()
-        for node in self.of_kind(NodeKind.COMMENT):
-            before = self.content[self.content.rfind(b"\n", 0, node.start) + 1 : node.start]
-            after_end = self.content.find(b"\n", node.end)
-            after = self.content[node.end : len(self.content) if after_end < 0 else after_end]
-            first = node.start_line + (1 if before.strip() else 0)
-            last = node.end_line - (1 if after.strip() else 0)
-            lines.update(range(first, last + 1))
+        for line, nodes in on_line.items():
+            start = starts[line - 1]
+            end = starts[line] - 1 if line < len(starts) else len(self.content)
+            if all(
+                chr(self.content[offset]).isspace()
+                or any(node.start <= offset < node.end for node in nodes)
+                for offset in range(start, end)
+            ):
+                lines.add(line)
         return frozenset(lines)
 
     @property

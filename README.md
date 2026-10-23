@@ -309,8 +309,8 @@ A file touches a trigger when a changed line falls inside a node it matches. A n
 touches every trigger it matches. A blank line is never a changed line, in any language:
 adding or removing blank lines fires no trigger, isn't judged and leaves no diagnostic,
 so the blank line before a new method doesn't make its class part of the change. A line
-holding only a comment touches only `comment` (and gates on it), not the function or
-class around it: a comment breaks no code rule. A rule
+holding only comments and docstrings touches only `comment` and `docstring`, not the
+function or class around it: prose breaks no code rule. A rule
 that needs every change says `triggers: [any]`; `codeguard test` warns on `any`, `code`,
 `function-body` and `function-signature`. The built-in kinds are `comment`, `docstring`,
 `import`, `function-signature`, `function-body`, `test-function`, `fixture`, `helper-function`,
@@ -531,7 +531,7 @@ The judge gets the code the change touched: each changed function or method, wit
 decorators; each changed statement outside them, whole, with the header and decorators of
 the class it's in; for a changed `elif`, `else`, `except` or `finally` line, just that
 clause, with the `try` block an `except` guards; each class whose header changed, whole;
-each changed comment line alone; and, for each of the rule's
+each changed comment or docstring line alone; and, for each of the rule's
 triggers, the whole of each node of that kind around a changed line, so the judge sees
 the code that made the rule apply. Removed lines are sent with the code the change kept
 around them, the same way: the function or method they were in, or the header of their

@@ -402,3 +402,23 @@ class TestChangeClassifier:
 
         assert classified_judged_lines(git_repo, "a.py") == frozenset()
         assert classified_kinds(git_repo, "a.py") == {ChangeKind.COMMENT, ChangeKind.ANY}
+
+    def test_docstring_edit_judges_only_the_docstring(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = 'def tax():\n    """Net tax."""\n    return 0\n'
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("Net", "Gross"))
+
+        assert classified_judged_lines(git_repo, "a.py") == {2}
+        assert classified_kinds(git_repo, "a.py") == {ChangeKind.DOCSTRING, ChangeKind.ANY}
+
+    def test_module_docstring_edit_touches_no_code_kind(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        source = '"""Pricing.\n\nRates.\n"""  # doc\nRATE = 1\n'
+        git_repo.write("a.py", source)
+        git_repo.commit("Add a")
+        git_repo.write("a.py", source.replace("Rates.", "Tax rates."))
+
+        assert classified_judged_lines(git_repo, "a.py") == {3}
+        assert classified_kinds(git_repo, "a.py") == {ChangeKind.DOCSTRING, ChangeKind.ANY}
