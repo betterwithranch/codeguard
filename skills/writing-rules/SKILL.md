@@ -11,6 +11,12 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
 
 - Write one `valid` or `invalid` test case per branch of the rule, so deleting a branch
   fails a case. A comment above each case names its branch.
+- Match a pattern rule's construct only where it breaks the convention: a `len()`
+  compared with a literal, not a `len()` inside a slice. `stopBy: end` on `has` or
+  `inside` searches every descendant or ancestor; in a positive match, use it only when
+  the construct breaks the convention in every position.
+- Give each construct a pattern rule matches a `valid` case where the convention allows
+  it, if it has such a position, so a rule that matches too widely fails a case.
 - Use made-up names in test cases (`ExampleModel`), so the case shows the pattern rather
   than one class in the codebase.
 - Put the reason and the fix in a pattern rule's `note`. codeguard prints it under the
@@ -22,6 +28,10 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
 - Write a pattern rule whenever ast-grep can check the convention, and a judge rule
   (a skill) only when it needs judgment. A pattern rule is fast, free, and gives the
   same answer every time; a judge rule costs a Claude call per changed file.
+- When syntax decides only some forms of a convention, write a pattern rule for those
+  forms and a judge rule gated on every form. No judge rule runs on a file with an
+  `error` diagnostic, so the two report the same code only if the pattern rule is a
+  `warning`.
 - A pattern rule runs on every file in its language. Scope it with a binding,
   `bindings/<id>.yaml` with `rule`, `paths` and `exclude_paths`, never with ast-grep's
   `files` or `ignores`, so a project can change the scope. The exception is a file name
@@ -35,8 +45,8 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
   without one, and a violation outside the triggers.
 - Before writing or changing a judge rule, and whenever its eval or a judged review
   fails, flips between runs or reports a warning, follow `references/judge-rules.md`:
-  how to state the criterion, gate every form of the violation, write eval cases at the
-  boundary, and verify.
+  how to read the code it will judge, state the criterion, gate every form of the
+  violation, write eval cases at the boundary, and verify.
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.
