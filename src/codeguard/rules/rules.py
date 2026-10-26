@@ -25,7 +25,6 @@ from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 @dataclass(frozen=True)
 class Rules:
     working_tree: WorkingTree
-    latest: bool = False
 
     @cached_property
     def config(self) -> Config:
@@ -107,9 +106,7 @@ class Rules:
 
     @cached_property
     def resolver(self) -> RulesetResolver:
-        return RulesetResolver(
-            self.working_tree.root, self.config, self.ast_grep, latest=self.latest
-        )
+        return RulesetResolver(self.working_tree.root, self.config, self.ast_grep)
 
     @cached_property
     def judges(self) -> Judges:

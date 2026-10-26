@@ -11,7 +11,6 @@ from codeguard.config.change_kind import ChangeKind
 from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE
 from codeguard.config.gate_rule import GateRule
-from codeguard.config.lock import LOCK_FILE
 from codeguard.config.pattern_binding_config import PatternBindingsConfig
 from codeguard.config.ruleset import BINDINGS_DIR, Ruleset
 from codeguard.config.ruleset_config import RulesetConfig
@@ -34,7 +33,7 @@ class RulesetLoader:
         return cls(
             repo=working_tree,
             root=working_tree / CONFIG_DIR,
-            files=frozenset({PurePath(CONFIG_FILE).name, PurePath(LOCK_FILE).name}),
+            files=frozenset({PurePath(CONFIG_FILE).name}),
         )
 
     def check(self) -> None:

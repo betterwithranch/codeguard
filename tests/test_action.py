@@ -18,11 +18,6 @@ FAKE_UV = (
 
 
 class TestReviewStep:
-    def test_review_command_has_no_latest(self, tmp_path):
-        arguments = run_review_step(tmp_path, labels=[])
-
-        assert arguments == ["review", "--base", "origin/main"]
-
     def test_allow_judge_errors_label_passes_judge_errors_as_warnings(self, tmp_path):
         arguments = run_review_step(tmp_path, labels=["bug", ALLOW_JUDGE_ERRORS_LABEL])
 

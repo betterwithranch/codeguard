@@ -1,7 +1,6 @@
 import os
 
 import pytest
-from packaging.specifiers import SpecifierSet
 from packaging.version import Version
 from pydantic import ValidationError
 
@@ -16,7 +15,6 @@ from codeguard.config import (
     RuleOverride,
     RulesetConfig,
     Severity,
-    VersionedPackageConfig,
 )
 
 
@@ -132,29 +130,7 @@ class TestPackagesConfig:
                 }
             )
 
-    def test_git_package_with_a_version_range_is_versioned(self):
-        config = Config.model_validate(
-            {
-                "packages": [
-                    {
-                        "kind": "versioned",
-                        "git": "https://example.com/rules.git",
-                        "version": ">=0.2,<1",
-                        "rulesets": {"python": {}},
-                    }
-                ]
-            }
-        )
-
-        assert config.packages == (
-            VersionedPackageConfig(
-                git="https://example.com/rules.git",
-                version=SpecifierSet(">=0.2,<1"),
-                rulesets={"python": RulesetConfig()},
-            ),
-        )
-
-    def test_git_package_with_both_ref_and_version_is_an_error(self):
+    def test_versioned_package_is_an_error(self):
         with pytest.raises(ValidationError):
             Config.model_validate(
                 {
@@ -162,7 +138,6 @@ class TestPackagesConfig:
                         {
                             "kind": "versioned",
                             "git": "https://example.com/rules.git",
-                            "ref": "v0.2.0",
                             "version": ">=0.2,<1",
                             "rulesets": {"python": {}},
                         }
