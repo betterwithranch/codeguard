@@ -71,10 +71,6 @@ The action reviews the files changed since the merge base with the PR's base bra
 then runs the rule tests. The judge needs the token; create it with `claude setup-token`
 and store it as a repository secret.
 
-The review uses the package tags in `.codeguard/lock.yaml`, the same as a local review,
-so run `codeguard update` and commit the lock. For now, a package range the lock
-doesn't have uses the newest tag in the range; a later release will require the lock.
-
 A judge call that couldn't complete fails the review, and no setting turns that off
 ([why](#configuration-reference)). To merge the PR anyway, add the
 `codeguard-allow-judge-errors` label to it, so each bypass is chosen for one PR and
@@ -141,9 +137,9 @@ A project can also opt into rulesets from rule packages:
 ```yaml
 # .codeguard/config.yaml
 packages:
-  - kind: versioned
+  - kind: git
     git: https://github.com/betterwithranch/codeguard-rules.git
-    version: ">=0.2,<1"
+    ref: v0.6.0
     rulesets:
       python:
         exclude: [no-del-param]
@@ -172,18 +168,12 @@ packages:
 Diagnostics name a packaged rule by package, ruleset and id:
 `betterwithranch/python/no-del-param`.
 
-A git package takes a `version` range (`kind: versioned`) or a `ref` (`kind: git`):
+A git package's `ref` is a tag or commit. Local and CI reviews use the rules at that
+`ref`, so a commit gets the same rules everywhere, and a package release changes nothing
+until a project moves its `ref`. To try a release, change `ref` locally, or point a
+`kind: path` package at a checkout of it.
 
-- `version` follows the newest tag in the range. `codeguard update` writes that tag to
-  `.codeguard/lock.yaml`; commit it. Local and CI reviews use the locked tag until the
-  next update, so a commit gets the same rules everywhere. A range the lock doesn't have
-  uses the newest tag in the range, until a later release requires the lock.
-  `codeguard review --latest`
-  uses the newest tag in the range and ignores the lock, for trying a new version
-  locally.
-- `ref` pins a tag or commit everywhere. `codeguard update` leaves it alone.
-
-codeguard fetches each tag once into `~/.cache/codeguard/packages` and reuses it, so a
+codeguard fetches each `ref` once into `~/.cache/codeguard/packages` and reuses it, so a
 `ref` must not be a branch.
 
 A project runs one ast-grep version for all its rules: codeguard's own, or the version
@@ -229,8 +219,8 @@ python/
 
 A binding or rule eval may end in `.yaml` or `.yml`. Pattern rule tests in
 `rule-tests/pattern/`, the old layout, still run. codeguard rejects anything else in a
-ruleset directory, and in `.codeguard/` anything else but `config.yaml` and
-`lock.yaml`, so a rule moves between a project and a package unchanged.
+ruleset directory, and in `.codeguard/` anything else but `config.yaml`, so a rule
+moves between a project and a package unchanged.
 
 ### Bindings
 
@@ -460,7 +450,7 @@ A project tests the rules in its `.codeguard/` the same way a package does.
 | | | each edit gets its expected review, 20 runs of 20 | `codeguard eval --repeat 20` | yes |
 
 Run `codeguard test` and `codeguard eval` at the package root; they cover every ruleset. Tag
-releases `v<major>.<minor>.<patch>` so `codeguard update` finds them.
+releases `v<major>.<minor>.<patch>`; projects name the tag as their `ref`.
 [betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules) is
 an example.
 
@@ -723,14 +713,12 @@ From the project:
 codeguard review              # uncommitted changes
 codeguard review --base main  # changes since the merge base with main
 codeguard review --all        # every file
-codeguard review --latest     # newest tag in each package range, not the lock
 codeguard review --dry-run    # pattern rules, then count the judge calls; calls no model
 codeguard review --format json  # one JSON object with every diagnostic
 codeguard review --judge-errors-as-warnings  # judge calls that couldn't complete don't fail
 codeguard test                # pattern rule and gate tests, and judge rule eval triggers
 codeguard test --update-all   # the same, regenerating snapshots
 codeguard eval                # judge rule evals; calls the configured judge
-codeguard update              # lock each package range to its newest tag
 ```
 
 ## Working on codeguard

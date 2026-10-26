@@ -11,7 +11,6 @@ from pydantic import (
 )
 
 from codeguard.config.ruleset_config import RulesetConfig
-from codeguard.config.versions import VersionRange
 
 
 class GitPackageConfig(BaseModel):
@@ -20,15 +19,6 @@ class GitPackageConfig(BaseModel):
     kind: Literal["git"] = "git"
     git: str
     ref: str
-    rulesets: dict[str, RulesetConfig] = Field(min_length=1)
-
-
-class VersionedPackageConfig(BaseModel):
-    model_config = ConfigDict(extra="forbid", frozen=True, arbitrary_types_allowed=True)
-
-    kind: Literal["versioned"] = "versioned"
-    git: str
-    version: VersionRange
     rulesets: dict[str, RulesetConfig] = Field(min_length=1)
 
 
@@ -48,6 +38,4 @@ class PathPackageConfig(BaseModel):
         return (working_tree / path).resolve()
 
 
-type PackageConfig = Annotated[
-    GitPackageConfig | VersionedPackageConfig | PathPackageConfig, Field(discriminator="kind")
-]
+type PackageConfig = Annotated[GitPackageConfig | PathPackageConfig, Field(discriminator="kind")]

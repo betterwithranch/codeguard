@@ -9,7 +9,6 @@ import logfire
 
 from codeguard.config import ConfigLoader
 from codeguard.file_lock import exclusive_lock
-from codeguard.packages import PackageUpdate
 from codeguard.rules import Rules, check_installed_evals
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
@@ -36,11 +35,6 @@ def main() -> int:
         "--all",
         action="store_true",
         help="Check every tracked and untracked file.",
-    )
-    review_command.add_argument(
-        "--latest",
-        action="store_true",
-        help="Use the newest tag in each package's version range instead of the lock file.",
     )
     output = review_command.add_mutually_exclusive_group()
     output.add_argument(
@@ -99,11 +93,6 @@ def main() -> int:
     )
     eval_command.set_defaults(run=_eval)
 
-    update_command = commands.add_parser(
-        "update", help="Lock each package's version range to its newest matching tag."
-    )
-    update_command.set_defaults(run=_update)
-
     config_command = commands.add_parser(
         "config", help="Print a setting from .codeguard/config.yaml, or its default."
     )
@@ -147,7 +136,7 @@ def _configure_telemetry() -> None:
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
     if args.dry_run:
-        rules = Rules(working_tree, latest=args.latest)
+        rules = Rules(working_tree)
         scope = _scope(working_tree, args)
         result = rules.check_patterns(scope)
         result.write(sys.stdout)
@@ -159,10 +148,9 @@ def _review(args: argparse.Namespace) -> int:
             "review {repository}",
             repository=working_tree.root.name,
             files=len(scope.files),
-            latest=args.latest,
             host=args.host,
         ) as span:
-            result = Rules(working_tree, latest=args.latest).review(scope)
+            result = Rules(working_tree).review(scope)
             if args.judge_errors_as_warnings:
                 result = result.with_judge_errors_as_warnings()
             span.set_attributes(
@@ -206,10 +194,4 @@ def _working_tree(package: Path | None) -> WorkingTree:
 def _config(args: argparse.Namespace) -> int:
     config = ConfigLoader(WorkingTree.containing(Path.cwd()).root).load()
     sys.stdout.write(f"{getattr(config, args.setting)}\n")
-    return _EXIT_PASSED
-
-
-def _update(args: argparse.Namespace) -> int:
-    for update in PackageUpdate(WorkingTree.containing(Path.cwd()).root).run():
-        sys.stdout.write(f"{update}\n")
     return _EXIT_PASSED

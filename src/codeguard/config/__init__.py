@@ -6,12 +6,10 @@ from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
 from codeguard.config.gate_rule import GateRule
 from codeguard.config.judge_config import JudgeConfig, JudgeModel, JudgeProvider
-from codeguard.config.lock import LOCK_FILE, Lock, LockedPackage
 from codeguard.config.package_config import (
     GitPackageConfig,
     PackageConfig,
     PathPackageConfig,
-    VersionedPackageConfig,
 )
 from codeguard.config.path_scope import PathScope
 from codeguard.config.pattern_binding_config import PatternBindingConfig, PatternBindingsConfig
@@ -36,7 +34,6 @@ __all__ = [
     "GATE_DIR",
     "JUDGE_EVAL_DIR",
     "LEGACY_PATTERN_TEST_DIR",
-    "LOCK_FILE",
     "PATTERN_RULE_DIR",
     "RULE_TEST_DIR",
     "SKILL_FILE",
@@ -53,8 +50,6 @@ __all__ = [
     "JudgeConfig",
     "JudgeModel",
     "JudgeProvider",
-    "Lock",
-    "LockedPackage",
     "PackageConfig",
     "PathPackageConfig",
     "PathScope",
@@ -67,5 +62,4 @@ __all__ = [
     "RulesetStructure",
     "Severity",
     "VersionRange",
-    "VersionedPackageConfig",
 ]

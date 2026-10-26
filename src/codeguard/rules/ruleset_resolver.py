@@ -6,8 +6,8 @@ from pathlib import Path
 from packaging.version import Version
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import Config, ConfigError, Lock, Ruleset, RulesetLoader
-from codeguard.packages import MANIFEST_FILE, GitFetch, LatestRefs, LockedRefs, Manifest, Packages
+from codeguard.config import Config, ConfigError, Ruleset, RulesetLoader
+from codeguard.packages import MANIFEST_FILE, GitFetch, Manifest, Packages
 
 _PACKAGE_CACHE_DIR = Path.home() / ".cache" / "codeguard" / "packages"
 _CODEGUARD_VERSION = Version(version("codeguard"))
@@ -18,13 +18,11 @@ class RulesetResolver:
     root: Path
     config: Config
     ast_grep: AstGrep
-    latest: bool = False
 
     @cached_property
     def rulesets(self) -> tuple[Ruleset, ...]:
-        refs = LatestRefs() if self.latest else LockedRefs(Lock.load(self.root))
         packages = Packages(
-            self.root, GitFetch(_PACKAGE_CACHE_DIR), self.ast_grep.version, _CODEGUARD_VERSION, refs
+            self.root, GitFetch(_PACKAGE_CACHE_DIR), self.ast_grep.version, _CODEGUARD_VERSION
         )
         return (RulesetLoader.local(self.root).load(), *packages.rulesets(self.config.packages))
 
