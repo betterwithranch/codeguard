@@ -26,6 +26,11 @@ class _PatternRule(BaseModel):
     model_config = ConfigDict(extra="ignore", frozen=True)
 
     id: str
+    metadata: dict[str, object] | None = None
+
+    @property
+    def why(self) -> object:
+        return (self.metadata or {}).get("why")
 
 
 @dataclass(frozen=True)
@@ -43,13 +48,25 @@ class Ruleset:
         return frozenset(binding.skill.name for binding in self.bindings.root.values())
 
     def pattern_rule_ids(self) -> frozenset[str]:
+        return frozenset(rule.id for rule in self._pattern_rules())
+
+    def pattern_rules_without_why(self) -> tuple[str, ...]:
+        return tuple(
+            sorted(
+                rule.id
+                for rule in self._pattern_rules()
+                if not (isinstance(rule.why, str) and rule.why.strip())
+            )
+        )
+
+    def _pattern_rules(self) -> list[_PatternRule]:
         rule_dir = self.root / PATTERN_RULE_DIR
-        return frozenset(
-            _PatternRule.model_validate(document).id
+        return [
+            _PatternRule.model_validate(document)
             for path in sorted(rule_dir.rglob("*.y*ml"))
             for document in yaml.safe_load_all(path.read_text())
             if document
-        )
+        ]
 
     def gates(self) -> dict[str, GateRule]:
         gate_dir = self.root / GATE_DIR

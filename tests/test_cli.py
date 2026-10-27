@@ -1075,6 +1075,33 @@ class TestTestCommand:
         )
         assert result.returncode == 0
 
+    @pytest.mark.parametrize(
+        ("options", "report", "returncode"),
+        [
+            ([], "warning: no-print: no metadata.why\n", 0),
+            (["--missing-why", "warn"], "warning: no-print: no metadata.why\n", 0),
+            (["--missing-why", "fail"], "no-print: no metadata.why\n", 1),
+            (["--missing-why", "off"], "", 0),
+        ],
+        ids=["default", "warn", "fail", "off"],
+    )
+    def test_rule_without_a_why_is_reported_as_the_mode_says(
+        self, repo, options, report, returncode
+    ):
+        repo.write(
+            ".codeguard/rules/pattern/no-print.yml",
+            "id: no-print\nlanguage: python\nseverity: error\nmessage: Use logging, not print.\n"
+            "rule:\n  pattern: print($$$ARGS)\n",
+        )
+        repo.write(NO_PRINT_TEST, "id: no-print\nvalid:\n  - logging.info(1)\n")
+
+        result = subprocess.run(
+            [CODEGUARD, "test", *options], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == PASSING_NO_PRINT_TEST_REPORT + report
+        assert result.returncode == returncode
+
     def test_gate_tests_run_with_the_pattern_tests(self, repo):
         repo.write(
             ".codeguard/gates/enum-value.yml",

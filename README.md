@@ -238,6 +238,35 @@ change it. The exception is a file name that is the convention itself, like
 `all-only-in-init` skipping `__init__.py`. Rule and gate ids are unique within a
 ruleset.
 
+### Why a rule exists
+
+Every rule says why it exists: one or two sentences on the harm it prevents, so the rule
+can be reviewed when the code or the design around it changes. A source is optional: a
+link to public documentation, or the bug, PR comment or team decision behind the rule.
+
+- A judge rule has a `## Why` section in its `SKILL.md`, with an optional `Source:` line.
+  The section is part of the judge's prompt: it explains the test but doesn't widen it.
+  ```markdown
+  ## Why
+
+  A caller that must unpack a created flag couples itself to how the lookup works.
+
+  Source: https://example.com/team-decisions/42
+  ```
+- A pattern rule has `metadata.why`, and optionally `metadata.source`. codeguard doesn't
+  print them; `note` is what the blocked agent reads.
+  ```yaml
+  metadata:
+    why: Print output skips the log levels and handlers production reads.
+    source: https://example.com/logging-guide
+  ```
+
+A gate needs no why: it is a judge rule's trigger, not a rule.
+
+`codeguard test` warns about each rule without a why, naming it. `--missing-why fail`
+fails the run instead, and `--missing-why off` reports nothing. A missing source is never
+reported.
+
 ### Judge rules
 
 A judge rule is three files, all named by its id:
