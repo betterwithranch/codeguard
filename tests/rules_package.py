@@ -5,10 +5,15 @@ NO_PRINT_RULE = (
     "language: python\n"
     "severity: error\n"
     "message: Use logging, not print.\n"
+    "metadata:\n"
+    "  why: Print output skips the log levels and handlers production reads.\n"
     "rule:\n"
     "  pattern: print($$$ARGS)\n"
 )
-PLACEMENT_SKILL = "# Responsibility placement\n\nA method lives on the type whose data it reads.\n"
+PLACEMENT_SKILL = (
+    "# Responsibility placement\n\nA method lives on the type whose data it reads.\n\n"
+    "## Why\n\nLogic away from its data is missed when the data changes.\n"
+)
 
 
 def write_package(repo: GitRepo, prefix: str = "") -> None:

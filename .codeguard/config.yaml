@@ -1,28 +1,9 @@
 packages:
   - kind: git
     git: https://github.com/betterwithranch/codeguard-rules.git
-    ref: v0.4.0
+    ref: v0.6.1
     rulesets:
       python:
-        include:
-          - all-only-in-init
-          - no-append-in-every-branch
-          - no-assert-in-fixtures
-          - no-assert-on-lookup-field
-          - no-bucket-module-names
-          - no-comments-in-tests
-          - no-constructed-test-constants
-          - no-default-constructor-fixtures
-          - no-del-param
-          - no-dict-round-trip-between-models
-          - no-field-tuple-asserts
-          - no-len-asserts
-          - no-manual-kwargs-check
-          - no-normalized-asserts
-          - no-pop-from-kwargs
-          - no-sleep-in-async-tests
-          - no-tuple-fixtures
-          - typed-dispatch-registries
         rules:
           no-assert-on-lookup-field: &tests-only
             paths:
@@ -38,13 +19,12 @@ packages:
           no-manual-kwargs-check: *tests-only
           no-normalized-asserts: *tests-only
           no-pop-from-kwargs: *tests-only
-          enum-usage: &not-in-tests
+          no-append-in-every-branch: &not-in-tests
             exclude_paths:
               - "**/test_*.py"
               - "**/*_test.py"
               - "**/tests/**/*.py"
               - "**/conftest.py"
-          no-append-in-every-branch: *not-in-tests
           no-bucket-module-names:
             exclude_paths: []
           no-dict-round-trip-between-models: *not-in-tests

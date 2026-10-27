@@ -9,6 +9,7 @@ import logfire
 
 from codeguard.config import ConfigLoader, JudgeModel, JudgeProvider
 from codeguard.file_lock import exclusive_lock
+from codeguard.rule_tests import MissingWhyMode
 from codeguard.rules import Rules, check_installed_evals
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 
@@ -73,6 +74,14 @@ def main() -> int:
         "-U",
         action="store_true",
         help="Regenerate snapshots and remove entries for cases that no longer exist.",
+    )
+    test_command.add_argument(
+        "--missing-why",
+        type=MissingWhyMode,
+        choices=list(MissingWhyMode),
+        default=MissingWhyMode.WARN,
+        help="Report each rule that doesn't say why it exists as a warning, as a failure, "
+        "or not at all. Default: warn.",
     )
     test_command.set_defaults(run=_test)
 
@@ -199,7 +208,7 @@ def _scope(working_tree: WorkingTree, args: argparse.Namespace) -> ChangedLines 
 
 
 def _test(args: argparse.Namespace) -> int:
-    tests = Rules(_working_tree(args.package)).tests
+    tests = Rules(_working_tree(args.package)).tests(args.missing_why)
     result = tests.update_snapshots() if args.update_all else tests.run()
     result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED

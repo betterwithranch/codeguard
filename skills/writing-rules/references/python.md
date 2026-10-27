@@ -38,6 +38,8 @@ message: Concrete models inherit BaseModel.
 note: |
   BaseModel adds the shared primary key and timestamps. Change the superclass to
   BaseModel. Abstract mixins (`class Meta: abstract = True`) are skipped.
+metadata:
+  why: A model on Model alone lacks the primary key and timestamps other code expects.
 rule:
   kind: class_definition
   has:

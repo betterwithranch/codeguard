@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: created-flag-tuples
 expected_outcome: |
-  A judge rule in plain language with one yes/no test, gated narrowly, whose eval has a valid case calling a framework's get_or_create, case names that say why the code is or isn't a problem, and no case mixing in a second defect. codeguard test passes.
+  A judge rule in plain language with one yes/no test, gated narrowly, whose eval has a valid case calling a framework's get_or_create, case names that say why the code is or isn't a problem, and no case mixing in a second defect. Its SKILL.md says why the rule exists in a ## Why section. codeguard test passes.
 context:
   scaffold_script: place-files.sh

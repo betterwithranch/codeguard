@@ -14,6 +14,29 @@ A rule whose test only points at its forms ("flag code that does this in a way a
 below names") is several rules. Split it, or find the one test the forms share and drop
 the forms it doesn't decide.
 
+A rule states an abstract intent, never a list of code shapes, values or names: a shape
+nobody listed is still decided by its question. Rules that each police one code shape
+contradict each other and fail idiomatic code. The opposite failure is one rule asking
+several different questions under one intent; split it into one rule per question.
+
+## Say why it exists
+
+Every rule states the harm it prevents, in one or two sentences, so it can be reviewed
+when the code or the design around it changes. A rule nobody can trace to a reason can
+only be kept or dropped blind.
+
+- A judge rule: a `## Why` section in its `SKILL.md`. It is part of the judge's prompt,
+  so it helps the judge apply the test to code the examples don't name. It explains the
+  test and never widens it: the test alone decides each case.
+- A pattern rule: `metadata.why` in its rule file. codeguard doesn't print it; `note`
+  stays what the blocked agent reads.
+- Optionally, where the rule comes from: a `Source:` line in the Why section, or
+  `metadata.source`. A link to public documentation, or the bug, PR comment or team
+  decision behind it.
+
+A gate is a judge rule's trigger, not a rule, and needs no why. `codeguard test` warns
+on a rule without one; `--missing-why fail` fails it.
+
 ## Scoped to the change
 
 A rule and its cases ask for only as much as decides pass or fail: the code the change

@@ -48,6 +48,8 @@ def repo(tmp_path: Path) -> GitRepo:
         "note: |\n"
         "  print bypasses log levels.\n"
         "  Call logger.info instead.\n"
+        "metadata:\n"
+        "  why: Print output skips the log levels and handlers production reads.\n"
         "rule:\n"
         "  pattern: print($$$ARGS)\n",
     )
@@ -57,6 +59,8 @@ def repo(tmp_path: Path) -> GitRepo:
         "language: python\n"
         "severity: warning\n"
         "message: Remove breakpoint().\n"
+        "metadata:\n"
+        "  why: A breakpoint left in the code stops a run that nobody is watching.\n"
         "rule:\n"
         "  pattern: breakpoint()\n",
     )

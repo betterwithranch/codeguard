@@ -19,7 +19,7 @@ In the project's `.claude/settings.json`:
     "codeguard": {
       "source": {
         "source": "github",
-        "repo": "betterwithranch/codeguard",
+        "repo": "jig-code/codeguard",
         "ref": "v0"
       }
     }
@@ -42,7 +42,7 @@ List the plugin in the project's `.agents/plugins/marketplace.json`:
       "name": "codeguard",
       "source": {
         "source": "url",
-        "url": "https://github.com/betterwithranch/codeguard.git",
+        "url": "https://github.com/jig-code/codeguard.git",
         "ref": "v0"
       }
     }
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: betterwithranch/codeguard@v0
+      - uses: jig-code/codeguard@v0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -188,7 +188,7 @@ codeguard fails when that version is outside a package's `ast-grep` range.
 For a private package in CI, pass a token that can read it:
 
 ```yaml
-      - uses: betterwithranch/codeguard@v0
+      - uses: jig-code/codeguard@v0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
@@ -237,6 +237,35 @@ Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a projec
 change it. The exception is a file name that is the convention itself, like
 `all-only-in-init` skipping `__init__.py`. Rule and gate ids are unique within a
 ruleset.
+
+### Why a rule exists
+
+Every rule says why it exists: one or two sentences on the harm it prevents, so the rule
+can be reviewed when the code or the design around it changes. A source is optional: a
+link to public documentation, or the bug, PR comment or team decision behind the rule.
+
+- A judge rule has a `## Why` section in its `SKILL.md`, with an optional `Source:` line.
+  The section is part of the judge's prompt: it explains the test but doesn't widen it.
+  ```markdown
+  ## Why
+
+  A caller that must unpack a created flag couples itself to how the lookup works.
+
+  Source: https://example.com/team-decisions/42
+  ```
+- A pattern rule has `metadata.why`, and optionally `metadata.source`. codeguard doesn't
+  print them; `note` is what the blocked agent reads.
+  ```yaml
+  metadata:
+    why: Print output skips the log levels and handlers production reads.
+    source: https://example.com/logging-guide
+  ```
+
+A gate needs no why: it is a judge rule's trigger, not a rule.
+
+`codeguard test` warns about each rule without a why, naming it. `--missing-why fail`
+fails the run instead, and `--missing-why off` reports nothing. A missing source is never
+reported.
 
 ### Judge rules
 
@@ -504,7 +533,7 @@ To run codeguard from a terminal, or to write rules in Codex, install the CLI wi
 It doesn't need the plugin, and the plugin doesn't need it.
 
 ```sh
-uv tool install git+https://github.com/betterwithranch/codeguard@v0
+uv tool install git+https://github.com/jig-code/codeguard@v0
 ```
 
 ### Upgrade

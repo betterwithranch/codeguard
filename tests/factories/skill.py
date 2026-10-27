@@ -12,7 +12,10 @@ class MakeSkill(factory.Factory):
         no_print = factory.Trait(name="no-print", text="# No print\n")
 
     name = "responsibility-placement"
-    text = "# Responsibility placement\n\nA method lives on the type whose data it reads.\n"
+    text = (
+        "# Responsibility placement\n\nA method lives on the type whose data it reads.\n\n"
+        "## Why\n\nLogic away from its data is missed when the data changes.\n"
+    )
 
 
 class MakeBinding(factory.Factory):

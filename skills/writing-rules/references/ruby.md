@@ -17,6 +17,8 @@ note: |
   A method that assigns state directly hides a write from the class's interface.
   Declare an attr_writer and assign with `self.name = value`. Memoization
   (`@name ||= ...`) is allowed.
+metadata:
+  why: State written from any method can't be traced to the class's interface.
 rule:
   kind: assignment
   has:

@@ -9,6 +9,8 @@ review:
 - Don't loosen a gate to get past it.
 - Don't change the reviewed code to get past a finding you think is wrong. Fix the rule.
 - Don't change the rule's wording to get a weak case to pass. Fix the case, or drop it.
+- Don't add a failing case's code to the skill as an example. The case would then pass
+  by memory; restate the question instead.
 
 ## State the criterion
 
@@ -22,6 +24,8 @@ change, in plain words. In the skill:
 - Name the language's and its common libraries' forms on both sides of the test, as
   illustrations of it. A judge wavers on code in a form the skill doesn't place, such as
   a framework's validated data or an ORM's rows.
+- End with a `## Why` section: the harm the rule prevents, which helps the judge apply the
+  test to unnamed code but never widens it (`references/rule-design.md`).
 - When a judge can't decide a case, restate the test so the case is decided by it.
   Don't add a carve-out for the code that was just flagged. A rule that needs a new
   example each time it meets new code has a bad criterion.
@@ -57,6 +61,11 @@ change, in plain words. In the skill:
   applies the test rather than matching its examples.
 - Use made-up code. A public rule package never holds code copied from a private
   repository.
+- A case never reuses code from the skill's examples: not the same snippet, and not the
+  same code with renamed identifiers or changed literals. Use different code, a
+  different domain and different names that ask the same question. A case that copies
+  an example tests whether the judge recognizes the example, not whether it applies the
+  intent, and proves nothing.
 
 ## Verify
 
