@@ -8,17 +8,20 @@ review:
 - Don't re-run until it passes.
 - Don't loosen a gate to get past it.
 - Don't change the reviewed code to get past a finding you think is wrong. Fix the rule.
+- Don't change the rule's wording to get a weak case to pass. Fix the case, or drop it.
 
 ## State the criterion
 
-- Open the skill with one sentence saying what the rule enforces, in words that don't
-  depend on the language.
-- Give the judge a test it can apply to each piece of code it reads, a question with a
-  yes or no answer: "which code states the shape being read?", not "is this clean?".
+`references/rule-design.md` has what the claim must be: one yes/no test, scoped to the
+change, in plain words. In the skill:
+
+- Open with one sentence saying what the rule enforces, in words that don't depend on the
+  language.
+- Give the judge the test as a question it can answer for each piece of code it reads:
+  "does a caller have to unpack the result to know what happened?", not "is this clean?".
 - Name the language's and its common libraries' forms on both sides of the test, as
-  illustrations of it. A judge wavers on code in a form the skill doesn't place, such
-  as a framework's validated data or an ORM's rows.
-- State the violation as code in the file under review, one claim per rule, and no fix.
+  illustrations of it. A judge wavers on code in a form the skill doesn't place, such as
+  a framework's validated data or an ORM's rows.
 - When a judge can't decide a case, restate the test so the case is decided by it.
   Don't add a carve-out for the code that was just flagged. A rule that needs a new
   example each time it meets new code has a bad criterion.
@@ -30,7 +33,8 @@ review:
 - List the syntactic forms the violation takes, including forms the skill doesn't name,
   and give each one an `invalid` gate test, so a gate that stops matching a form fails
   `codeguard test`.
-- Gate on where a violation appears, not on the rule's topic.
+- Gate on where a violation appears, not on the rule's topic: a rule about passing enum
+  members needs a gate on literals, because the enum is defined elsewhere.
 - A wider gate costs judge calls. `codeguard review --dry-run` counts them.
 - A wider gate costs tokens too: the judge is sent the whole node a trigger matched
   around the change. Gate on the narrowest node that holds the violation, such as the
@@ -41,6 +45,12 @@ review:
 - Each case is clear. An `invalid` case breaks the rule beyond argument, a `valid` case
   obviously keeps it, and a `skipped` case is outside the gate. If a reasonable reviewer
   could argue a case either way, make it clear or remove it.
+- A case shows what's at stake. A reader of the case alone sees why the code is a
+  problem or why it's fine, and its name says that, not only what the code does:
+  "caller can't tell a new customer from an existing one", not "returns a tuple".
+- A case tests one thing. It doesn't mix in a second defect, such as a CSV split on
+  `","`, which is a bug whatever the rule says, so the judge can't flag the case for the
+  wrong reason.
 - Pair the cases: for each form the criterion allows, a `valid` case, and beside it an
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
@@ -51,6 +61,6 @@ review:
 ## Verify
 
 1. `codeguard test`: rule tests, gate tests, and every case's triggers.
-2. `codeguard eval --repeat 20`: every case passes 20 runs of 20. `--rule <id>` judges
-   only the rule you are working on, and `--case <text>` only the cases whose name
-   contains the text.
+2. `codeguard eval --rule <id> --repeat 20`: every case passes 20 runs of 20.
+   `--case <text>` judges only the cases whose name contains the text, while you work on
+   one. In CI, run the evals of the rules a change touches.

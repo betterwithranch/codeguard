@@ -1,16 +1,36 @@
 # Choosing a tool
 
-codeguard adds the checks a project's linters can't do. Use the first row that can
-express the convention.
+codeguard adds the checks a project's linters can't do. The cheapest exact tool decides a
+convention: take the first row that can express it. A judge rule is for judgment, never
+for something syntax, types or a symbol lookup decide, because an exact tool gives the
+same answer every run, costs nothing, and already runs in the editor.
 
 | The convention | Use |
 |---|---|
-| A linter the project runs already has the rule | Enable or configure it (Ruff, ESLint, RuboCop) |
+| A linter or type checker the project runs already has the check | Enable or configure it (Ruff, ESLint, RuboCop; basedpyright, mypy, `tsc`) |
 | A linter can express it through configuration | Configure it: ESLint `no-restricted-syntax` (AST selectors) or `no-restricted-imports`, Ruff `banned-api`, a configurable RuboCop cop |
 | Which modules may import which | The project's import linter (import-linter, `import/no-restricted-paths`) |
 | A code shape in one file | A codeguard pattern rule |
 | Logic across nodes (counting, state, types), or an autocorrect | The linter's custom rule: a Pylint checker, an ESLint plugin rule, a RuboCop custom cop |
-| Judgment | Skill prose |
+| Who implements, calls or references a symbol | A language-server lookup (find references, find implementations), or a dead-code tool built on one |
+| Judgment | A judge rule |
+
+## Type checker settings
+
+A convention about where untyped values flow is a type checker's job. A setting that
+reports values typed `Any` catches every read of untyped data at once, with no rule to
+maintain, and leaves values with a real type alone. `references/python.md` has the
+Python settings.
+
+## Language-server lookups
+
+Implementers, callers and references are exact lookups across the repository. A judge
+rule sees one changed file and guesses at the rest, so it can't decide them: a function
+nobody calls, an interface without implementers, or a symbol used from one module only
+belongs to a language server's find-references, or a dead-code tool such as vulture or
+`ts-prune`, run in CI.
+
+## Pattern rules and custom linter rules
 
 A codeguard pattern rule replaces a custom rule that only matches a shape: a YAML file
 and test cases instead of a class and a spec. A custom rule with an autocorrect stays

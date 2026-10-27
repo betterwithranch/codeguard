@@ -33,6 +33,8 @@ markers = ["llm: calls the real claude CLI; run with pytest -m llm"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# The writing-rules skill's eval projects keep the defects their tasks are about.
+extend-exclude = ["skills/*/evals"]
 
 [tool.ruff.lint]
 select = [
