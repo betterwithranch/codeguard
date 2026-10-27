@@ -14,9 +14,10 @@ pattern rules (ast-grep) and judge rules (a skill a model judges the change agai
 1. **Pick the tool.** The cheapest exact tool decides the convention: a linter or type
    checker setting, the import linter, a pattern rule, a language-server lookup, and only
    then a judge rule. Read `references/choosing-a-tool.md` before writing any rule.
-2. **State the claim.** One claim per rule, as one yes/no test in the words a reviewer
-   would use, scoped to the change. Read `references/rule-design.md` before writing or
-   rewording a rule, and when two rules disagree about the same code.
+2. **State the claim and why it exists.** One claim per rule, as one yes/no test in the
+   words a reviewer would use, scoped to the change, and the harm it prevents. Read
+   `references/rule-design.md` before writing or rewording a rule, and when two rules
+   disagree about the same code.
 3. **Gate it.** A pattern rule matches only where the code breaks the convention. A judge
    rule's binding has `triggers` on where its violations appear.
 4. **Write the cases.** One case per branch of a pattern rule; for a judge rule, `invalid`,

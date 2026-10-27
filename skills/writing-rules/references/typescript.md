@@ -15,6 +15,8 @@ message: Await promises instead of chaining .then or .catch.
 note: |
   Chained callbacks split the control flow and lose async stack traces. Use await,
   with try/catch for errors.
+metadata:
+  why: A rejected .then chain without .catch fails silently and loses its stack.
 rule:
   any:
     - pattern: $PROMISE.then($$$ARGS)

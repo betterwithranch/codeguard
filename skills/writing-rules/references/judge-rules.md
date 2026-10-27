@@ -22,6 +22,8 @@ change, in plain words. In the skill:
 - Name the language's and its common libraries' forms on both sides of the test, as
   illustrations of it. A judge wavers on code in a form the skill doesn't place, such as
   a framework's validated data or an ORM's rows.
+- End with a `## Why` section: the harm the rule prevents, which helps the judge apply the
+  test to unnamed code but never widens it (`references/rule-design.md`).
 - When a judge can't decide a case, restate the test so the case is decided by it.
   Don't add a carve-out for the code that was just flagged. A rule that needs a new
   example each time it meets new code has a bad criterion.
