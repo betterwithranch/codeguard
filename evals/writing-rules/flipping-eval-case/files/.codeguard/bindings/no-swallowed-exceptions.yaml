@@ -1,0 +1,3 @@
+skill: .codeguard/skills/no-swallowed-exceptions
+paths: ["src/**/*.py"]
+triggers: [any]

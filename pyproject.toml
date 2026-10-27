@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.6.0"
+version = "0.7.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }
@@ -33,6 +33,8 @@ markers = ["llm: calls the real claude CLI; run with pytest -m llm"]
 [tool.ruff]
 line-length = 100
 target-version = "py313"
+# The writing-rules eval cases keep the defects their tasks are about.
+extend-exclude = ["evals/writing-rules"]
 
 [tool.ruff.lint]
 select = [

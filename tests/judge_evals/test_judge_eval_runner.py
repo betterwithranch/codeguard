@@ -1,5 +1,7 @@
+import re
 import subprocess
 from dataclasses import dataclass
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
@@ -191,6 +193,34 @@ class TestJudgeEvalRunner:
         assert [(report.dataset_name, report.name) for report in result.reports] == [
             ("enum-usage", "enum-usage on claude-haiku-5-5")
         ]
+
+    def test_records_the_model_rule_version_and_codeguard_version(self, enum_rule):
+        enum_rule.bind("haiku-model.yaml")
+        enum_rule.evaluate("string-is-valid.yaml")
+
+        result = enum_rule.judged_with(Verdict(violations=()))
+
+        metadata = result.reports[0].experiment_metadata
+        assert metadata is not None
+        assert {name: metadata[name] for name in ("provider", "model", "codeguard_version")} == {
+            "provider": "claude-cli",
+            "model": "claude-haiku-5-5",
+            "codeguard_version": version("codeguard"),
+        }
+        assert re.fullmatch("[0-9a-f]{12}", metadata["rule_version"])
+
+    def test_rule_version_changes_with_the_skill(self, enum_rule, repo):
+        enum_rule.evaluate("string-is-valid.yaml")
+        before = enum_rule.judged_with(Verdict(violations=())).reports[0].experiment_metadata
+        repo.write(
+            ".codeguard/skills/enum-usage/SKILL.md",
+            f"---\nname: enum-usage\n---\n{ENUM_SKILL}Also pass members to compare.\n",
+        )
+
+        after = enum_rule.judged_with(Verdict(violations=())).reports[0].experiment_metadata
+
+        assert before is not None and after is not None
+        assert before["rule_version"] != after["rule_version"]
 
     def test_confident_violation_passes_an_invalid_case(self, enum_rule, make_violation):
         enum_rule.evaluate("string-is-invalid.yaml")

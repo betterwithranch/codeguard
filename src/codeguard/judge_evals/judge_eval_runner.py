@@ -1,5 +1,6 @@
 import asyncio
 from dataclasses import dataclass, replace
+from importlib.metadata import version
 from pathlib import Path
 
 from pydantic_evals import Case, Dataset
@@ -97,6 +98,8 @@ class JudgeEvalRunner:
                 "provider": model.provider,
                 "model": model.name,
                 "confidence_threshold": self.confidence_threshold,
+                "rule_version": binding.version,
+                "codeguard_version": version("codeguard"),
             },
             repeat=self.repeat,
             max_concurrency=self.judge_config.concurrency(model.provider),

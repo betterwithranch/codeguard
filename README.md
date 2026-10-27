@@ -421,7 +421,9 @@ criterion or the case; don't re-run until it passes.
 Both take a package directory, so `codeguard eval path/to/package` evaluates a package
 outside the current repository. An eval tests the rule, not the code, so it never uses
 the verdict cache: every run calls the model. With a Logfire token each rule's run is
-also in Logfire.
+also in Logfire, as an experiment named `<rule> on <model>` with the provider, model,
+confidence threshold, rule version (a hash of the skill, paths and triggers) and
+codeguard version, so runs of the same rule compare.
 
 #### What makes a case fail
 
@@ -539,6 +541,13 @@ the plugin ships, not one on your PATH. Claude Code and Codex get the same behav
   CI still fails on them unless the PR has the `codeguard-allow-judge-errors` label.
 - If the review crashes or uv can't build codeguard's environment, you see why, and the
   stop goes through.
+
+In Claude Code, a second hook guards the rules themselves. Before an `Edit` or `Write` to
+a rule file (a skill, pattern rule, gate, binding, rule test or rule eval, under
+`.codeguard/` or a package ruleset's directory), it checks the session's transcript for
+the `writing-rules` skill: a Skill call naming it, or a Read of its `SKILL.md`. Until the
+session has loaded it, the edit is denied with a message telling the agent to load it. A
+transcript the hook can't read lets the edit through.
 
 The judge gets the code the change touched: each changed function or method, with its
 decorators; each changed statement outside them, whole, with the header and decorators of
@@ -771,6 +780,15 @@ Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skill
 bindings beside them. A case that flips between runs or comes back uncertain is a defect
 in the case or the judge prompt; fix it, don't re-run until it passes. The plain suite
 checks each case's triggers.
+
+The `writing-rules` skill has its own evals in `evals/writing-rules/`: tasks an agent
+does with the plugin loaded, each graded against what the skill should lead it to. Run
+them after changing the skill, with the Claude Code CLI; they cost tokens too, and each
+case also runs without the plugin, for comparison:
+
+```sh
+claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
+```
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:

@@ -1,3 +1,5 @@
+import hashlib
+import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from typing import Self
@@ -36,6 +38,12 @@ class Binding:
             triggers=binding.triggers,
             exclude_paths=binding.exclude_paths,
         )
+
+    @property
+    def version(self) -> str:
+        """Identify what decides the rule's verdicts, other than its model."""
+        rule = [self.skill.text, sorted(self.triggers), self.paths, self.exclude_paths]
+        return hashlib.sha256(json.dumps(rule).encode()).hexdigest()[:12]
 
     def files(self, changed: Sequence[str]) -> list[str]:
         return [file for file in changed if self._matches(file)]
