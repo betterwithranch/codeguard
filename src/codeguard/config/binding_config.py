@@ -27,7 +27,7 @@ class BindingConfig(BaseModel):
     exclude_paths: tuple[str, ...] = ()
     severity: Severity = Severity.ERROR
     provider: JudgeProvider = JudgeProvider.CLAUDE_CLI
-    model: str = "claude-sonnet-5-5"
+    model: str = JudgeProvider.CLAUDE_CLI.default_model
     triggers: frozenset[str] = Field(frozenset({ChangeKind.ANY}), min_length=1)
 
     @model_validator(mode="before")

@@ -250,10 +250,14 @@ python/
 ```
 
 The rule eval is what makes a rule trustworthy. It shows the rule flags the edits it
-should and passes the ones it should, on the model that will judge it in reviews. That
-model is the binding's, and nothing overrides it: a project can't switch a rule to a
-model its rule eval never passed on. To move a rule to another model, change its
-binding and pass its rule eval again.
+should and passes the ones it should, on the model that will judge it in reviews. In
+reviews, that model is the binding's, and nothing overrides it: a project can't switch a
+rule to a model its rule eval never passed on. To move a rule to another model, change
+its binding and pass its rule eval again.
+
+`codeguard eval` judges with the binding's model too, unless `--provider` names another.
+That is for a package whose bar is passing on more than one model, such as a CI job per
+provider; it changes nothing a review judges with.
 
 #### The binding
 
@@ -391,6 +395,24 @@ ignore.
    rule is ready when every case passes all twenty runs. CI can repeat fewer times to
    save calls, since the twenty-run check comes before the rule is added.
 
+`codeguard eval` takes options to judge part of a package, or with another model:
+
+- `--rule <id>` evaluates only that judge rule; repeat it for more. The check for an
+  eval with an `invalid` case covers only the rules selected.
+- `--case <text>` judges only the cases whose name contains the text; repeat it to
+  judge the cases matching any of them. A rule with no matching case is left out.
+- `--provider claude-cli` or `--provider gemini` judges every selected rule with that
+  provider instead of its binding's. `--model` names the model; it defaults to
+  `claude-sonnet-5-5` for `claude-cli` and `gemini-3.1-pro-preview` for `gemini`.
+
+A `--rule` that names no judge rule, or a `--case` that no selected rule's case name
+contains, fails the eval before any case is judged.
+
+```sh
+codeguard eval --rule mock-only-at-boundary --case "patches a" --repeat 20
+codeguard eval --provider gemini --repeat 20
+```
+
 Each case is a clear violation, a clear non-violation, or clearly outside the triggers.
 A case a reviewer could argue either way doesn't belong in a rule eval. A case that
 flips between runs means the skill's criterion or the case is unclear. Fix the
@@ -435,7 +457,8 @@ failure.
 |---|---|
 | The edits, the files around them and their expected reviews | the rule eval, `rule-evals/<id>.yaml` |
 | The convention | the skill |
-| Paths, triggers, provider and model | the binding |
+| Paths and triggers | the binding |
+| Provider and model | the binding, or `--provider` and `--model` |
 | The confidence threshold, and the Google Cloud project, location and calls at once | the caller's `.codeguard/config.yaml` |
 | The judge prompt and how each case is checked | codeguard |
 
@@ -574,15 +597,16 @@ limit in `.codeguard/config.yaml`:
 review_time_limit_minutes: 10
 ```
 
-Each judge rule is judged with its binding's provider and model, the same ones its rule
-eval passed on; see [Judge rules](#judge-rules). A binding that sets neither is judged
+In a review, each judge rule is judged with its binding's provider and model, the same
+ones its rule eval passed on; see [Judge rules](#judge-rules). A binding that sets neither is judged
 with `claude-sonnet-5-5` through the `claude` CLI.
 
 ### Judge with Gemini on Google Cloud
 
 By default the judge runs `claude -p`. A judge rule whose binding sets
 `provider: gemini` is judged with Gemini on Google Cloud (Vertex AI) instead, in reviews
-and in its rule eval, so its rule eval has to pass on Gemini:
+and in its rule eval, so its rule eval has to pass on Gemini. `codeguard eval --provider
+gemini` judges a rule's eval with Gemini whatever its binding names:
 
 ```yaml
 skill: .claude/skills/responsibility-placement

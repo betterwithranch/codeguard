@@ -8,7 +8,7 @@ from git_repo import GitRepo
 from recording_judge import FailingJudge, RecordingJudge, RecordingJudges
 
 from codeguard.config import ConfigError, JudgeModel, JudgeProvider, RulesetLoader
-from codeguard.judge_evals import JudgeEvalResult, JudgeEvalRunner, JudgeFactory
+from codeguard.judge_evals import EvalSelection, JudgeEvalResult, JudgeEvalRunner, JudgeFactory
 from codeguard.review import Judge, Judgement, JudgeRequest, Skill, Verdict
 from codeguard.rule_tests import RuleTestResult
 
@@ -31,9 +31,26 @@ class EnumRule:
     def evaluate(self, rule_eval: str, as_file: str = "enum-usage.yaml") -> None:
         copy_fixture(self.repo, f"rule-evals/{rule_eval}", f"rule-evals/{as_file}")
 
-    def run(self, judges: JudgeFactory, repeat: int = 1) -> JudgeEvalResult:
+    def run(
+        self,
+        judges: JudgeFactory,
+        repeat: int = 1,
+        selection: EvalSelection = EvalSelection(),
+        model: JudgeModel | None = None,
+    ) -> JudgeEvalResult:
+        return self.runner(judges, repeat, selection, model).run()
+
+    def runner(
+        self,
+        judges: JudgeFactory,
+        repeat: int = 1,
+        selection: EvalSelection = EvalSelection(),
+        model: JudgeModel | None = None,
+    ) -> JudgeEvalRunner:
         loader = RulesetLoader.local(self.repo.root)
-        return JudgeEvalRunner(self.repo.root, loader, judges, 0.9, repeat=repeat).run()
+        return JudgeEvalRunner(
+            self.repo.root, loader, judges, 0.9, repeat=repeat, selection=selection, model=model
+        )
 
     def judged_with(self, verdict: Verdict) -> JudgeEvalResult:
         return self.run(RecordingJudges(RecordingJudge(verdict)))
@@ -150,6 +167,19 @@ class TestJudgeEvalRunner:
 
         assert [creation.model for creation in judges.created] == [
             JudgeModel(provider=JudgeProvider.GEMINI, name="gemini-3.1-pro-preview")
+        ]
+
+    def test_judges_with_the_given_model_instead_of_the_binding_s(self, enum_rule):
+        enum_rule.bind("haiku-model.yaml")
+        enum_rule.evaluate("string-is-valid.yaml")
+        judges = RecordingJudges(RecordingJudge())
+        gemini = JudgeModel(provider=JudgeProvider.GEMINI, name="gemini-3.1-pro-preview")
+
+        result = enum_rule.run(judges, model=gemini)
+
+        assert [creation.model for creation in judges.created] == [gemini]
+        assert [report.name for report in result.reports] == [
+            "enum-usage on gemini-3.1-pro-preview"
         ]
 
     def test_reports_one_experiment_per_rule_named_after_the_rule_and_model(self, enum_rule):
@@ -464,6 +494,57 @@ class TestRepeats:
             "invalid\n  line 1 (1.00): Rename it."
             for run in (1, 2)
         ]
+
+
+class TestSelection:
+    def test_judges_only_the_cases_whose_name_has_the_text(self, enum_rule):
+        enum_rule.evaluate("cases-in-different-files.yaml")
+        judges = ListingJudges([])
+
+        result = enum_rule.run(judges, selection=EvalSelection(cases=("member",)))
+
+        assert judges.listed == [["cancelling.py"]]
+        assert [case.name for report in result.reports for case in report.cases] == [
+            "passes the member"
+        ]
+
+    def test_judges_nothing_of_a_rule_not_selected(self, enum_rule):
+        enum_rule.evaluate("string-is-valid.yaml")
+        judges = RecordingJudges(RecordingJudge())
+
+        result = enum_rule.run(judges, selection=EvalSelection(rules=frozenset({"other-rule"})))
+
+        assert (result, judges.created) == (JudgeEvalResult(), [])
+
+    def test_unknown_eval_of_a_rule_not_selected_is_not_reported(self, enum_rule):
+        enum_rule.evaluate("named-for-a-misspelled-rule.yaml")
+
+        result = enum_rule.run(
+            RecordingJudges(RecordingJudge()), selection=EvalSelection(rules=frozenset({"x"}))
+        )
+
+        assert result == JudgeEvalResult()
+
+    def test_rule_with_no_case_selected_is_left_out(self, enum_rule):
+        enum_rule.evaluate("string-is-valid.yaml")
+
+        result = enum_rule.run(
+            RecordingJudges(RecordingJudge()), selection=EvalSelection(cases=("member",))
+        )
+
+        assert result == JudgeEvalResult()
+
+    def test_lists_the_case_names_of_each_judge_rule(self, enum_rule):
+        enum_rule.evaluate("cases-in-different-files.yaml")
+
+        names = enum_rule.runner(RecordingJudges(RecordingJudge())).case_names()
+
+        assert names == {"enum-usage": ("passes a string", "passes the member")}
+
+    def test_judge_rule_without_an_eval_has_no_case_names(self, enum_rule):
+        names = enum_rule.runner(RecordingJudges(RecordingJudge())).case_names()
+
+        assert names == {"enum-usage": ()}
 
 
 class TestWithoutJudgeEvals:

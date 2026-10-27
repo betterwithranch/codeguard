@@ -7,7 +7,7 @@ from pathlib import Path
 
 import logfire
 
-from codeguard.config import ConfigLoader
+from codeguard.config import ConfigLoader, JudgeModel, JudgeProvider
 from codeguard.file_lock import exclusive_lock
 from codeguard.rules import Rules, check_installed_evals
 from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
@@ -91,6 +91,32 @@ def main() -> int:
         default=1,
         help="Judge each case this many times. Default: 1.",
     )
+    eval_command.add_argument(
+        "--rule",
+        action="append",
+        default=[],
+        metavar="ID",
+        help="Evaluate only this judge rule. Repeat it for more rules. Default: every judge rule.",
+    )
+    eval_command.add_argument(
+        "--case",
+        action="append",
+        default=[],
+        metavar="TEXT",
+        help="Judge only the cases whose name contains this text. Repeat it to judge the cases "
+        "matching any of them. Default: every case.",
+    )
+    eval_command.add_argument(
+        "--provider",
+        type=JudgeProvider,
+        choices=list(JudgeProvider),
+        help="Judge every selected rule with this provider instead of its binding's.",
+    )
+    eval_command.add_argument(
+        "--model",
+        help="The model --provider judges with. Default: claude-sonnet-5-5 for claude-cli, "
+        "gemini-3.1-pro-preview for gemini.",
+    )
     eval_command.set_defaults(run=_eval)
 
     config_command = commands.add_parser(
@@ -100,6 +126,8 @@ def main() -> int:
     config_command.set_defaults(run=_config)
 
     args = parser.parse_args()
+    if getattr(args, "model", None) and not args.provider:
+        eval_command.error("--model needs --provider")
     _configure_telemetry()
     try:
         with logfire.span("codeguard {command}", command=args.run.__name__.lstrip("_")):
@@ -180,9 +208,16 @@ def _test(args: argparse.Namespace) -> int:
 def _eval(args: argparse.Namespace) -> int:
     check_installed_evals()
     # pydantic-evals takes about 0.4s to import, so only codeguard eval loads it.
+    from codeguard.judge_evals import EvalSelection  # noqa: PLC0415
     from codeguard.rules.rule_evaluation import RuleEvaluation  # noqa: PLC0415
 
-    result = RuleEvaluation(Rules(_working_tree(args.package))).run(args.repeat)
+    selection = EvalSelection(frozenset(args.rule), tuple(args.case))
+    model = (
+        JudgeModel(provider=args.provider, name=args.model or args.provider.default_model)
+        if args.provider
+        else None
+    )
+    result = RuleEvaluation(Rules(_working_tree(args.package))).run(args.repeat, selection, model)
     result.write(sys.stdout)
     return _EXIT_PASSED if result.passed else _EXIT_FAILED
 
