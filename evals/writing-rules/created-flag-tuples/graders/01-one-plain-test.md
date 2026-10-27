@@ -4,4 +4,4 @@ focus: trace
 weight: 1
 ---
 
-The judge rule's SKILL.md states one yes/no test in words a reviewer would use, and any forms it lists illustrate that test rather than each defining its own violation.
+The judge rule's SKILL.md states one convention as a declarative sentence in words a reviewer would use, not as a question, and any forms it lists illustrate that convention rather than each defining its own violation.
