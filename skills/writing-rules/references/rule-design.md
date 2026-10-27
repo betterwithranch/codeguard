@@ -3,21 +3,27 @@
 Each principle here corrected a rule that misjudged code. Apply them before stating a
 rule, and when two rules or a rule and its cases disagree.
 
-## One claim, one yes/no test
+## One convention, one statement
 
-A rule makes one claim, stated as one question with a yes or no answer for each piece of
-code the judge reads. The rule's forms (the shapes the violation takes in the language
-and its libraries) illustrate that test on both sides: the test alone decides each form,
-and no form defines its own violation.
+A rule is one convention, stated as one declarative sentence at the level of intent, in
+words that don't depend on the language. Each piece of code the judge reads either keeps
+the statement or breaks it: that is the rule's one yes/no test. The rule's forms (the
+shapes the violation takes in the language and its libraries) illustrate the statement
+on both sides: the statement alone decides each form, and no form defines its own
+violation.
 
-A rule whose test only points at its forms ("flag code that does this in a way a form
-below names") is several rules. Split it, or find the one test the forms share and drop
+A rule is a statement, not a question. The judge decides whether code breaks the
+convention it is given; a question in its place leaves the judge to infer which answer
+is the violation.
+
+A rule whose statement only points at its forms ("code breaks this when it takes a form
+below") is several rules. Split it, or find the one statement the forms share and drop
 the forms it doesn't decide.
 
 A rule states an abstract intent, never a list of code shapes, values or names: a shape
-nobody listed is still decided by its question. Rules that each police one code shape
-contradict each other and fail idiomatic code. The opposite failure is one rule asking
-several different questions under one intent; split it into one rule per question.
+nobody listed is still decided by its statement. Rules that each police one code shape
+contradict each other and fail idiomatic code. The opposite failure is one rule stating
+several conventions under one intent; split it into one rule per convention.
 
 ## Say why it exists
 

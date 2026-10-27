@@ -14,15 +14,18 @@ pattern rules (ast-grep) and judge rules (a skill a model judges the change agai
 1. **Pick the tool.** The cheapest exact tool decides the convention: a linter or type
    checker setting, the import linter, a pattern rule, a language-server lookup, and only
    then a judge rule. Read `references/choosing-a-tool.md` before writing any rule.
-2. **State the claim and why it exists.** One claim per rule, as one yes/no test in the
-   words a reviewer would use, scoped to the change, and the harm it prevents. Read
-   `references/rule-design.md` before writing or rewording a rule, and when two rules
-   disagree about the same code.
+2. **State the convention and why it exists.** One convention per rule, as one
+   declarative sentence in the words a reviewer would use, scoped to the change, which
+   code either keeps or breaks; never a question. Then the harm it prevents. A judge
+   rule's skill has one structure: a title, the convention, definitions of its terms,
+   `## Violation`, the forms on both sides, `## Not a violation` and `## Why`
+   (`references/judge-rules.md`). Read `references/rule-design.md` before writing or
+   rewording a rule, and when two rules disagree about the same code.
 3. **Gate it.** A pattern rule matches only where the code breaks the convention. A judge
    rule's binding has `triggers` on where its violations appear.
 4. **Write the cases.** One case per branch of a pattern rule; for a judge rule, `invalid`,
-   `valid` and `skipped` cases at the boundary of its test. A judge rule's cases never
-   reuse code from its skill's examples, even renamed.
+   `valid` and `skipped` cases at the boundary of its convention. A judge rule's cases
+   never reuse code from its skill's examples, even renamed.
 5. **Verify** with the rule's own cases (below). Nothing else proves a rule.
 
 For a judge rule, also read `references/judge-rules.md` before writing or changing it,
@@ -76,7 +79,7 @@ codeguard's README has the binding and rule eval formats.
 - Set `severity: error` on a rule that must block; `warning` only reports.
 - Write a judge rule's skill as the violation: code in the file under review that breaks
   the convention, and no fix. The judge reports violations only. Its examples illustrate
-  the question on both sides; they never define it.
+  the convention on both sides; they never define it.
 - Give every judge rule an eval with an `invalid` case. `codeguard eval` fails a rule
   without one, and a violation outside the triggers.
 - Leave the codebase clean for a new rule: fix each existing violation, or put an
