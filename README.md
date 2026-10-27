@@ -19,7 +19,7 @@ In the project's `.claude/settings.json`:
     "codeguard": {
       "source": {
         "source": "github",
-        "repo": "betterwithranch/codeguard",
+        "repo": "jig-code/codeguard",
         "ref": "v0"
       }
     }
@@ -42,7 +42,7 @@ List the plugin in the project's `.agents/plugins/marketplace.json`:
       "name": "codeguard",
       "source": {
         "source": "url",
-        "url": "https://github.com/betterwithranch/codeguard.git",
+        "url": "https://github.com/jig-code/codeguard.git",
         "ref": "v0"
       }
     }
@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: betterwithranch/codeguard@v0
+      - uses: jig-code/codeguard@v0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -188,7 +188,7 @@ codeguard fails when that version is outside a package's `ast-grep` range.
 For a private package in CI, pass a token that can read it:
 
 ```yaml
-      - uses: betterwithranch/codeguard@v0
+      - uses: jig-code/codeguard@v0
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
@@ -533,7 +533,7 @@ To run codeguard from a terminal, or to write rules in Codex, install the CLI wi
 It doesn't need the plugin, and the plugin doesn't need it.
 
 ```sh
-uv tool install git+https://github.com/betterwithranch/codeguard@v0
+uv tool install git+https://github.com/jig-code/codeguard@v0
 ```
 
 ### Upgrade

@@ -49,7 +49,7 @@ runs:
     - name: Point to the plugin
       if: failure() && steps.review.outcome == 'failure'
       shell: bash
-      run: echo "::error::Install the codeguard plugin so your agent catches these before you push. See https://github.com/betterwithranch/codeguard#setup"
+      run: echo "::error::Install the codeguard plugin so your agent catches these before you push. See https://github.com/jig-code/codeguard#setup"
     - name: Test rules
       shell: bash
       run: uv run --frozen --project "${{ github.action_path }}" codeguard test
