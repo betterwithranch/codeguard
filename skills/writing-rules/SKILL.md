@@ -45,8 +45,8 @@ pattern rules (ast-grep) and judge rules (a skill Claude judges the change again
   without one, and a violation outside the triggers.
 - Before writing or changing a judge rule, and whenever its eval or a judged review
   fails, flips between runs or reports a warning, follow `references/judge-rules.md`:
-  how to read the code it will judge, state the criterion, gate every form of the
-  violation, write eval cases at the boundary, and verify.
+  how to state the criterion, gate every form of the violation, write eval cases at the
+  boundary, and verify.
 - Write a codeguard rule only for a code shape in one file that no linter the project
   runs has or can be configured to check (`references/choosing-a-tool.md`), because a
   linter rule already runs in the editor and can autocorrect.
