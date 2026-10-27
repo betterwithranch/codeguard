@@ -421,7 +421,9 @@ criterion or the case; don't re-run until it passes.
 Both take a package directory, so `codeguard eval path/to/package` evaluates a package
 outside the current repository. An eval tests the rule, not the code, so it never uses
 the verdict cache: every run calls the model. With a Logfire token each rule's run is
-also in Logfire.
+also in Logfire, as an experiment named `<rule> on <model>` with the provider, model,
+confidence threshold, rule version (a hash of the skill, paths and triggers) and
+codeguard version, so runs of the same rule compare.
 
 #### What makes a case fail
 
