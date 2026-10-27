@@ -75,8 +75,8 @@ only be kept or dropped blind.
   `metadata.source`. A link to public documentation, or the bug, PR comment or team
   decision behind it.
 
-A gate is a judge rule's trigger, not a rule, and needs no why. `codeguard test` warns
-on a rule without one; `--missing-why fail` fails it.
+A gate is a judge rule's trigger, not a rule, and needs no why. `codeguard test` reports
+a rule without one.
 
 ## Layout
 
@@ -145,7 +145,6 @@ codeguard eval --rule <id> --repeat 20  # a judge rule: every case passes 20 run
 codeguard review --all --dry-run  # existing violations of pattern rules; calls no model
 ```
 
-`codeguard eval --case <text>` judges only the cases whose name contains the text, while
-you work on one. In CI, run the evals of the rules a change touches. Never run
-`codeguard review --all` without `--dry-run`: it judges every file against every judge
-rule.
+In CI, run the evals of the rules a change touches. Never run `codeguard review --all`
+without `--dry-run`: it judges every file against every judge rule. codeguard's README
+has every command's options.

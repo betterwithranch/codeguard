@@ -119,18 +119,15 @@ leaves it to the formatter.
 
 ### Rules
 
-A project's own rules live under `.codeguard/`. The plugin's `writing-rules` skill
-guides an agent through writing a rule and its tests.
+A project's own rules live under `.codeguard/`. To write or change one, use the
+plugin's `writing-rules` skill: it says which kind of rule fits a convention, how to
+state the rule, and how to test it. This README documents the files and commands the
+skill works with.
 
 A rule is one of two kinds:
 
 - A **pattern rule** is an ast-grep rule. It matches code by its syntax tree.
 - A **judge rule** is a skill that Claude judges each change to a file against.
-
-Write a pattern rule whenever ast-grep can check the convention: it runs in
-milliseconds, costs nothing, and gives the same answer every time. A judge rule costs a
-Claude call for every changed file it matches. Use one only when the convention needs
-judgment, such as whether a name matches what the code does.
 
 A project can also opt into rulesets from rule packages:
 
@@ -233,39 +230,13 @@ rule: no-comments-in-tests
 paths: ["**/test_*.py", "**/*_test.py", "**/tests/**/*.py", "**/conftest.py"]
 ```
 
-Put a glob in the binding, never in ast-grep's `files` or `ignores`, so a project can
-change it. The exception is a file name that is the convention itself, like
-`all-only-in-init` skipping `__init__.py`. Rule and gate ids are unique within a
-ruleset.
+Rule and gate ids are unique within a ruleset.
 
 ### Why a rule exists
 
-Every rule says why it exists: one or two sentences on the harm it prevents, so the rule
-can be reviewed when the code or the design around it changes. A source is optional: a
-link to public documentation, or the bug, PR comment or team decision behind the rule.
-
-- A judge rule has a `## Why` section in its `SKILL.md`, with an optional `Source:` line.
-  The section is part of the judge's prompt: it explains the test but doesn't widen it.
-  ```markdown
-  ## Why
-
-  A caller that must unpack a created flag couples itself to how the lookup works.
-
-  Source: https://example.com/team-decisions/42
-  ```
-- A pattern rule has `metadata.why`, and optionally `metadata.source`. codeguard doesn't
-  print them; `note` is what the blocked agent reads.
-  ```yaml
-  metadata:
-    why: Print output skips the log levels and handlers production reads.
-    source: https://example.com/logging-guide
-  ```
-
-A gate needs no why: it is a judge rule's trigger, not a rule.
-
-`codeguard test` warns about each rule without a why, naming it. `--missing-why fail`
-fails the run instead, and `--missing-why off` reports nothing. A missing source is never
-reported.
+Every rule says why it exists; the `writing-rules` skill says what to write and where.
+`codeguard test` reports each rule without a why: as a warning by default, as a failure
+with `--missing-why fail`, and not at all with `--missing-why off`.
 
 ### Judge rules
 
@@ -311,10 +282,9 @@ model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
 A judge rule's id is its skill's directory name.
 
 `triggers` names the code the rule's violations need. The judge skips a changed file
-whose changed lines fall inside none of it, so a narrow trigger saves judge calls. The
-judge is sent the whole of each trigger node around a change, so a narrow trigger saves
-tokens too. Gate on where a violation appears, not on the rule's topic. A binding
-without `triggers` gets `[any]`, so packages written before triggers still load.
+whose changed lines fall inside none of it, and is sent the whole of each trigger node
+around a change. A binding without `triggers` gets `[any]`, so packages written before
+triggers still load.
 
 A trigger is a gate or a built-in change kind. A gate is an ast-grep rule in
 `<ruleset>/gates/<id>.yml`, tested like a pattern rule by `rule-tests/<id>-test.yml`
@@ -408,21 +378,15 @@ A case that leaves them out checks only the outcome. Besides `cases`, the file m
 holds nothing else: codeguard decides how a case is judged and checked, so every rule is
 held to the same bar.
 
-Every judge rule needs at least one `invalid` case. Give it `valid` cases for the
-nearby code it must not flag, and `skipped` cases for the changes its triggers should
-ignore.
-
 #### Test a judge rule
 
 1. `codeguard test` checks the triggers on every case, with no model call. It commits
    each `before` and `unchanged` file to a scratch repository, writes each `after`, and
-   classifies the diff the way a review does. Fix the triggers until it passes.
+   classifies the diff the way a review does.
 2. `codeguard eval` reviews every case with the binding's model, the way
-   `codeguard review` would. Fix the skill, or the case, until it passes.
+   `codeguard review` would.
 3. `codeguard eval --repeat 20` reviews each case twenty times, so an unstable verdict
-   shows up as a failing run, named like `adds a second class [2/20]`. A new or changed
-   rule is ready when every case passes all twenty runs. CI can repeat fewer times to
-   save calls, since the twenty-run check comes before the rule is added.
+   shows up as a failing run, named like `adds a second class [2/20]`.
 
 `codeguard eval` takes options to judge part of a package, or with another model:
 
@@ -441,11 +405,6 @@ contains, fails the eval before any case is judged.
 codeguard eval --rule mock-only-at-boundary --case "patches a" --repeat 20
 codeguard eval --provider gemini --repeat 20
 ```
-
-Each case is a clear violation, a clear non-violation, or clearly outside the triggers.
-A case a reviewer could argue either way doesn't belong in a rule eval. A case that
-flips between runs means the skill's criterion or the case is unclear. Fix the
-criterion or the case; don't re-run until it passes.
 
 Both take a package directory, so `codeguard eval path/to/package` evaluates a package
 outside the current repository. An eval tests the rule, not the code, so it never uses
@@ -806,9 +765,9 @@ uv run pytest -m llm -n 8 --llm-runs 20    # before merging a change to the judg
 `-n 8` runs eight tests at once, each with its own `claude` call.
 
 Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skills and
-bindings beside them. A case that flips between runs or comes back uncertain is a defect
-in the case or the judge prompt; fix it, don't re-run until it passes. The plain suite
-checks each case's triggers.
+bindings beside them. When a case flips between runs or comes back uncertain, follow the
+`writing-rules` skill, and look at the judge prompt as well. The plain suite checks each
+case's triggers.
 
 The `writing-rules` skill has its own evals in `evals/writing-rules/`: tasks an agent
 does with the plugin loaded, each graded against what the skill should lead it to. Run

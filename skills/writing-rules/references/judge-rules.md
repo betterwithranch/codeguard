@@ -43,22 +43,21 @@ example each time it meets new code has a bad convention.
 
 ## Gate every form of the violation
 
-- The judge sees a changed file only when a changed line falls inside one of the
-  binding's `triggers`. A violation the gate doesn't match is never reported.
+A violation outside the binding's `triggers` is never reported; codeguard's README says
+how triggers select what the judge sees.
+
 - List the syntactic forms the violation takes, including forms the skill doesn't name,
   and give each one an `invalid` gate test, so a gate that stops matching a form fails
   `codeguard test`.
 - Gate on where a violation appears, not on the rule's topic: a rule about passing enum
   members needs a gate on literals, because the enum is defined elsewhere.
-- A wider gate costs judge calls. `codeguard review --dry-run` counts them.
-- A wider gate costs tokens too: the judge is sent the whole node a trigger matched
-  around the change. Gate on the narrowest node that holds the violation, such as the
-  `except` clause rather than the whole `try`.
+- Gate on the narrowest node that holds the violation, such as the `except` clause
+  rather than the whole `try`. A wider gate costs judge calls and tokens;
+  `codeguard review --dry-run` counts the calls.
 
 ## Write eval cases at the boundary
 
-- Every judge rule has an eval with an `invalid` case. `codeguard eval` fails a rule
-  without one, and a violation outside the triggers.
+- Every judge rule's eval has an `invalid` case.
 - Each case is clear. An `invalid` case breaks the rule beyond argument, a `valid` case
   obviously keeps it, and a `skipped` case is outside the gate. If a reasonable reviewer
   could argue a case either way, make it clear or remove it.
