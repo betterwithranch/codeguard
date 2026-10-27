@@ -1,23 +1,13 @@
 # Writing a judge rule that judges reliably
 
-A judge rule is ready when every eval case comes out the same way on every run, and a
-judged review of real code reports nothing the rule should allow. A result is
-unreliable when it flips between runs, is judged with low confidence, or comes back as
-a warning. That is a defect in the rule or in the case, never in the code under review:
+A judge rule is ready when every eval case comes out the same way on every run. A
+result is unreliable when it flips between runs, is judged with low confidence, or comes
+back as a warning. That is a defect in the rule or in the case, never in the code under
+review:
 
 - Don't re-run until it passes.
 - Don't loosen a gate to get past it.
 - Don't change the reviewed code to get past a finding you think is wrong. Fix the rule.
-
-## Read the code the rule will judge
-
-- Before stating the criterion, run the rule's gates over real code it applies to and
-  read each match: `codeguard review --all --dry-run` lists the files the judge would
-  read, and `uvx --from ast-grep-cli ast-grep scan -r <gate>.yml <path>` shows what
-  matched.
-- Place every form you find on one side of the test. A form the criterion doesn't
-  decide is where the judge wavers or reports code the rule should allow.
-- Give the common forms eval cases, in made-up code of the same shape.
 
 ## State the criterion
 
@@ -55,17 +45,12 @@ a warning. That is a defect in the rule or in the case, never in the code under 
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
   applies the test rather than matching its examples.
-- When a review flags code the rule should allow, fix the criterion. Then add a `valid`
-  case modelled on that code and an `invalid` case close to it.
 - Use made-up code. A public rule package never holds code copied from a private
   repository.
 
 ## Verify
 
 1. `codeguard test`: rule tests, gate tests, and every case's triggers.
-2. `codeguard eval --repeat 20`: every case passes 20 runs of 20.
-3. A judged review of real code the rule applies to: `codeguard review --base <ref>` on
-   recent changes, or `--all` once `--dry-run` shows its size. It reports nothing: each
-   finding is a violation to fix in that code, or a false positive that changes the
-   criterion, after which you start again at step 1. A finding in a form no eval case
-   covers means the code was read too narrowly before the criterion was stated.
+2. `codeguard eval --repeat 20`: every case passes 20 runs of 20. `--rule <id>` judges
+   only the rule you are working on, and `--case <text>` only the cases whose name
+   contains the text.

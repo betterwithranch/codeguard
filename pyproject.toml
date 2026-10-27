@@ -54,7 +54,7 @@ select = [
 ]
 
 [tool.ruff.lint.flake8-bugbear]
-extend-immutable-calls = ["codeguard.config.RulesetConfig"]
+extend-immutable-calls = ["codeguard.config.RulesetConfig", "codeguard.judge_evals.EvalSelection"]
 
 [tool.ruff.lint.flake8-tidy-imports.banned-api]
 "typing.TYPE_CHECKING".msg = "Do not use TYPE_CHECKING. Fix the import cycle."

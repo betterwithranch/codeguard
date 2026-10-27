@@ -1,7 +1,7 @@
 import pytest
 
 from codeguard.config import RulesetLoader
-from codeguard.judge_evals import EvalCoverage
+from codeguard.judge_evals import EvalCoverage, EvalSelection
 from codeguard.rule_tests import RuleTestResult
 
 ENUM_SKILL = "# Enum usage\n\nPass the enum member, never a bare literal.\n"
@@ -46,5 +46,17 @@ class TestEvalCoverage:
         )
 
         result = EvalCoverage(RulesetLoader.local(repo.root)).run()
+
+        assert result == RuleTestResult(problems=("enum-usage: no eval with an invalid case",))
+
+    def test_judge_rule_not_selected_is_not_checked(self, repo):
+        selection = EvalSelection(rules=frozenset({"other-rule"}))
+
+        assert EvalCoverage(RulesetLoader.local(repo.root), selection).run() == RuleTestResult()
+
+    def test_selected_judge_rule_without_an_invalid_case_fails(self, repo):
+        selection = EvalSelection(rules=frozenset({"enum-usage"}))
+
+        result = EvalCoverage(RulesetLoader.local(repo.root), selection).run()
 
         assert result == RuleTestResult(problems=("enum-usage: no eval with an invalid case",))

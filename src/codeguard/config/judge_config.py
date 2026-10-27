@@ -17,6 +17,17 @@ class JudgeProvider(StrEnum):
     CLAUDE_CLI = "claude-cli"
     GEMINI = "gemini"
 
+    @property
+    def default_model(self) -> str:
+        return _DEFAULT_MODELS[self]
+
+
+# The models codeguard was tested with on each provider.
+_DEFAULT_MODELS = {
+    JudgeProvider.CLAUDE_CLI: "claude-sonnet-5-5",
+    JudgeProvider.GEMINI: "gemini-3.1-pro-preview",
+}
+
 
 class JudgeModel(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)

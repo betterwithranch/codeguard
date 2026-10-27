@@ -709,6 +709,106 @@ class TestEvalCommand:
 
         assert calls.read_text() == "called\ncalled\n"
 
+    def test_rule_matching_no_judge_rule_exits_1_without_calling_the_model(
+        self, tmp_path, tmp_path_factory
+    ):
+        package = invoice_package(tmp_path_factory)
+        bin_dir = recording_claude(tmp_path, [])
+
+        result = subprocess.run(
+            [CODEGUARD, "eval", "--rule", "responsibility-placment"],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == (
+            "--rule responsibility-placment: no judge rule responsibility-placment\n"
+        )
+        assert not (tmp_path / "eval").exists()
+        assert result.returncode == 1
+
+    def test_case_text_matching_no_case_exits_1(self, tmp_path, tmp_path_factory):
+        package = invoice_package(tmp_path_factory)
+        bin_dir = recording_claude(tmp_path, [])
+
+        result = subprocess.run(
+            [CODEGUARD, "eval", "--case", "refunds"],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stdout == "--case refunds: no case of the selected rules has it in its name\n"
+        assert result.returncode == 1
+
+    def test_judges_the_selected_rule_and_case(self, tmp_path, tmp_path_factory):
+        package = invoice_package(tmp_path_factory)
+        bin_dir = recording_claude(
+            tmp_path, [{"file": "invoice.py", "line": 3, "message": "M.", "confidence": 1.0}]
+        )
+
+        result = subprocess.run(
+            [
+                CODEGUARD,
+                "eval",
+                "--rule",
+                "responsibility-placement",
+                "--case",
+                "order lines",
+            ],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+            text=True,
+        )
+
+        assert "Evaluation Summary: responsibility-placement on claude-sonnet-5-5" in result.stdout
+        assert result.returncode == 0
+
+    @pytest.mark.parametrize(
+        ("options", "model"),
+        [
+            (["--provider", "claude-cli"], "claude-sonnet-5-5"),
+            (["--provider", "claude-cli", "--model", "claude-haiku-5-5"], "claude-haiku-5-5"),
+        ],
+        ids=["default-model", "given-model"],
+    )
+    def test_judges_with_the_given_provider_and_model(
+        self, tmp_path, tmp_path_factory, options, model
+    ):
+        package = invoice_package(tmp_path_factory)
+        package.write(
+            "python/bindings/responsibility-placement.yaml",
+            'skill: python/skills/responsibility-placement\npaths: ["**/*.py"]\n'
+            "triggers: [any]\nprovider: gemini\nmodel: gemini-3.1-pro-preview\n",
+        )
+        bin_dir = recording_claude(tmp_path, [])
+
+        result = subprocess.run(
+            [CODEGUARD, "eval", *options],
+            cwd=package.root,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "eval"),
+            capture_output=True,
+            text=True,
+        )
+
+        assert recorded_call(tmp_path / "eval")["model"] == model
+        assert f"Evaluation Summary: responsibility-placement on {model}" in result.stdout
+
+    def test_model_without_a_provider_exits_2(self, tmp_path):
+        result = subprocess.run(
+            [CODEGUARD, "eval", "--model", "claude-haiku-5-5"],
+            cwd=tmp_path,
+            capture_output=True,
+            text=True,
+        )
+
+        assert result.stderr.endswith("error: --model needs --provider\n")
+        assert result.returncode == 2
+
 
 INVOICE_BEFORE = (
     "class Invoice:\n"

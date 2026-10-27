@@ -1,13 +1,14 @@
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from pydantic_evals import Case, Dataset
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import JudgeConfig, RulesetLoader
+from codeguard.config import JudgeConfig, JudgeModel, RulesetLoader
 from codeguard.judge_evals.edit_evaluators import PartialEqualsExpected, ViolationsOnTriggers
 from codeguard.judge_evals.edit_review_task import EditReviewTask
+from codeguard.judge_evals.eval_selection import EvalSelection
 from codeguard.judge_evals.judge_eval_result import JudgeEvalResult, RuleEvalReport
 from codeguard.judge_evals.judge_factory import JudgeFactory
 from codeguard.review import Binding, Bindings
@@ -24,9 +25,25 @@ class JudgeEvalRunner:
     repeat: int = 1
     judge_config: JudgeConfig = JudgeConfig()
     ast_grep: AstGrep = AstGrep()
+    selection: EvalSelection = EvalSelection()
+    # Judges every rule with this model instead of its binding's.
+    model: JudgeModel | None = None
+
+    def case_names(self) -> dict[str, tuple[str, ...]]:
+        cases = {dataset.name: dataset.cases for _, dataset in rule_evals(self.ruleset.root)}
+        return {
+            binding.skill.name: tuple(case.name for case in cases.get(binding.skill.name, ()))
+            for binding in Bindings.from_rulesets([self.ruleset.load()])
+        }
 
     def run(self) -> JudgeEvalResult:
-        evals = rule_evals(self.ruleset.root)
+        evals = [
+            (file, self._selected_cases(dataset))
+            for file, dataset in rule_evals(self.ruleset.root)
+            if self.selection.selects_rule(dataset.name)
+        ]
+        if self.selection.cases:
+            evals = [(file, dataset) for file, dataset in evals if dataset.cases]
         if not evals:
             return JudgeEvalResult()
         ruleset = self.ruleset.load()
@@ -42,6 +59,10 @@ class JudgeEvalRunner:
         scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         reports = asyncio.run(self._evaluate_all(experiments, scanner))
         return JudgeEvalResult(reports=tuple(reports), checks=RuleTestResult(problems=unknown))
+
+    def _selected_cases(self, rule_eval: RuleEval) -> RuleEval:
+        cases = tuple(case for case in rule_eval.cases if self.selection.selects_case(case.name))
+        return rule_eval.model_copy(update={"cases": cases})
 
     async def _evaluate_all(
         self, experiments: list[tuple[RuleEval, Binding]], scanner: SyntaxScanner
@@ -64,8 +85,10 @@ class JudgeEvalRunner:
                 ViolationsOnTriggers(tuple(sorted(binding.triggers)), self.confidence_threshold),
             ],
         )
-        model = binding.model
-        task = EditReviewTask(binding, self.judges, self.confidence_threshold, scanner)
+        model = self.model or binding.model
+        task = EditReviewTask(
+            replace(binding, model=model), self.judges, self.confidence_threshold, scanner
+        )
         return await dataset.evaluate(
             task,
             name=f"{dataset.name} on {model.name}",
