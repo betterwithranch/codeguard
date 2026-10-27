@@ -14,6 +14,11 @@ A rule whose test only points at its forms ("flag code that does this in a way a
 below names") is several rules. Split it, or find the one test the forms share and drop
 the forms it doesn't decide.
 
+A rule states an abstract intent, never a list of code shapes, values or names: a shape
+nobody listed is still decided by its question. Rules that each police one code shape
+contradict each other and fail idiomatic code. The opposite failure is one rule asking
+several different questions under one intent; split it into one rule per question.
+
 ## Say why it exists
 
 Every rule states the harm it prevents, in one or two sentences, so it can be reviewed

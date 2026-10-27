@@ -9,6 +9,8 @@ review:
 - Don't loosen a gate to get past it.
 - Don't change the reviewed code to get past a finding you think is wrong. Fix the rule.
 - Don't change the rule's wording to get a weak case to pass. Fix the case, or drop it.
+- Don't add a failing case's code to the skill as an example. The case would then pass
+  by memory; restate the question instead.
 
 ## State the criterion
 
@@ -59,6 +61,11 @@ change, in plain words. In the skill:
   applies the test rather than matching its examples.
 - Use made-up code. A public rule package never holds code copied from a private
   repository.
+- A case never reuses code from the skill's examples: not the same snippet, and not the
+  same code with renamed identifiers or changed literals. Use different code, a
+  different domain and different names that ask the same question. A case that copies
+  an example tests whether the judge recognizes the example, not whether it applies the
+  intent, and proves nothing.
 
 ## Verify
 

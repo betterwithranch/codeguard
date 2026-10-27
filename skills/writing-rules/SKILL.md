@@ -21,7 +21,8 @@ pattern rules (ast-grep) and judge rules (a skill a model judges the change agai
 3. **Gate it.** A pattern rule matches only where the code breaks the convention. A judge
    rule's binding has `triggers` on where its violations appear.
 4. **Write the cases.** One case per branch of a pattern rule; for a judge rule, `invalid`,
-   `valid` and `skipped` cases at the boundary of its test.
+   `valid` and `skipped` cases at the boundary of its test. A judge rule's cases never
+   reuse code from its skill's examples, even renamed.
 5. **Verify** with the rule's own cases (below). Nothing else proves a rule.
 
 For a judge rule, also read `references/judge-rules.md` before writing or changing it,
@@ -74,7 +75,8 @@ codeguard's README has the binding and rule eval formats.
   one class in the codebase. Match a code pattern, never a named class, function or file.
 - Set `severity: error` on a rule that must block; `warning` only reports.
 - Write a judge rule's skill as the violation: code in the file under review that breaks
-  the convention, and no fix. The judge reports violations only.
+  the convention, and no fix. The judge reports violations only. Its examples illustrate
+  the question on both sides; they never define it.
 - Give every judge rule an eval with an `invalid` case. `codeguard eval` fails a rule
   without one, and a violation outside the triggers.
 - Leave the codebase clean for a new rule: fix each existing violation, or put an
