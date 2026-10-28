@@ -530,7 +530,17 @@ uv tool install git+https://github.com/jig-code/codeguard@v0
 ### Upgrade
 
 Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
-A commit on `main` reaches no one until it is released. After a release:
+A commit on `main` reaches no one until it is released.
+
+Upgrade after a release, and when codeguard fails because a rule package needs a newer
+codeguard than the one installed, as after a `ref` change in `.codeguard/config.yaml`:
+
+```
+packages.0: betterwithranch needs codeguard >=0.9, not 0.7.0; upgrade codeguard
+```
+
+Upgrade codeguard the way it was installed, never by cloning it or running it from
+source:
 
 - Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 - Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
@@ -538,6 +548,8 @@ A commit on `main` reaches no one until it is released. After a release:
   claude plugin marketplace update codeguard
   claude plugin update codeguard@codeguard --scope project
   ```
+  The `codeguard` on the PATH of Claude's commands is the plugin's, so it stays the old
+  version until the update and the reload.
   To get releases without updating by hand, turn on auto-update for the codeguard
   marketplace in `/plugin` (Marketplaces, then codeguard). Auto-update is off by
   default for marketplaces outside Anthropic's own. It applies new releases in the
