@@ -73,8 +73,9 @@ examples.
   judge could flag instead.
 - For each example in the skill, write a `valid` case and an `invalid` case of the same
   shape.
-- Write at least one `invalid` case of a violation the skill doesn't show. A judge that
-  catches only what the skill shows is matching examples.
+- Write at least one `invalid` case that breaks the convention with a construct the skill
+  doesn't show, not one of its examples in a new place. A judge that catches only what
+  the skill shows is matching examples.
 - Write each case's code fresh: a different domain and different names. A skill example
   with new names or values is still the example, and the judge passes it from memory.
 
@@ -98,7 +99,8 @@ supplement. Test each language against its own prompt, and don't translate every
 into every language. In each language, with each case's `file` in that language, write:
 
 - a `valid` and `invalid` pair for each example in the language's supplement;
-- an `invalid` case of a violation that neither `SKILL.md` nor the supplement shows;
+- an `invalid` case that breaks the convention with a construct neither `SKILL.md` nor
+  the supplement shows;
 - a case whose violation shows only with the code around the change, if the language has
   no change kinds (every language but Python, today). There the judge sees only the
   changed lines, so an edit inside a long function is judged without the function.
