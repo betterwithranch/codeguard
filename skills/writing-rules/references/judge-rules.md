@@ -1,59 +1,56 @@
 # Writing a judge rule that judges reliably
 
-A judge rule is ready when every eval case comes out the same way on every run. A
-result is unreliable when it flips between runs, is judged with low confidence, or comes
-back as a warning. That is a defect in the rule or in the case:
+A judge rule is ready when every eval case comes out the same way on every run. A case
+that flips between runs, is judged with low confidence, or comes back as a warning shows
+a defect in the rule or in the case. Fix that defect:
 
-- Don't re-run until it passes.
-- Don't loosen a gate to get past it.
-- Don't change the rule's wording to get a weak case to pass. Fix the case, or drop it.
-- Don't add a failing case's code to the skill as an example. The case would then pass
-  by memory; restate the convention instead.
+- Make the case clear, or drop it. Re-running until it passes hides the defect.
+- Keep the gate as narrow as it was. Loosening it to get past a case hides the defect too.
+- Restate the convention when the judge can't decide a case. Bending the wording to pass
+  one weak case, or adding the case's code to the skill as an example, makes the case
+  pass by memory instead of by the convention.
 
 ## Write the skill
 
-The skill is the convention codeguard's judge reviews against. The judge reports each
-violation of it on a changed line a fix would change, and gives its highest confidence
-to code that matches a case, sign or example the skill describes. Write the skill in
-this order:
+The skill is what codeguard's judge reviews a change against. The judge reports each
+violation on a changed line that a fix would change. It is most confident on code that
+looks like an example in the skill, which is why the eval's cases use different code
+(below). Write the skill in this order:
 
 1. A title.
-2. The convention, as `SKILL.md` says to state it: "A function's result says what
-   happened without the caller unpacking it", not "is this clean?".
+2. The convention, stated as `SKILL.md` says: "A function's result says what happened
+   without the caller unpacking it", not "is this clean?".
 3. Definitions of the convention's terms.
-4. `## Violation`: statements of what breaks the convention, and the line a violation is
-   reported on: the line a fix would change. The judge reports a violation only where a
-   fix changes a changed line.
-5. The language's and its common libraries' forms on both sides of the convention, as
-   illustrations of it. A judge wavers on code in a form the skill doesn't place, such
-   as a framework's validated data or an ORM's rows.
+4. `## Violation`: what breaks the convention, and the line a violation is reported on:
+   the line a fix would change.
+5. Examples: code in the language and its common libraries that keeps the convention,
+   and code that breaks it. Add an example for any code the judge can't place on its
+   own, such as a framework's validated data or an ORM's rows.
 6. `## Not a violation`: code near the boundary that keeps the convention.
-7. `## Why`: the harm the rule prevents. It is part of the judge's prompt, so it helps
-   the judge apply the convention to code the examples don't name, but it never widens
-   the convention: the convention alone decides each case.
+7. `## Why`: the harm the rule prevents. The judge reads it too, so it helps the judge
+   decide code no example shows, but the convention alone decides each case.
 
-For a rule in several languages, `SKILL.md` holds every item but the forms (5), in no
-language's names, syntax, libraries or frameworks. Each language's supplement, which the
-judge reads after it, holds that language's forms on both sides and its framework code
-that keeps the convention. A supplement places the language's code on either side of the
-convention; it never changes or widens it.
+For a rule in several languages, `SKILL.md` holds every item but the examples (5), in
+words that belong to no language. Each language's supplement (`python.md`,
+`typescript.md`), which the judge reads after `SKILL.md`, holds that language's examples.
+A supplement shows where the language's code falls; it never changes the convention.
 
-Leave out the fix, and anything telling the judge how to answer: the judge's own prompt
-sets its output and its confidence scale. A question inside the skill can walk the judge
-through a hard case ("follow the value: does it go into building a declared value?");
-the convention itself is never a question.
+Leave out the fix, and anything about how to answer: the judge's own prompt sets its
+output and confidence scale. A question can walk the judge through a hard case ("follow
+the value: does it go into building a declared value?"), but the convention itself is a
+statement.
 
-When a judge can't decide a case, restate the convention so the case is decided by it.
-Don't add a carve-out for the code that was just flagged. A rule that needs a new
-example each time it meets new code has a bad convention.
+When the judge can't decide a case, restate the convention so the convention decides it.
+A carve-out for the code that was just flagged fixes one case; a rule that needs a new
+example for each new piece of code has a convention that isn't clear yet.
 
-## Gate every form of the violation
+## Gate every way the violation is written
 
-A violation outside the binding's `triggers` is never reported; codeguard's README says
+The judge never sees a change outside the binding's `triggers`; codeguard's README says
 how triggers select what the judge sees.
 
-- List the syntactic forms the violation takes, including forms the skill doesn't name,
-  and give each one an `invalid` gate test, so a gate that stops matching a form fails
+- List every way the violation can be written, including ways the skill doesn't show,
+  and give each one an `invalid` gate test, so a gate that stops matching one fails
   `codeguard test`.
 - Gate on where a violation appears, not on the rule's topic: a rule about passing enum
   members needs a gate on literals, because the enum is defined elsewhere.
@@ -61,48 +58,62 @@ how triggers select what the judge sees.
   rather than the whole `try`. A wider gate costs judge calls and tokens;
   `codeguard review --dry-run` counts the calls.
 
-## Write eval cases at the boundary
+## Write eval cases
 
-- Every judge rule's eval has an `invalid` case.
+The eval shows that the judge applies the convention, not that it recognises the skill's
+examples.
+
+- Every eval has an `invalid` case.
 - Each case is clear. An `invalid` case breaks the rule beyond argument, a `valid` case
-  obviously keeps it, and a `skipped` case is outside the gate. If a reasonable reviewer
-  could argue a case either way, make it clear or remove it.
-- A case shows what's at stake. A reader of the case alone sees why the code is a
-  problem or why it's fine, and its name says that, not only what the code does:
-  "caller can't tell a new customer from an existing one", not "returns a tuple".
-- A case tests one thing. It doesn't mix in a second defect, such as a CSV split on
-  `","`, which is a bug whatever the rule says, so the judge can't flag the case for the
-  wrong reason.
-- Pair the cases: for each form the convention allows, a `valid` case, and beside it an
-  `invalid` case of the same shape that breaks the rule.
-- Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
-  applies the convention rather than matching its examples.
-- A case never reuses code from the skill's examples: not the same snippet, and not the
-  same code with renamed identifiers or changed literals. Use different code, a
-  different domain and different names that keep or break the same convention. The
-  judge gives its highest confidence to code that matches an example the skill
-  describes, so a case that copies an example measures that match, not whether the
-  judge applies the convention, and proves nothing.
+  obviously keeps it, and a `skipped` case is outside the gate. If a reviewer could argue
+  a case either way, make it clear or remove it.
+- A case's name says why the code breaks or keeps the rule: "caller can't tell a new
+  customer from an existing one", not "returns a tuple".
+- A case tests one thing. It holds no second bug, such as a CSV split on `","`, that the
+  judge could flag instead.
+- For each example in the skill, write a `valid` case and an `invalid` case of the same
+  shape.
+- Write at least one `invalid` case of a violation the skill doesn't show. A judge that
+  catches only what the skill shows is matching examples.
+- Write each case's code fresh: a different domain and different names. A skill example
+  with new names or values is still the example, and the judge passes it from memory.
 
-### Cases in a rule in several languages
+For example, take a skill whose convention is "an error is handled or passed on, never
+dropped", and whose only example of a violation is `except Exception: pass`. Its eval
+has:
 
-Each language is judged with its own prompt, `SKILL.md` and that language's supplement,
-so each needs its own evidence, but not a copy of every other language's cases. Don't
-mirror every case in every language. In each language, each case's `file` in it, write:
+| Case | Outcome | What it shows |
+|---|---|---|
+| a payment retry logs the timeout and re-raises it | `valid` | the pair for the skill's example |
+| a payment retry catches the timeout and does nothing | `invalid` | the pair for the skill's example |
+| a parser returns `None` from its `except`, and its caller can't tell bad input from empty input | `invalid` | a violation the skill doesn't show |
 
-- a `valid` and `invalid` pair for each form the language's supplement names. A
-  supplement's examples are claims about its language only: `keyof typeof` and
-  `z.infer` in TypeScript, `tuple(Enum)` and `@overload` in Python.
-- `invalid` cases in forms neither the skill nor the supplement names in that language,
-  so the eval shows the judge applies the convention there rather than matching
-  examples.
-- cases where the language's review conditions add risk. Only Python has change kinds
-  and gates so far, so on a file in another language every trigger fires and the judge
-  gets the changed lines without the code around them. A form that depends on the code
-  around it, such as a partial copy of a function inside a larger body, needs a case in
-  that language.
+The first two use a different domain and code from the skill's example; the third is a
+way of dropping an error that the skill never mentions.
 
-A boundary that doesn't depend on the language, such as code that differs only in a
-literal, can sit mostly in one language. Cases in a second language catch a skill
-drifting into one language's terms only by chance; the guard against that is keeping
-every language's terms in its supplement.
+### A rule in several languages
+
+The judge reviews each language with a different prompt: `SKILL.md` plus that language's
+supplement. Test each language against its own prompt, and don't translate every case
+into every language. In each language, with each case's `file` in that language, write:
+
+- a `valid` and `invalid` pair for each example in the language's supplement;
+- an `invalid` case of a violation that neither `SKILL.md` nor the supplement shows;
+- a case whose violation shows only with the code around the change, if the language has
+  no change kinds (every language but Python, today). There the judge sees only the
+  changed lines, so an edit inside a long function is judged without the function.
+
+A case whose outcome doesn't depend on the language, such as values that match by
+coincidence, needs only one language.
+
+For example, extending the error-handling rule above to TypeScript, whose supplement
+shows `.catch(() => {})` as a violation, adds TypeScript cases for:
+
+- `.catch` that reports the error, and `.catch` that drops it: the pair for the
+  supplement's example;
+- a `try`/`catch` that returns an empty list on failure: a violation neither file shows;
+- an edit that adds an empty `catch` inside an existing 40-line handler: a violation
+  the judge must see without the rest of the handler.
+
+It doesn't repeat the Python `except Exception: pass` pair: that example is Python's, and
+TypeScript has its own.

@@ -267,13 +267,13 @@ Python and TypeScript files. A path names a language by its file extension; code
 knows javascript (`js`, `jsx`, `mjs`, `cjs`), python (`py`, `pyi`), ruby (`rb`) and
 typescript (`ts`, `tsx`, `mts`, `cts`).
 
-A language's forms of the convention go in a supplement beside the skill, named after
+A language's examples of the convention go in a supplement beside the skill, named after
 the language:
 
 ```
 skills/<id>/
   SKILL.md                   # the convention, in no language's terms
-  python.md                  # optional: the convention's forms in Python
+  python.md                  # optional: the convention's examples in Python
   typescript.md
 ```
 

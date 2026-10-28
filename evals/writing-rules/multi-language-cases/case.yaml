@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: multi-language-cases
+expected_outcome: |
+  The rule's binding adds TypeScript files. The rule eval's TypeScript cases pair each example in typescript.md, add a violation that neither SKILL.md nor typescript.md shows, and cover an edit whose violation shows only with the code around it, rather than translating every Python case. No TypeScript case reuses typescript.md's example code. codeguard test passes.
+context:
+  scaffold_script: place-files.sh

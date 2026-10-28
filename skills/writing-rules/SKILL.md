@@ -29,10 +29,10 @@ project's language, read `references/python.md`, `references/typescript.md` or
 
 A rule is one convention, stated as one declarative sentence at the level of intent, in
 words that don't depend on the language. Each piece of code the rule reads either keeps
-the statement or breaks it: that is the rule's one yes/no test. The rule's forms (the
-shapes the violation takes in the language and its libraries) illustrate the statement
-on both sides: the statement alone decides each form, and no form defines its own
-violation.
+the statement or breaks it: that is the rule's one yes/no test. The rule's examples
+(code in the language and its libraries that keeps or breaks it) illustrate the
+statement: the statement alone decides each example, and no example is a violation of
+its own.
 
 - **A statement, never a question.** The judge decides whether code breaks the
   convention it is given; a question in its place leaves the judge to infer which
@@ -41,9 +41,9 @@ violation.
   shape nobody listed is still decided by its statement. Rules that each police one code
   shape contradict each other and fail idiomatic code.
 - **One convention.** A rule stating several conventions under one intent, or whose
-  statement only points at its forms ("code breaks this when it takes a form below"), is
-  several rules. Split it into one rule per convention, or find the one statement the
-  forms share and drop the forms it doesn't decide.
+  statement only points at its examples ("code breaks this when it looks like one
+  below"), is several rules. Split it into one rule per convention, or find the one
+  statement the examples share and drop the examples it doesn't decide.
 - **Plain language.** Write it the way a reviewer would say it in a code review. No
   invented terms: if the rule needs a word nobody uses, it isn't clear yet. A judge
   reads an unfamiliar term as loosely as a person does.
@@ -91,7 +91,7 @@ a rule without one.
 - In a rule package (a repo with `codeguard-package.yaml`), the same layout sits under
   each ruleset's directory instead of `.codeguard/`.
 - A judge rule whose convention holds in several languages is one rule: its binding's
-  paths name each language, and each language's forms go in a supplement beside the
+  paths name each language, and each language's examples go in a supplement beside the
   skill (codeguard's README, A rule in several languages). Never copy a convention into
   a rule per language. A pattern rule matches one language.
 - Before writing a rule, check the rulesets the project opts into in
@@ -112,17 +112,17 @@ codeguard's README has the binding and rule eval formats.
   `exclude_paths`, never with ast-grep's `files` or `ignores`, so a project can change
   the scope. The exception is a file name that is the convention itself (`__all__` only
   in `__init__.py`).
-- When syntax decides only some forms of a convention, write a pattern rule for those
-  forms and a judge rule gated on every form. No judge rule runs on a file with an
-  `error` diagnostic, so the two report the same code only if the pattern rule is a
-  `warning`.
+- When syntax can decide only some violations of a convention, write a pattern rule for
+  those and a judge rule gated on every way the violation is written. No judge rule runs
+  on a file with an `error` diagnostic, so the two report the same code only if the
+  pattern rule is a `warning`.
 
 ## Cases
 
 - Use made-up code and names (`ExampleModel`), so a case shows the pattern rather than
   one class in the codebase. A public rule package never holds code copied from a
   private repository.
-- Give the idiomatic form a `valid` case beside the `invalid` one.
+- Give idiomatic code a `valid` case beside the `invalid` one.
 - A pattern rule: one `valid` or `invalid` case per branch, so deleting a branch fails a
   case, with a comment above each case naming its branch. Give each matched construct a
   `valid` case where the convention allows it, if it has such a position, so a rule that
