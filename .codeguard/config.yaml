@@ -1,8 +1,12 @@
 packages:
   - kind: git
     git: https://github.com/betterwithranch/codeguard-rules.git
-    ref: v0.6.1
+    ref: v0.7.0
     rulesets:
+      general:
+        rules:
+          dry:
+            severity: error
       python:
         rules:
           no-assert-on-lookup-field: &tests-only

@@ -1,0 +1,33 @@
+name: llm-tests
+on:
+  push:
+    branches: [main]
+    paths: &judge
+      - src/codeguard/review/**
+      - src/codeguard/claude_provider/**
+      - src/codeguard/rules/**
+      - src/codeguard/syntax/**
+      - src/codeguard/working_tree.py
+      - src/codeguard/rule_tests/edit_repo.py
+      - src/codeguard/rule_tests/rule_eval.py
+      - evals/judge/**
+      - tests/rules/test_judge_prompt.py
+      - tests/conftest.py
+      - pyproject.toml
+      - uv.lock
+      - .github/workflows/llm-tests.yaml
+  pull_request:
+    paths: *judge
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+jobs:
+  llm-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v10.2.0
+      - run: npm install --global @anthropic-ai/claude-code
+      - run: uv run --frozen pytest -m llm -n 8
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}

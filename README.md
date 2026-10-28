@@ -68,16 +68,17 @@ jobs:
 ```
 
 The action reviews the files changed since the merge base with the PR's base branch,
-then runs the rule tests. The judge needs the token; create it with `claude setup-token`
-and store it as a repository secret.
+against the rules the project opts into, wherever they are defined. The judge needs the
+token; create it with `claude setup-token` and store it as a repository secret. It
+doesn't test the rules: a repository that defines rules tests them with
+[`jig-code/codeguard/test`](#which-test-to-write).
 
 A judge call that couldn't complete fails the review, and no setting turns that off
 ([why](#configuration-reference)). To merge the PR anyway, add the
 `codeguard-allow-judge-errors` label to it, so each bypass is chosen for one PR and
 shows in its history. The action then passes
 `--judge-errors-as-warnings` to the review, so those calls print as warnings, and rule
-violations still fail. The label doesn't cover the `eval` input's `codeguard eval`,
-which still fails on them.
+violations still fail.
 
 Re-running the job doesn't pick up the label: a re-run reuses the event that started
 the workflow, with the PR's labels at that time. For adding the label to start a new
@@ -266,13 +267,13 @@ Python and TypeScript files. A path names a language by its file extension; code
 knows javascript (`js`, `jsx`, `mjs`, `cjs`), python (`py`, `pyi`), ruby (`rb`) and
 typescript (`ts`, `tsx`, `mts`, `cts`).
 
-A language's forms of the convention go in a supplement beside the skill, named after
+A language's examples of the convention go in a supplement beside the skill, named after
 the language:
 
 ```
 skills/<id>/
   SKILL.md                   # the convention, in no language's terms
-  python.md                  # optional: the convention's forms in Python
+  python.md                  # optional: the convention's examples in Python
   typescript.md
 ```
 
@@ -499,6 +500,16 @@ releases `v<major>.<minor>.<patch>`; projects name the tag as their `ref`.
 [betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules) is
 an example.
 
+In CI, the test action runs `codeguard test`, and `codeguard eval` with `eval: true`:
+
+```yaml
+      - uses: actions/checkout@v7
+      - uses: jig-code/codeguard/test@v0
+        with:
+          eval: true
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+```
+
 ## Setup
 
 The plugin is codeguard: it ships the CLI and runs it with
@@ -530,7 +541,17 @@ uv tool install git+https://github.com/jig-code/codeguard@v0
 ### Upgrade
 
 Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
-A commit on `main` reaches no one until it is released. After a release:
+A commit on `main` reaches no one until it is released.
+
+Upgrade after a release, and when codeguard fails because a rule package needs a newer
+codeguard than the one installed, as after a `ref` change in `.codeguard/config.yaml`:
+
+```
+packages.0: betterwithranch needs codeguard >=0.9, not 0.7.0; upgrade codeguard
+```
+
+Upgrade codeguard the way it was installed, never by cloning it or running it from
+source:
 
 - Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 - Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
@@ -538,6 +559,8 @@ A commit on `main` reaches no one until it is released. After a release:
   claude plugin marketplace update codeguard
   claude plugin update codeguard@codeguard --scope project
   ```
+  The `codeguard` on the PATH of Claude's commands is the plugin's, so it stays the old
+  version until the update and the reload.
   To get releases without updating by hand, turn on auto-update for the codeguard
   marketplace in `/plugin` (Marketplaces, then codeguard). Auto-update is off by
   default for marketplaces outside Anthropic's own. It applies new releases in the
@@ -763,7 +786,7 @@ telemetry:
 | Command | Who runs it | What it checks | Calls the model |
 |---|---|---|---|
 | `codeguard review` | a project using codeguard: the agent's Stop hook, and the action in CI | the project's changed code against the rules it opts into | for judge rules |
-| `codeguard test` | whoever writes rules, in a rule package or a project's `.codeguard/` | the rules: pattern rules and gates match their test cases, and judge rules' triggers fire on their eval cases | no |
+| `codeguard test` | whoever writes rules, in a rule package or a project's `.codeguard/`, and the test action in CI | the rules: pattern rules and gates match their test cases, and judge rules' triggers fire on their eval cases | no |
 | `codeguard eval` | whoever writes rules | judge rules: each eval case gets its expected review | yes |
 
 `review` checks code; `test` and `eval` check the rules themselves. [Write a rule
@@ -795,8 +818,10 @@ uv run pytest
 instructions, request and tools still get the right verdicts from a real model. Each
 one reviews an edit in a scratch repository the way `codeguard review` does, calling
 the real `claude` CLI, so they cost tokens. They are marked `llm`, which plain `pytest`
-deselects. CI runs them; run them after changing the judge's instructions, request or
-tools:
+deselects. CI runs them only when a change reaches the judge: the code under
+`src/codeguard/` that decides what it sees, builds its request and reads its verdict,
+the cases in `evals/judge`, or the dependencies. Run them after changing the judge's
+instructions, request or tools:
 
 ```sh
 uv run pytest -m llm -n 8                  # each case 3 times, as CI does

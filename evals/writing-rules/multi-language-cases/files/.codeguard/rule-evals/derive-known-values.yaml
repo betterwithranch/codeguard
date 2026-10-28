@@ -1,0 +1,86 @@
+cases:
+  - name: shipping methods derived from the enum gain each new method
+    inputs:
+      file: src/shop/shipping.py
+      after: |
+        from enum import Enum
+
+
+        class ShippingMethod(Enum):
+            STANDARD = "standard"
+            EXPRESS = "express"
+
+
+        SHIPPING_CHOICES = tuple(method.value for method in ShippingMethod)
+    expected_output:
+      outcome: valid
+  - name: shipping methods written out miss a method added to the enum
+    inputs:
+      file: src/shop/shipping.py
+      after: |
+        from enum import Enum
+
+
+        class ShippingMethod(Enum):
+            STANDARD = "standard"
+            EXPRESS = "express"
+
+
+        SHIPPING_CHOICES = ("standard", "express")
+    expected_output:
+      outcome: invalid
+  - name: currency codes read from the Literal alias stay in step with it
+    inputs:
+      file: src/shop/money.py
+      after: |
+        from typing import Literal, get_args
+
+        Currency = Literal["usd", "eur", "gbp"]
+
+        SUPPORTED_CURRENCIES = get_args(Currency)
+    expected_output:
+      outcome: valid
+  - name: a parameter retypes the currency Literal and misses a new currency
+    inputs:
+      file: src/shop/money.py
+      after: |
+        from typing import Literal
+
+        Currency = Literal["usd", "eur", "gbp"]
+
+
+        def convert(amount: int, currency: Literal["usd", "eur", "gbp"]) -> int:
+            return amount
+    expected_output:
+      outcome: invalid
+  - name: a membership test lists the enum's values and misses a new status
+    inputs:
+      file: src/shop/refunds.py
+      after: |
+        from enum import Enum
+
+
+        class RefundStatus(Enum):
+            REQUESTED = "requested"
+            APPROVED = "approved"
+
+
+        def is_known(status: str) -> bool:
+            return status in ["requested", "approved"]
+    expected_output:
+      outcome: invalid
+  - name: HTTP verbs that share a word with an enum mean something else
+    inputs:
+      file: src/shop/routes.py
+      after: |
+        from enum import Enum
+
+
+        class Access(Enum):
+            GET = "get"
+            ADMIN = "admin"
+
+
+        ALLOWED_VERBS = ["get", "post"]
+    expected_output:
+      outcome: valid

@@ -1,5 +1,5 @@
 name: codeguard
-description: Check a pull request's changed files against the project's rules, and run the rule tests.
+description: Check a pull request's changed files against the project's rules.
 inputs:
   base:
     description: Ref the changes are compared against. The checkout needs its history (fetch-depth 0).
@@ -13,9 +13,6 @@ inputs:
   logfire-token:
     description: Logfire write token. When set, codeguard sends a trace of each run, with each judge call's tokens, cost and duration.
     required: false
-  eval:
-    description: Also run `codeguard eval`, which calls Claude for each judge rule case. Needs claude-code-oauth-token.
-    default: 'false'
   dry-run:
     description: Run the pattern rules and list the judge calls the review would make, without calling a model. Fails only on pattern rule errors.
     default: 'false'
@@ -50,13 +47,3 @@ runs:
       if: failure() && steps.review.outcome == 'failure'
       shell: bash
       run: echo "::error::Install the codeguard plugin so your agent catches these before you push. See https://github.com/jig-code/codeguard#setup"
-    - name: Test rules
-      shell: bash
-      run: uv run --frozen --project "${{ github.action_path }}" codeguard test
-    - name: Evaluate judge rules
-      if: inputs.eval == 'true'
-      shell: bash
-      run: uv run --frozen --project "${{ github.action_path }}" codeguard eval
-      env:
-        CLAUDE_CODE_OAUTH_TOKEN: ${{ inputs.claude-code-oauth-token }}
-        LOGFIRE_TOKEN: ${{ inputs.logfire-token }}

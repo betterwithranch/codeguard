@@ -1,0 +1,3 @@
+skill: .codeguard/skills/derive-known-values
+paths: ["**/*.py"]
+triggers: [collection-literal, annotation, call]
