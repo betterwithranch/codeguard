@@ -29,7 +29,6 @@ jobs:
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           logfire-token: ${{ secrets.LOGFIRE_TOKEN }}
-          dry-run: true
   llm-tests:
     runs-on: ubuntu-latest
     steps:
