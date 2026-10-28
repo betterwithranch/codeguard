@@ -68,16 +68,17 @@ jobs:
 ```
 
 The action reviews the files changed since the merge base with the PR's base branch,
-then runs the rule tests. The judge needs the token; create it with `claude setup-token`
-and store it as a repository secret.
+against the rules the project opts into, wherever they are defined. The judge needs the
+token; create it with `claude setup-token` and store it as a repository secret. It
+doesn't test the rules: a repository that defines rules tests them with
+[`jig-code/codeguard/test`](#which-test-to-write).
 
 A judge call that couldn't complete fails the review, and no setting turns that off
 ([why](#configuration-reference)). To merge the PR anyway, add the
 `codeguard-allow-judge-errors` label to it, so each bypass is chosen for one PR and
 shows in its history. The action then passes
 `--judge-errors-as-warnings` to the review, so those calls print as warnings, and rule
-violations still fail. The label doesn't cover the `eval` input's `codeguard eval`,
-which still fails on them.
+violations still fail.
 
 Re-running the job doesn't pick up the label: a re-run reuses the event that started
 the workflow, with the PR's labels at that time. For adding the label to start a new
@@ -499,6 +500,16 @@ releases `v<major>.<minor>.<patch>`; projects name the tag as their `ref`.
 [betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules) is
 an example.
 
+In CI, the test action runs `codeguard test`, and `codeguard eval` with `eval: true`:
+
+```yaml
+      - uses: actions/checkout@v7
+      - uses: jig-code/codeguard/test@v0
+        with:
+          eval: true
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+```
+
 ## Setup
 
 The plugin is codeguard: it ships the CLI and runs it with
@@ -775,7 +786,7 @@ telemetry:
 | Command | Who runs it | What it checks | Calls the model |
 |---|---|---|---|
 | `codeguard review` | a project using codeguard: the agent's Stop hook, and the action in CI | the project's changed code against the rules it opts into | for judge rules |
-| `codeguard test` | whoever writes rules, in a rule package or a project's `.codeguard/` | the rules: pattern rules and gates match their test cases, and judge rules' triggers fire on their eval cases | no |
+| `codeguard test` | whoever writes rules, in a rule package or a project's `.codeguard/`, and the test action in CI | the rules: pattern rules and gates match their test cases, and judge rules' triggers fire on their eval cases | no |
 | `codeguard eval` | whoever writes rules | judge rules: each eval case gets its expected review | yes |
 
 `review` checks code; `test` and `eval` check the rules themselves. [Write a rule

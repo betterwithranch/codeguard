@@ -5,7 +5,9 @@ from pathlib import Path
 
 import yaml
 
-ACTION = Path(__file__).resolve().parent.parent / "action.yml"
+ROOT = Path(__file__).resolve().parent.parent
+ACTION = ROOT / "action.yml"
+TEST_ACTION = ROOT / "test" / "action.yml"
 ALLOW_JUDGE_ERRORS_LABEL = "codeguard-allow-judge-errors"
 EXPRESSION = re.compile(r"\$\{\{\s*(.*?)\s*\}\}")
 FAKE_UV = (
@@ -27,6 +29,18 @@ class TestReviewStep:
         arguments = run_review_step(tmp_path, labels=["bug"])
 
         assert arguments == ["review", "--base", "origin/main"]
+
+
+class TestTestAction:
+    def test_runs_the_codeguard_of_the_repository_it_is_in(self):
+        steps = yaml.safe_load(TEST_ACTION.read_text())["runs"]["steps"]
+        projects = {
+            match.group(1).replace("${{ github.action_path }}", str(TEST_ACTION.parent))
+            for step in steps
+            for match in re.finditer(r'--project "([^"]+)"', step.get("run", ""))
+        }
+
+        assert {Path(project).resolve() for project in projects} == {ROOT}
 
 
 def run_review_step(tmp_path: Path, labels: list[str]) -> list[str]:
