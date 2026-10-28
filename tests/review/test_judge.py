@@ -9,12 +9,18 @@ THRESHOLD = 0.9
 
 
 class TestJudgeRequest:
-    def test_prompt_is_the_skill_text(self, make_skill, make_judge_request):
-        skill = make_skill()
+    def test_prompt_holds_the_named_convention_then_the_changes(
+        self, make_skill, make_judge_request
+    ):
+        skill = make_skill(name="pricing", text="Prices are integers.\n")
+        request = make_judge_request(skill=skill, file="pricing.py", changes="+     1\tA = 1\n")
 
-        assert make_judge_request(skill=skill).prompt == skill.text
+        assert request.prompt == (
+            '<convention name="pricing">\nPrices are integers.\n</convention>\n\n'
+            '<changes path="pricing.py">\n+     1\tA = 1\n</changes>\n'
+        )
 
-    def test_prompt_is_the_skill_and_the_supplement_for_the_file_language(
+    def test_convention_is_the_skill_and_the_supplement_for_the_file_language(
         self, tmp_path, make_binding, make_skill
     ):
         (tmp_path / "orders.py").write_text('STATUS = "shipped"\n')
@@ -25,7 +31,7 @@ class TestJudgeRequest:
 
         request = JudgeRequest.of_change(binding, tmp_path, "orders.py", scope)
 
-        assert request.prompt == f"{skill.text}\n{supplement.text}"
+        assert request.skill.text == f"{skill.text}\n{supplement.text}"
 
     def test_judged_lines_are_numbered_with_their_file_line_numbers(
         self, tmp_path, make_binding, make_skill
@@ -131,13 +137,12 @@ class TestJudgeRequest:
 
         assert request == JudgeRequest(make_skill(), "pricing.py", "+     2\tTAX = 2\n")
 
-    def test_instructions_end_with_the_changes(self, make_judge_request):
-        request = make_judge_request(file="pricing.py", changes="     4\tdef discounted(total):\n")
+    def test_instructions_are_the_same_for_every_rule_and_file(
+        self, make_skill, make_judge_request
+    ):
+        request = make_judge_request(skill=make_skill(name="pricing"), file="pricing.py")
 
-        assert request.instructions == (
-            f'{INSTRUCTIONS}\n<changes path="pricing.py">\n     4\tdef discounted(total):\n'
-            "</changes>\n"
-        )
+        assert request.instructions == INSTRUCTIONS
 
 
 class TestViolation:

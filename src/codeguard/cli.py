@@ -178,6 +178,7 @@ def _configure_telemetry() -> None:
         console=False,
         inspect_arguments=False,
     )
+    logfire.instrument_pydantic_ai()
 
 
 def _review(args: argparse.Namespace) -> int:

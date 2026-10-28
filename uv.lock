@@ -272,6 +272,7 @@ dependencies = [
     { name = "logfire" },
     { name = "packaging" },
     { name = "pydantic" },
+    { name = "pydantic-ai-slim", extra = ["google"] },
     { name = "pydantic-evals" },
     { name = "pyyaml" },
 ]
@@ -295,6 +296,7 @@ requires-dist = [
     { name = "logfire", specifier = ">=5.2.0" },
     { name = "packaging", specifier = ">=26.3" },
     { name = "pydantic", specifier = ">=2.13.5" },
+    { name = "pydantic-ai-slim", extras = ["google"], specifier = "~=2.57.0" },
     { name = "pydantic-evals", specifier = "~=2.57.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
@@ -986,6 +988,11 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/a1/dd/f92904e5719bb7de25eaa9eb9f0fb9746a8b43b02775249d2516b9583f5b/pydantic_ai_slim-2.57.0.tar.gz", hash = "sha256:2c5c150bcd097e6a1e267ea13e7f279a0b504d46b346a4e00b61e1996ad05372", size = 1907558, upload-time = "2026-10-16T03:51:13.084Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/cc/4f/ee187f80f9f9232fc6915da47d84305dfa62d4f879efbb1e6ff262172437/pydantic_ai_slim-2.57.0-py3-none-any.whl", hash = "sha256:a07d732e09df8d51f22bd3be2ad45ab644721a904809a2481146bf5d7bb47c67", size = 2229864, upload-time = "2026-10-16T03:50:59.882Z" },
+]
+
+[package.optional-dependencies]
+google = [
+    { name = "google-genai" },
 ]
 
 [[package]]

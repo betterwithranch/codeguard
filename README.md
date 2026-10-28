@@ -654,14 +654,16 @@ judge:
 ```
 
 Gemini reads the working directory through read-only `read_file`, `grep` and `glob`
-tools, limited to the repository, and reports through a `submit_verdict` tool that
-takes the same verdict schema as Claude. Verdicts are cached per provider and model,
-so switching providers doesn't reuse Claude's verdicts.
+tools, limited to the repository, thinks at the `LOW` level, and returns its verdict as
+structured output with the same verdict schema as Claude. A judgement that makes 10
+requests without a verdict is reported as not judged. Verdicts are cached per provider
+and model, so switching providers doesn't reuse Claude's verdicts.
 
 Gemini's pay-as-you-go capacity is shared and limited by tokens per minute, so the
 gemini provider makes 2 calls at once. Each provider has its own limit, so Claude and
-Gemini rules in one review don't wait on each other. A call that Gemini turns away with
-a 429 is retried for about 15 seconds, and then the rule is reported as not judged.
+Gemini rules in one review don't wait on each other. A request that Gemini turns away
+(408, 429 or a 5xx) or whose connection breaks is sent again for about 15 seconds, and
+then the rule is reported as not judged.
 
 Use `gemini-3.1-pro-preview`, the Gemini model codeguard was tested with. Flash was
 unreliable in testing.
@@ -701,7 +703,10 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
   `cache_creation_input_tokens` and `thinking_tokens`.
 - `gemini judges {rule} on {file}`: one span per Gemini judgement, with `model`,
   `num_turns`, `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
-  `thinking_tokens`, summed over its turns.
+  `thinking_tokens`, summed over its requests. Its time starts once the call has a slot,
+  not while it waits for one. Inside it, Pydantic AI's spans record each request and
+  tool call with its content: the prompt, which holds the convention and the changed
+  code, Gemini's thought summaries, the files it read and its verdict.
 - `judge {rule} on {file}`: one span per rule and file, with `cache_hit`, `violations`,
   `loaded_files` (the files the verdict depends on) and `changed_files` (the loaded files
   that changed since the cached verdict, which is why it was judged again). The Claude or
