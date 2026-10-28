@@ -74,8 +74,9 @@ examples.
 - For each example in the skill, write a `valid` case and an `invalid` case of the same
   shape.
 - Write at least one `invalid` case that breaks the convention with a construct the skill
-  doesn't show, not one of its examples in a new place. A judge that catches only what
-  the skill shows is matching examples.
+  doesn't show. An example's construct used inside something else is still that example:
+  if the skill shows a written-out list, a membership test over a written-out list is
+  the same case. A judge that catches only what the skill shows is matching examples.
 - Write each case's code fresh, in a domain no example in `SKILL.md` or a supplement
   uses: if an example is about sizes, no case is. The judge is most confident on code
   that looks like an example in its prompt, so a case that copies one, even with new
@@ -107,8 +108,8 @@ into every language. In each language, with each case's `file` in that language,
   no change kinds (every language but Python, today). There the judge sees only the
   changed lines, so an edit inside a long function is judged without the function.
 
-A case whose outcome doesn't depend on the language, such as values that match by
-coincidence, needs only one language.
+Write a case whose outcome doesn't depend on the language, such as values that match by
+coincidence, in one language only.
 
 For example, extending the error-handling rule above to TypeScript, whose supplement
 shows `.catch(() => {})` as a violation, adds TypeScript cases for:
@@ -119,5 +120,5 @@ shows `.catch(() => {})` as a violation, adds TypeScript cases for:
 - an edit that adds an empty `catch` inside an existing 40-line handler: a violation
   the judge must see without the rest of the handler.
 
-It doesn't repeat the Python `except Exception: pass` pair: that example is Python's, and
-TypeScript has its own.
+It doesn't repeat the Python `except Exception: pass` pair, which is Python's example, or
+a Python case that doesn't depend on the language.
