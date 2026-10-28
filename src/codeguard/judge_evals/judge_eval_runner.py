@@ -55,7 +55,10 @@ class JudgeEvalRunner:
             if dataset.name not in bindings
         )
         experiments = [
-            (dataset, bindings[dataset.name]) for _, dataset in evals if dataset.name in bindings
+            (part, bindings[dataset.name], language)
+            for _, dataset in evals
+            if dataset.name in bindings
+            for language, part in dataset.by_language(bindings[dataset.name].languages)
         ]
         scanner = SyntaxScanner.for_rulesets(self.ast_grep, [ruleset])
         reports = asyncio.run(self._evaluate_all(experiments, scanner))
@@ -66,14 +69,17 @@ class JudgeEvalRunner:
         return rule_eval.model_copy(update={"cases": cases})
 
     async def _evaluate_all(
-        self, experiments: list[tuple[RuleEval, Binding]], scanner: SyntaxScanner
+        self, experiments: list[tuple[RuleEval, Binding, str | None]], scanner: SyntaxScanner
     ) -> list[RuleEvalReport]:
         return await asyncio.gather(
-            *(self._evaluate(dataset, binding, scanner) for dataset, binding in experiments)
+            *(
+                self._evaluate(dataset, binding, language, scanner)
+                for dataset, binding, language in experiments
+            )
         )
 
     async def _evaluate(
-        self, rule_eval: RuleEval, binding: Binding, scanner: SyntaxScanner
+        self, rule_eval: RuleEval, binding: Binding, language: str | None, scanner: SyntaxScanner
     ) -> RuleEvalReport:
         dataset = Dataset[EditCase, EditReview, None](
             name=rule_eval.name,
@@ -98,7 +104,7 @@ class JudgeEvalRunner:
                 "provider": model.provider,
                 "model": model.name,
                 "confidence_threshold": self.confidence_threshold,
-                "rule_version": binding.version,
+                "rule_version": binding.version_for(language),
                 "codeguard_version": version("codeguard"),
             },
             repeat=self.repeat,

@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.8.0"
+version = "0.9.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }

@@ -13,19 +13,30 @@ class EvalCoverage:
 
     def run(self) -> RuleTestResult:
         ruleset = self.ruleset.load()
+        bindings = Bindings.from_rulesets([ruleset])
+        languages = {binding.skill.name: binding.languages for binding in bindings}
         evaluated = {
-            dataset.name
+            part.name
             for _, dataset in rule_evals(ruleset.root)
+            for _, part in dataset.by_language(languages.get(dataset.name, frozenset()))
             if any(
                 case.expected_output and case.expected_output.outcome is Outcome.INVALID
-                for case in dataset.cases
+                for case in part.cases
             )
         }
+        # A rule whose paths name several languages needs an invalid case in each.
         return RuleTestResult(
             problems=tuple(
-                f"{binding.skill.name}: no eval with an invalid case"
-                for binding in Bindings.from_rulesets([ruleset])
+                f"{name}: no eval with an invalid case"
+                for binding in bindings
                 if self.selection.selects_rule(binding.skill.name)
-                and binding.skill.name not in evaluated
+                for name in _names(binding.skill.name, binding.languages)
+                if name not in evaluated
             )
         )
+
+
+def _names(rule: str, languages: frozenset[str]) -> list[str]:
+    if len(languages) < 2:
+        return [rule]
+    return [f"{rule} ({language})" for language in sorted(languages)]

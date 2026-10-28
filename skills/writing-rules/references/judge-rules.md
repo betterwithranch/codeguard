@@ -32,6 +32,12 @@ this order:
    the judge apply the convention to code the examples don't name, but it never widens
    the convention: the convention alone decides each case.
 
+For a rule in several languages, `SKILL.md` holds every item but the forms (5), in no
+language's names, syntax, libraries or frameworks. Each language's supplement, which the
+judge reads after it, holds that language's forms on both sides and its framework code
+that keeps the convention. A supplement places the language's code on either side of the
+convention; it never changes or widens it.
+
 Leave out the fix, and anything telling the judge how to answer: the judge's own prompt
 sets its output and its confidence scale. A question inside the skill can walk the judge
 through a hard case ("follow the value: does it go into building a declared value?");
@@ -71,6 +77,7 @@ how triggers select what the judge sees.
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
   applies the convention rather than matching its examples.
+- A rule in several languages has cases in each, each case's `file` in its language.
 - A case never reuses code from the skill's examples: not the same snippet, and not the
   same code with renamed identifiers or changed literals. Use different code, a
   different domain and different names that keep or break the same convention. The

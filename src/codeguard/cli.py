@@ -24,7 +24,9 @@ def main() -> int:
     commands = parser.add_subparsers(required=True)
 
     review_command = commands.add_parser(
-        "review", help="Check the changed files against the project's rules."
+        "review",
+        help="Check a project's changed code against the rules it opts into. Runs in the "
+        "project: at the agent's Stop and in CI.",
     )
     scope = review_command.add_mutually_exclusive_group()
     scope.add_argument(
@@ -62,7 +64,11 @@ def main() -> int:
     )
     review_command.set_defaults(run=_review)
 
-    test_command = commands.add_parser("test", help="Run the project's rule tests.")
+    test_command = commands.add_parser(
+        "test",
+        help="Test the rules themselves, with no model call: pattern rule and gate tests, and "
+        "each judge rule's triggers on its eval cases. For whoever writes rules.",
+    )
     test_command.add_argument(
         "package",
         nargs="?",
@@ -86,7 +92,9 @@ def main() -> int:
     test_command.set_defaults(run=_test)
 
     eval_command = commands.add_parser(
-        "eval", help="Check that each judge rule flags its invalid cases and passes its valid ones."
+        "eval",
+        help="Judge each judge rule's eval cases with its model, to show the rule flags its "
+        "invalid cases and passes its valid ones. For whoever writes rules.",
     )
     eval_command.add_argument(
         "package",

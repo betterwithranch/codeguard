@@ -29,12 +29,15 @@ class _CaseCheck:
         expected = self.case.expected_output
         if not self.binding.files([file]):
             return f"{self.name}: {file} is outside the {rule} paths"
-        kinds = changed.kinds_of(self.path)
-        if kinds is None:
+        if self.path not in changed.files:
             return f"{self.name}: the case changes no code in {file}"
         should_fire = expected.outcome is not Outcome.SKIPPED
         if self.binding.is_triggered(changed, self.path) == should_fire:
             return None
+        kinds = changed.kinds_of(self.path)
+        if kinds is None:
+            # As in a review, a change in a language without change kinds fires every trigger.
+            return f"{self.name}: {file} has no change kinds, so every {rule} trigger fires on it"
         touched = ", ".join(sorted(kinds - {ChangeKind.ANY}))
         triggers = ", ".join(sorted(self.binding.triggers))
         verb = "miss" if should_fire else "fire on"

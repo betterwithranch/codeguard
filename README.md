@@ -259,6 +259,38 @@ its binding and pass its rule eval again.
 That is for a package whose bar is passing on more than one model, such as a CI job per
 provider; it changes nothing a review judges with.
 
+#### A rule in several languages
+
+A judge rule's binding `paths` decide its languages: `["**/*.py", "**/*.ts"]` runs it on
+Python and TypeScript files. A path names a language by its file extension; codeguard
+knows javascript (`js`, `jsx`, `mjs`, `cjs`), python (`py`, `pyi`), ruby (`rb`) and
+typescript (`ts`, `tsx`, `mts`, `cts`).
+
+A language's forms of the convention go in a supplement beside the skill, named after
+the language:
+
+```
+skills/<id>/
+  SKILL.md                   # the convention, in no language's terms
+  python.md                  # optional: the convention's forms in Python
+  typescript.md
+```
+
+- The judge gets `SKILL.md`, then the supplement for the reviewed file's language, if
+  there is one.
+- A supplement named after no language codeguard knows, or after a language the
+  binding's paths don't match, is an error. A path without an extension, like `src/**`,
+  matches every language.
+- A rule's version in a language covers `SKILL.md`, that language's supplement, its
+  triggers and paths. A change to `SKILL.md` needs every language's eval to pass again;
+  a change to a supplement, only its language's.
+- When the paths name more than one language, `codeguard eval` reports each language
+  apart, as `<id> (python)`, from the cases whose `file` is in that language, and each
+  needs an `invalid` case.
+- Triggers work per file: a change kind in any language, a gate only in its `language`.
+  Only Python has change kinds and gates so far: on a file in another language, every
+  trigger fires, and the judge is sent the changed lines without the code around them.
+
 #### The binding
 
 A judge rule's binding names its `skill`, from the package root, and where and when it
@@ -727,6 +759,15 @@ telemetry:
 | `LOGFIRE_TOKEN` | none: nothing is sent | Sends a trace of each run to Logfire; see [Telemetry](#telemetry). |
 
 ## CLI
+
+| Command | Who runs it | What it checks | Calls the model |
+|---|---|---|---|
+| `codeguard review` | a project using codeguard: the agent's Stop hook, and the action in CI | the project's changed code against the rules it opts into | for judge rules |
+| `codeguard test` | whoever writes rules, in a rule package or a project's `.codeguard/` | the rules: pattern rules and gates match their test cases, and judge rules' triggers fire on their eval cases | no |
+| `codeguard eval` | whoever writes rules | judge rules: each eval case gets its expected review | yes |
+
+`review` checks code; `test` and `eval` check the rules themselves. [Write a rule
+package](#write-a-rule-package) covers `test` and `eval`.
 
 From the project:
 
