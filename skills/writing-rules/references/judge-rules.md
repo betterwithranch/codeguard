@@ -76,8 +76,10 @@ examples.
 - Write at least one `invalid` case that breaks the convention with a construct the skill
   doesn't show, not one of its examples in a new place. A judge that catches only what
   the skill shows is matching examples.
-- Write each case's code fresh: a different domain and different names. A skill example
-  with new names or values is still the example, and the judge passes it from memory.
+- Write each case's code fresh, in a domain no example in `SKILL.md` or a supplement
+  uses: if an example is about sizes, no case is. The judge is most confident on code
+  that looks like an example in its prompt, so a case that copies one, even with new
+  names or values, passes from memory and shows nothing about the convention.
 
 For example, take a skill whose convention is "an error is handled or passed on, never
 dropped", and whose only example of a violation is `except Exception: pass`. Its eval
