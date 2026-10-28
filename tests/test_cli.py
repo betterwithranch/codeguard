@@ -11,7 +11,9 @@ import yaml
 from claude_output import fake_claude_script, tool_result, tool_use
 from git_repo import GitRepo
 from rules_package import write_package
+from spans import finished_span_attributes
 
+from codeguard import cli
 from codeguard.file_lock import exclusive_lock
 from codeguard.review import Severity
 
@@ -617,6 +619,16 @@ class TestConfigCommand:
 
         assert result.stdout == "10\n"
         assert result.returncode == 0
+
+    def test_creates_no_command_span(self, repo, monkeypatch, capfire):
+        monkeypatch.chdir(repo.root)
+        monkeypatch.setattr(cli, "_configure_telemetry", lambda: None)
+
+        for arguments in (["config", "review_time_limit_minutes"], ["review", "--dry-run"]):
+            monkeypatch.setattr(sys, "argv", ["codeguard", *arguments])
+            cli.main()
+
+        assert finished_span_attributes(capfire, "codeguard {command}") == [{"command": "review"}]
 
 
 class TestReviewWithGitPackages:

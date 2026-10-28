@@ -147,6 +147,8 @@ def main() -> int:
         eval_command.error("--model needs --provider")
     _configure_telemetry()
     try:
+        if args.run is _config:
+            return args.run(args)
         with logfire.span("codeguard {command}", command=args.run.__name__.lstrip("_")):
             return args.run(args)
     except subprocess.CalledProcessError as error:
