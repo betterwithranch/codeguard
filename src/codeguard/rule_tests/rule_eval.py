@@ -5,7 +5,7 @@ from typing import Self
 import yaml
 from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
 
-from codeguard.config import JUDGE_EVAL_DIR, ConfigError
+from codeguard.config import JUDGE_EVAL_DIR, ConfigError, language_of
 
 _EVAL_FILE_SUFFIXES = (".yaml", ".yml")
 
@@ -95,6 +95,29 @@ class RuleEval(BaseModel):
 
     name: str
     cases: tuple[RuleEvalCase, ...]
+
+    def by_language(self, languages: frozenset[str]) -> tuple[tuple[str | None, Self], ...]:
+        """Split the eval by the language of each case's file, for a rule whose paths name
+        several languages, so each language is evaluated and reported as `<rule> (<language>)`.
+        A rule that names one language or none keeps one eval, for its language if any."""
+        if len(languages) < 2:
+            return ((next(iter(languages), None), self),)
+        cases: dict[str | None, list[RuleEvalCase]] = {}
+        for case in self.cases:
+            language = language_of(case.inputs.file)
+            cases.setdefault(language if language in languages else None, []).append(case)
+        return tuple(
+            (
+                language,
+                self.model_copy(
+                    update={
+                        "name": self.name if language is None else f"{self.name} ({language})",
+                        "cases": tuple(grouped),
+                    }
+                ),
+            )
+            for language, grouped in sorted(cases.items(), key=lambda item: item[0] or "")
+        )
 
     @field_validator("cases")
     @classmethod

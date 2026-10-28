@@ -90,6 +90,10 @@ a rule without one.
   `.codeguard/rule-tests/<id>-test.yml`.
 - In a rule package (a repo with `codeguard-package.yaml`), the same layout sits under
   each ruleset's directory instead of `.codeguard/`.
+- A judge rule whose convention holds in several languages is one rule: its binding's
+  paths name each language, and each language's forms go in a supplement beside the
+  skill (codeguard's README, A rule in several languages). Never copy a convention into
+  a rule per language. A pattern rule matches one language.
 - Before writing a rule, check the rulesets the project opts into in
   `.codeguard/config.yaml`. To change a packaged rule for this project, override or
   exclude it there; don't copy it into `.codeguard/`.

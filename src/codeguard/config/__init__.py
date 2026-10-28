@@ -6,6 +6,7 @@ from codeguard.config.config_error import ConfigError
 from codeguard.config.config_loader import CONFIG_DIR, CONFIG_FILE, ConfigLoader
 from codeguard.config.gate_rule import GateRule
 from codeguard.config.judge_config import JudgeConfig, JudgeModel, JudgeProvider
+from codeguard.config.languages import LANGUAGES, language_of, named_languages
 from codeguard.config.package_config import (
     GitPackageConfig,
     PackageConfig,
@@ -33,6 +34,7 @@ __all__ = [
     "CONFIG_FILE",
     "GATE_DIR",
     "JUDGE_EVAL_DIR",
+    "LANGUAGES",
     "LEGACY_PATTERN_TEST_DIR",
     "PATTERN_RULE_DIR",
     "RULE_TEST_DIR",
@@ -62,4 +64,6 @@ __all__ = [
     "RulesetStructure",
     "Severity",
     "VersionRange",
+    "language_of",
+    "named_languages",
 ]

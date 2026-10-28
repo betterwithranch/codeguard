@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 import yaml
 from claude_output import fake_claude_script, tool_result, tool_use
+from general_rule import GENERAL_SKILL, PYTHON_SUPPLEMENT, RULE, write_general_rule
 from git_repo import GitRepo
 from rules_package import write_package
 
@@ -1164,3 +1165,25 @@ class TestTestCommand:
             "\n"
         )
         assert result.returncode == 1
+
+
+class TestGeneralRules:
+    def test_review_judges_a_file_with_the_skill_and_its_language_supplement(self, repo, tmp_path):
+        write_general_rule(repo)
+        repo.commit("Add a rule for any language")
+        repo.write("orders.py", 'STATUS = "shipped"\n')
+        violation = {"file": "orders.py", "line": 1, "message": "Stated twice.", "confidence": 1.0}
+        bin_dir = recording_claude(tmp_path, [violation])
+
+        result = subprocess.run(
+            [CODEGUARD, "review"],
+            cwd=repo.root,
+            capture_output=True,
+            text=True,
+            env=recording_env(tmp_path, bin_dir, tmp_path / "review"),
+        )
+
+        assert result.stdout.startswith(f"orders.py:1: error {RULE}: Stated twice.")
+        assert (
+            recorded_call(tmp_path / "review")["prompt"] == f"{GENERAL_SKILL}\n{PYTHON_SUPPLEMENT}"
+        )
