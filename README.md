@@ -807,8 +807,10 @@ uv run pytest
 instructions, request and tools still get the right verdicts from a real model. Each
 one reviews an edit in a scratch repository the way `codeguard review` does, calling
 the real `claude` CLI, so they cost tokens. They are marked `llm`, which plain `pytest`
-deselects. CI runs them; run them after changing the judge's instructions, request or
-tools:
+deselects. CI runs them only when a change reaches the judge: the code under
+`src/codeguard/` that decides what it sees, builds its request and reads its verdict,
+the cases in `evals/judge`, or the dependencies. Run them after changing the judge's
+instructions, request or tools:
 
 ```sh
 uv run pytest -m llm -n 8                  # each case 3 times, as CI does

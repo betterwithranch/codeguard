@@ -33,8 +33,31 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: astral-sh/setup-uv@v10.2.0
-      - run: npm install --global @anthropic-ai/claude-code
-      - run: uv run --frozen pytest -m llm -n 8
+        with:
+          fetch-depth: 0
+      - name: Check for judge changes
+        id: judge
+        run: |
+          if [ "$BEFORE" = 0000000000000000000000000000000000000000 ]; then
+            echo changed=true >> "$GITHUB_OUTPUT"
+          elif git diff --quiet "${BASE:-$BEFORE}" HEAD -- \
+            src/codeguard/review src/codeguard/claude_provider src/codeguard/rules \
+            src/codeguard/syntax src/codeguard/working_tree.py \
+            src/codeguard/rule_tests/edit_repo.py src/codeguard/rule_tests/rule_eval.py \
+            evals/judge tests/rules/test_judge_prompt.py tests/conftest.py \
+            pyproject.toml uv.lock .github/workflows/ci.yaml; then
+            echo changed=false >> "$GITHUB_OUTPUT"
+          else
+            echo changed=true >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          BEFORE: ${{ github.event.before }}
+      - if: steps.judge.outputs.changed == 'true'
+        uses: astral-sh/setup-uv@v10.2.0
+      - if: steps.judge.outputs.changed == 'true'
+        run: npm install --global @anthropic-ai/claude-code
+      - if: steps.judge.outputs.changed == 'true'
+        run: uv run --frozen pytest -m llm -n 8
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
