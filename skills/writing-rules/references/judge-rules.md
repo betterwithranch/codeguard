@@ -74,9 +74,10 @@ examples.
 - For each example in the skill, write a `valid` case and an `invalid` case of the same
   shape.
 - Write at least one `invalid` case that breaks the convention with a construct the skill
-  doesn't show. An example's construct used inside something else is still that example:
-  if the skill shows a written-out list, a membership test over a written-out list is
-  the same case. A judge that catches only what the skill shows is matching examples.
+  doesn't show. To choose it, list the constructs the skill's examples use, then pick one
+  that isn't on the list. An example's construct inside something else is still on the
+  list: if an example is a written-out list, a membership test over a written-out list
+  is that example. A judge that catches only what the skill shows is matching examples.
 - Write each case's code fresh, in a domain no example in `SKILL.md` or a supplement
   uses: if an example is about sizes, no case is. The judge is most confident on code
   that looks like an example in its prompt, so a case that copies one, even with new
@@ -103,7 +104,9 @@ into every language. In each language, with each case's `file` in that language,
 
 - a `valid` and `invalid` pair for each example in the language's supplement;
 - an `invalid` case that breaks the convention with a construct neither `SKILL.md` nor
-  the supplement shows;
+  the supplement shows, chosen the same way: list the constructs both files show, and
+  pick one that isn't on the list. Don't translate another language's case for it: that
+  case was chosen against another supplement;
 - a case whose violation shows only with the code around the change, if the language has
   no change kinds (every language but Python, today). There the judge sees only the
   changed lines, so an edit inside a long function is judged without the function.
@@ -116,7 +119,9 @@ shows `.catch(() => {})` as a violation, adds TypeScript cases for:
 
 - `.catch` that reports the error, and `.catch` that drops it: the pair for the
   supplement's example;
-- a `try`/`catch` that returns an empty list on failure: a violation neither file shows;
+- a `try`/`catch` that returns an empty list on failure: a violation neither file shows.
+  A `.then(onDone, () => {})` would not do: its empty handler is the supplement's
+  example in another place;
 - an edit that adds an empty `catch` inside an existing 40-line handler: a violation
   the judge must see without the rest of the handler.
 
