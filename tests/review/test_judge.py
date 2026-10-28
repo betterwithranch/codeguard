@@ -14,6 +14,19 @@ class TestJudgeRequest:
 
         assert make_judge_request(skill=skill).prompt == skill.text
 
+    def test_prompt_is_the_skill_and_the_supplement_for_the_file_language(
+        self, tmp_path, make_binding, make_skill
+    ):
+        (tmp_path / "orders.py").write_text('STATUS = "shipped"\n')
+        skill = make_skill()
+        supplement = make_skill(text="## In Python\n\nA module constant is a home.\n")
+        binding = make_binding(skill=skill, supplements={"python": supplement})
+        scope = ChangedLines({"orders.py": frozenset({1})})
+
+        request = JudgeRequest.of_change(binding, tmp_path, "orders.py", scope)
+
+        assert request.prompt == f"{skill.text}\n{supplement.text}"
+
     def test_judged_lines_are_numbered_with_their_file_line_numbers(
         self, tmp_path, make_binding, make_skill
     ):
