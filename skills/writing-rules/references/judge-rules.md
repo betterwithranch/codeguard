@@ -77,10 +77,32 @@ how triggers select what the judge sees.
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
   applies the convention rather than matching its examples.
-- A rule in several languages has cases in each, each case's `file` in its language.
 - A case never reuses code from the skill's examples: not the same snippet, and not the
   same code with renamed identifiers or changed literals. Use different code, a
   different domain and different names that keep or break the same convention. The
   judge gives its highest confidence to code that matches an example the skill
   describes, so a case that copies an example measures that match, not whether the
   judge applies the convention, and proves nothing.
+
+### Cases in a rule in several languages
+
+Each language is judged with its own prompt, `SKILL.md` and that language's supplement,
+so each needs its own evidence, but not a copy of every other language's cases. Don't
+mirror every case in every language. In each language, each case's `file` in it, write:
+
+- a `valid` and `invalid` pair for each form the language's supplement names. A
+  supplement's examples are claims about its language only: `keyof typeof` and
+  `z.infer` in TypeScript, `tuple(Enum)` and `@overload` in Python.
+- `invalid` cases in forms neither the skill nor the supplement names in that language,
+  so the eval shows the judge applies the convention there rather than matching
+  examples.
+- cases where the language's review conditions add risk. Only Python has change kinds
+  and gates so far, so on a file in another language every trigger fires and the judge
+  gets the changed lines without the code around them. A form that depends on the code
+  around it, such as a partial copy of a function inside a larger body, needs a case in
+  that language.
+
+A boundary that doesn't depend on the language, such as code that differs only in a
+literal, can sit mostly in one language. Cases in a second language catch a skill
+drifting into one language's terms only by chance; the guard against that is keeping
+every language's terms in its supplement.
