@@ -18,7 +18,7 @@ jobs:
       - run: uv run --frozen pytest
       - run: uv run --frozen lint-imports
       - run: uv run --frozen basedpyright
-  codeguard:
+  codeguard-rules:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
