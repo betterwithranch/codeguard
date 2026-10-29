@@ -38,7 +38,7 @@ expected review on every run.
 
 CI runs a rule's eval only for a change that can change its verdicts:
 
-| The change | Each case of the rule passes |
+| You change | Each case of the rule passes |
 |---|---|
 | The rule's definition: its skill or a language supplement, its binding (paths, triggers), its rule eval, or a gate its triggers name (the judge is sent the whole trigger node around a change) | 20 runs of 20 |
 | The judge: codeguard's judge prompt, request, tools or harness, or the codeguard version a package or app tests with | 3 runs of 3 |
@@ -90,7 +90,7 @@ claude plugin eval . --scaffold --allow-tools Write Edit Bash --runs 3 --thresho
 ```
 
 - Run it from a checkout with no `.venv`.
-- Granting Bash runs the agent's commands in Claude Code's sandbox. On Linux, install
+- Granting `Bash` runs the agent's commands in Claude Code's sandbox. On Linux, install
   `bubblewrap` and `socat`, and set `TMPDIR` to a directory outside `/tmp`, where the
   sandbox denies writes.
 - `--keep-temp` keeps each run's workspace. When a grader fails, open the files the
@@ -107,7 +107,7 @@ A grader checks what the agent produced, not what it said or the steps it took.
   `{ source: file, path: .codeguard/skills/<id>/SKILL.md }`, or the binding or rule eval.
 - Structure, such as a `## Why` heading or triggers other than `any`, is a `regex`
   grader. Judgement, such as whether the convention is one declarative sentence, is an
-  `llm` grader on that one short file, with PASS and FAIL stated concretely.
+  `llm` grader on that one short file, with `PASS` and `FAIL` stated concretely.
 - Never grade the trace with an `llm` grader: its judge sees only the first and last 12
   lines of the session, never the files.
 - That the agent ran the rule tests is a `tool_used` grader on `Bash` whose
@@ -120,7 +120,7 @@ A grader checks what the agent produced, not what it said or the steps it took.
 
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
-| A pattern rule, a gate or their tests | Each rule and gate matches its invalid snippets and none of its valid ones | `codeguard rules test` | `codeguard rules test` |
+| A pattern rule, a gate or their tests | Each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard rules test` | `codeguard rules test` |
 | A judge rule's skill, supplement, binding or rule eval, or a gate it uses | Each case's triggers, then each such rule's verdicts, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` |
 | The codeguard version CI tests with | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | `codeguard rules test`, `codeguard rules eval --repeat 3` |
 
