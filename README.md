@@ -836,9 +836,9 @@ claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
 ```
 
 The agent's commands run in a sandbox with no network, so each case's scaffold builds
-codeguard's environment in the run's home first. On Linux, set `TMPDIR` to a directory outside `/tmp`
-(`TMPDIR=~/.eval-tmp`): the run's sandbox denies writes under `/tmp`, where it puts the
-run itself, so every command fails with a read-only file system. A codeguard plugin
+codeguard's environment in the run's home first. On Linux, set `TMPDIR` to a directory
+outside `/tmp`: the run's sandbox denies writes under `/tmp`, where it puts the run
+itself, so every command fails with a read-only file system. A codeguard plugin
 installed at user scope also comes first on the run's PATH, and the run can't read its
 project, so `codeguard` stops; run the evals where it isn't installed at user scope.
 
