@@ -9,14 +9,17 @@ commands run the same checks on your machine, so you can find a failure before C
 The rows are the whole list: a change needs no check its row doesn't name. Never write a
 script, a copy of the repository or a workaround to test a change some other way. If a
 change fits no row, or a listed check can't run, say so and change this guide instead.
+A pull request description doesn't list the checks CI runs: their results already show
+on the pull request.
 
 ## Words
 
-Three kinds of test run here, and they share words like "case" and "eval".
+Four kinds of test run here, and they share words like "case" and "eval".
 
 | Test | Run with | It checks | Calls a model | A case is | Cases live in |
 |---|---|---|---|---|---|
-| codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge | Only the LLM tests | A test function | `tests/` |
+| codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge, with no model | No | A test function | `tests/` |
+| LLM tests | `uv run pytest -m llm` | The judge gives each fixture case its expected review from a real model | Yes, and its verdicts can vary, so each case runs several times | A fixture case | `evals/judge/` |
 | Rule tests | `codeguard rules test` | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and it gives the same result every run | A snippet a rule or gate must or must not match, or a rule eval's edit, checked for its triggers only | `rule-tests/<id>-test.yml`, `rule-evals/<id>.yaml` |
 | Rule evals | `codeguard rules eval` | Each judge rule's model gives each edit the review it should | Yes, and its verdicts can vary, so each case runs several times | An edit and the review it should get | `rule-evals/<id>.yaml` |
 
@@ -27,6 +30,10 @@ themselves; `codeguard review` is different: it runs the rules on your code.
 `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
 triggers fire and the judge reports a violation. `valid`: the triggers fire and the
 judge reports none. `skipped`: the triggers don't fire.
+
+The LLM tests' fixtures are a small rule package in `evals/judge/` that exists only to
+test the judge. A fixture rule is a judge rule there, and a fixture case is one of its
+rule eval cases. They are part of codeguard's tests, not rules codeguard reviews with.
 
 ## The bar for a judge rule
 
@@ -43,9 +50,9 @@ CI runs a rule's eval only for a change that can change its verdicts:
 
 Twenty clean runs show, with 95% confidence, that a case fails less than 1 run in 7.
 Three clean runs catch a rule that a judge change has broken. No other change runs a
-rule eval: a pattern rule, a gate no judge rule uses, or another rule. CI applies this
-wherever judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own
-fixtures in `evals/judge/`.
+rule eval: a pattern rule, a gate no judge rule uses, or another rule. The bar applies
+wherever judge rules live: a rule package, an app's `.codeguard/`, and codeguard's
+fixture rules.
 
 When a case fails or flips, fix the rule or the case, as the writing-rules skill
 describes; never re-run until it passes.
@@ -58,24 +65,17 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 |---|---|---|---|
 | Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | Same |
 | Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, the Stop hook reviews the session's uncommitted and untracked files each time the agent stops | `codeguard review --base <base branch>` | `codeguard review` |
-| The judge: its review, provider, rules or syntax code, or the dependencies | Each fixture case's verdict, 3 runs | `uv run pytest -m llm -n 8` | Same |
-| A fixture rule for the LLM tests | That rule's verdicts, 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` | Same |
-| The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval . --runs 3 --threshold 0.8` | Same |
+| The judge: its review, provider, rules or syntax code, or the dependencies | Each fixture case's review, 3 runs | `uv run pytest -m llm -n 8` | Same |
+| A fixture rule or its fixture cases | Each of that rule's fixture cases, 20 runs | `uv run pytest -m llm -n 8`, which runs each case 3 times | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
+| The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | None | See [Testing the writing-rules skill](skill-evals.md) |
 
-The writing-rules skill and its evals are in `skills/writing-rules/` and
-`evals/writing-rules/`, the LLM tests' fixture rules are in `evals/judge/`, and the
-judge's code is under `src/codeguard/`. [Testing the writing-rules skill](skill-evals.md)
-says how to run and write the skill's evals.
-
-`uv run pytest` calls no model. The LLM tests review each fixture case the way
-`codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
-them.
+The judge's code is under `src/codeguard/`. The LLM tests review each fixture case the
+way `codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
+them. `-n 8` only sets how many run at once: any number gives the same result.
 
 codeguard ships no rules, so never run `codeguard rules test` or `codeguard rules eval`
 here. The rules in `evals/judge/` are fixtures for codeguard's own tests, and the rules
 codeguard reviews itself with are tested in their package's CI.
-
-A pull request description doesn't list the checks CI runs.
 
 ## Changing a rule package
 

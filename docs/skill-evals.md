@@ -11,10 +11,15 @@ rules and reviewing code.
 
 ## Running the evals
 
-CI runs them when `skills/writing-rules/` or `evals/writing-rules/` changes. The skill is
-guidance, and the rules it leads to are held to their own rule tests and evals, so the
-bar is lower than a judge rule's: each case gets 3 runs and passes at a score of 0.8 or
-more.
+A skill eval measures the skill by the content of what an agent writes with it: each
+grader checks a file the agent wrote against what the skill says. It doesn't measure
+whether that rule's tests or evals pass, or how reliably they pass. Testing a rule is
+the job of its own rule tests and evals, wherever the rule lives, and is out of scope
+here.
+
+CI doesn't run the skill evals. Before merging a change to `skills/writing-rules/` or
+`evals/writing-rules/`, run them; each case gets 3 runs and passes at a score of 0.8 or
+more:
 
 ```sh
 claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 \
