@@ -27,6 +27,24 @@ whether it sets that tool up. So:
 - A grader reads one file the agent wrote, checks that it wrote no rule file, or, in a
   case that declines a rule, reads the agent's final reply.
 
+## Writing a case
+
+A case measures whether the skill's instructions lead an agent to the right result, so
+a failure means the skill didn't get the agent there:
+
+- Each grader checks one instruction the skill states, in the skill's terms. A grader
+  never asks for more than the skill says: a quality the skill doesn't require goes into
+  the skill first.
+- A grader checks the instruction, never an example the skill gives for it, and the
+  skill's examples never contain a case's answer. A case the skill's example answers
+  measures whether the agent copied it.
+- The skill's instructions decide the case's prompt: the right result follows from the
+  skill alone, with no outside knowledge and no judgment call either way.
+- When a grader fails or flips, find which side is wrong. If the agent missed an
+  instruction, make the instruction clearer or put it where the agent reads it. If the
+  grader asks for more than the skill says, fix the grader. Neither is reworded only to
+  pass.
+
 ## Running them
 
 CI runs them when `skills/writing-rules/` or `evals/writing-rules/` changes. Each case

@@ -4,4 +4,4 @@ focus: {source: file, path: .codeguard/skills/created-flag-results/SKILL.md}
 weight: 1
 ---
 
-This SKILL.md has a ## Why section stating, in a sentence or two, the harm the rule prevents, without adding cases the convention doesn't decide.
+This SKILL.md has a ## Why section stating the harm the rule prevents in one or two sentences, without widening the convention.
