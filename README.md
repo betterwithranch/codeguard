@@ -785,8 +785,8 @@ codeguard eval                # judge rule evals; calls the configured judge
 
 ## Working on codeguard
 
-[docs/testing.md](docs/testing.md) says what each kind of test checks, here, in a
-rule package and in an app, and which to run for a change.
+[docs/testing.md](docs/testing.md) says how to test a change to codeguard, a rule
+package or an app.
 
 Tests:
 

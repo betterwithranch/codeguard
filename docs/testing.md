@@ -1,122 +1,131 @@
-# Testing codeguard
+# Testing
 
-Three different programs run tests around codeguard. Each checks something different,
-and they share words like "case", "eval" and "valid". Pick the test by what you
-changed (see [Which test for which change](#which-test-for-which-change)), and read a
-word as the runner that owns it means it.
+How to test a change to codeguard, to a rule package such as
+[betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules), or
+to an app that uses codeguard. CI enforces each check below; run the same commands
+locally to find a failure before CI does.
 
-## Three runners
+## Words
 
-| Runner | Owned by | What it runs | What a case is |
-|---|---|---|---|
-| `pytest` | codeguard's own suite | Python tests of codeguard's code, in `tests/` | a test function |
-| `codeguard test` / `codeguard eval` | codeguard, the product | a rule author's rules: rule tests, and judge rules' rule evals | a snippet a pattern rule must or must not match (`rule-tests/<id>-test.yml`), or an edit and the review it should get (`rule-evals/<id>.yaml`) |
-| `claude plugin eval` | Anthropic (Claude Code) | an agent doing a task with the plugin loaded, graded afterwards | a task prompt and its graders (`evals/<case>/case.yaml`, `prompt.md`, `graders/*.md`) |
+Three programs run tests here, and they share words like "case" and "eval".
 
-### Whose words are whose
+| Runner | What it tests | A case is |
+|---|---|---|
+| `pytest` | codeguard's own code, in `tests/` | a test function |
+| `codeguard test`, `codeguard eval` | a rule author's rules | a snippet a pattern rule must or must not match (`rule-tests/<id>-test.yml`), or an edit and the review it should get (`rule-evals/<id>.yaml`) |
+| `claude plugin eval` | an agent doing a task with the codeguard plugin loaded | a prompt and its graders (`evals/writing-rules/<case>/`) |
 
-- **codeguard's:** `valid`, `invalid` and `skipped` are the outcomes a rule eval case
-  expects. `invalid`: the triggers fire and the judge reports a violation. `valid`: the
-  triggers fire and the judge reports none. `skipped`: the triggers don't fire, so the
-  judge never sees the edit. Also *rule test*, *rule eval*, *gate*, *trigger* and
-  *binding* (see the README's [Write a rule package](../README.md#write-a-rule-package)).
-- **Anthropic's:** *grader* and its types (`llm`, `regex`, `tool_used`, `tool_order`,
-  `file_exists`, `baseline`), `focus` and `target` (what a grader reads), *arm* and
-  *ablation* (with and without the plugin), *scaffold*. `focus:` is a field of
-  Anthropic's `llm` grader, not anything in codeguard. See
-  [Test plugins with evals](https://code.claude.com/docs/en/plugin-evals.md).
-- **Both:** "eval" is `codeguard eval` (judge rule cases) or `claude plugin eval` (agent
-  tasks). "Case" is a rule eval case or a plugin eval case. The writing-rules skill
-  evals ask an agent to *write* rule eval cases, so both meanings meet in one test.
+- `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
+  triggers fire and the judge reports a violation. `valid`: the triggers fire and the
+  judge reports none. `skipped`: the triggers don't fire.
+- *Grader*, `focus`, `target`, *arm* and *scaffold* are `claude plugin eval`'s words;
+  see [Test plugins with evals](https://code.claude.com/docs/en/plugin-evals.md).
 
-## In this repository
+## The bar for a judge rule
 
-codeguard is the product, so its own tests check the CLI, the hooks and the judge, not
-anyone's rules. `codeguard test` and `codeguard eval` are features it ships for rule
-authors; pytest tests those features with fixture rules.
+A review judges each change once, so a case that flips between runs is a review that
+wrongly blocks or misses. A judge rule passes its rule eval when every case gets its
+expected review on every run:
 
-| Test | Run | It checks | Calls a model | In CI |
-|---|---|---|---|---|
-| Unit and integration tests, `tests/` | `uv run pytest` | the CLI (`review`, `test`, `eval`), config loading, triggers, the hooks, the `bin/codeguard` launcher | no | every push |
-| LLM tests, `tests/` marked `llm` | `uv run pytest -m llm -n 8` | the judge's instructions, request and tools still get the right verdicts from a real model; fixtures are the rule eval cases in `evals/judge/python/` | yes, each case 3 times (`--llm-runs 20` before merging a judge change) | every push |
-| Lint, format, imports and types | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright` | style, import boundaries, types | no | every push |
-| writing-rules skill evals, `evals/writing-rules/` | `claude plugin eval` | the writing-rules skill leads an agent to a good rule, or to a better tool than codeguard | yes: the agent, and a judge per `llm` grader | no; run by hand |
-| Dogfooding | the Stop hook in this clone, and the `codeguard-rules` CI job | codeguard's own code against the codeguard-rules rules it opts into in `.codeguard/config.yaml` | Stop hook: for judge rules; CI: no (`dry-run: true`) | the CI job, on pull requests |
-
-### Which test for which change
-
-| You change | Run |
+| The change | Each affected case passes |
 |---|---|
-| CLI, config, triggers, hooks or launcher code | `uv run pytest`, and the lint and type checks |
-| The judge's prompt, request or tools | the above, then `uv run pytest -m llm -n 8 --llm-runs 20` |
-| A fixture in `evals/judge/` | `uv run pytest` (it checks each case's triggers), then `uv run pytest -m llm -n 8`. Follow the writing-rules skill when a case flips |
-| `skills/writing-rules/` | `claude plugin eval` on `evals/writing-rules/` (below) |
-| A case in `evals/writing-rules/` | that case alone: `claude plugin eval . --case <name>`, with the options below |
+| Defines the rule: its skill or a language supplement, its binding (paths, triggers), or its rule eval | 20 runs of 20 |
+| Reaches the rule only through the framework: codeguard's judge prompt, request, tools or harness, a shared gate, a new codeguard release | 3 runs of 3 |
 
-A rule that misjudges codeguard's own code is fixed in codeguard-rules, not here; see
-[In a rule package](#in-a-rule-package-codeguard-rules).
+Twenty clean runs show, with 95% confidence, that a case fails less than 1 run in 7.
+Three clean runs catch a rule that a change has broken. CI applies this bar wherever
+judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own fixtures
+in `evals/judge/`.
+
+When a case fails or flips, follow the `writing-rules` skill: fix the rule or the case,
+never re-run until it passes.
+
+`codeguard test` warnings, such as broad triggers, are advisory: they don't fail a
+change.
+
+## Changing codeguard
+
+| You change | CI runs | Locally |
+|---|---|---|
+| Anything | lint, format, import boundaries, types and the offline tests, on every push | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` |
+| Anything | codeguard reviews the PR's changed files against the rules it opts into in `.codeguard/config.yaml`, judge rules included; an `error` fails the PR | the Stop hook reviews each session's changes |
+| The judge: `src/codeguard/` review, provider, rules or syntax code, the rule eval harness, `pyproject.toml` or `uv.lock` | the LLM tests, every fixture 3 times | `uv run pytest -m llm -n 8` |
+| A fixture rule in `evals/judge/` | the LLM tests, that rule's cases 20 times | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
+| `skills/writing-rules/` or `evals/writing-rules/` | the writing-rules skill evals | [below](#the-writing-rules-skill-evals) |
+
+`uv run pytest` calls no model. The LLM tests review each fixture case the way
+`codeguard review` does, with the real `claude` CLI; plain `pytest` deselects them.
+
+codeguard ships no rules, so its CI doesn't run `codeguard test`. The rules it reviews
+itself with are tested in their package's CI.
+
+A PR description doesn't list the checks CI runs.
 
 ### The writing-rules skill evals
 
-Each case under `evals/writing-rules/` is a task prompt, a scaffold script that seeds a
-git repository from the case's `files/`, and graders. `claude plugin eval` runs each
-case with the plugin loaded and again without it, 3 times each by default, and scores
-the graders.
+Each case in `evals/writing-rules/` asks an agent to write or fix a rule with the
+plugin loaded, then grades what it wrote. The skill is guidance and the rules it leads
+to have their own evals, so the bar is lower than a judge rule's: CI runs each case 3
+times and passes a case scoring 0.8 or more.
 
 ```sh
-claude plugin eval . --scaffold --allow-tools Write Edit Bash --runs 3 --trust-plugin --no-publish --keep-temp
+claude plugin eval . --scaffold --allow-tools Write Edit Bash --runs 3 --threshold 0.8 \
+  --trust-plugin --no-publish --keep-temp
 ```
 
-- `--scaffold` runs each case's `place-files.sh`; `--trust-plugin` skips the first-run
-  trust prompt; `--no-publish` keeps the HTML report local.
-- `--ablation none` runs only the with-plugin arm, which halves the cost when you don't
-  need the comparison.
-- `--keep-temp` keeps each run's workspace and prints its path. Open the files the agent
-  wrote there to check a grader's verdict against them.
-- Granting `Bash` runs every command in Claude Code's sandbox. On Linux, install
-  `bubblewrap` and `socat` first. The sandbox denies writes under `/tmp`, where the eval
-  puts each run, so set `TMPDIR` to a directory outside `/tmp`.
-- The graders that expect `codeguard test` to pass need `codeguard` to run inside the
-  sandbox, which has no network and doesn't put the plugin's `bin` on `PATH`.
+- Run it from a checkout with no `.venv`.
+- Granting Bash runs the agent's commands in Claude Code's sandbox. On Linux, install
+  `bubblewrap` and `socat`, and set `TMPDIR` to a directory outside `/tmp`, where the
+  sandbox denies writes.
+- `--keep-temp` keeps each run's workspace. When a grader fails, open the files the
+  agent wrote there and check them against the verdict before changing the skill.
+- `--case <name>` runs one case; `--ablation none` skips the run without the plugin.
 
-What a grader reads decides what it can check. An `llm` grader with `focus: trace` sees
-only the first 12 and the last 12 lines of the session, and a run is usually far longer,
-so it doesn't see the files the agent wrote. To grade the rule itself, point a grader at
-`{ source: file, path: <path> }`: a `regex` grader for structure, an `llm` grader for
-judgement on one short file. Anthropic's guide says to keep `llm` graders for short
-outputs and grade what the agent produced, not the path it took.
+### Writing a skill eval case
 
-## In a rule package: codeguard-rules
+A grader checks what the agent produced, not what it said or the steps it took.
 
-A rule package tests its rules with `codeguard test` and `codeguard eval`. It has no
-pytest suite and no agent evals.
-[betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules)
-has the rulesets `general` and `python`.
+- The prompt names the rule's id, so the grader knows each file's path.
+- A grader reads one file: `focus` or `target` is
+  `{ source: file, path: .codeguard/skills/<id>/SKILL.md }`, or the binding or rule eval.
+- Structure, such as a `## Why` heading or triggers other than `any`, is a `regex`
+  grader. Judgement, such as whether the convention is one declarative sentence, is an
+  `llm` grader on that one short file, with PASS and FAIL stated concretely.
+- Never grade the trace with an `llm` grader: its judge sees only the first and last 12
+  lines of the session, never the files.
+- That `codeguard test` ran is a `tool_used` grader on `Bash` whose `input_match` is
+  `codeguard test`.
+- Nothing in the skill gives a case's answer: no example in `SKILL.md` or `references/`
+  shares a case's convention, domain or names. A case the skill answers measures
+  copying.
 
-| Test | Lives in | Run | It checks | Calls a model | In CI |
-|---|---|---|---|---|---|
-| Rule tests: pattern rules and gates | `<ruleset>/rule-tests/<id>-test.yml`, snapshots in `__snapshots__/` | `codeguard test` | each rule or gate matches its `invalid` snippets and none of its `valid` ones | no | every push |
-| Rule eval triggers | `<ruleset>/rule-evals/<id>.yaml` | `codeguard test` | each judge rule's triggers fire on its `valid` and `invalid` cases and not on its `skipped` ones | no | every push |
-| Rule evals: judge verdicts | same files | `codeguard eval` | each case gets its expected review from the binding's model | yes | 3 runs each, only the judge rules a change can affect |
-| Release bar for a judge rule | same files | `codeguard eval --rule <id> --repeat 20` | each case passes 20 runs of 20 | yes | no; run by hand before tagging |
+## Changing a rule package
 
-The package's CI checks out the codeguard tag in its `CODEGUARD_REF`. A project gets the
-package's rules by naming a tag in `.codeguard/config.yaml`, and codeguard checks the
-package's `codeguard` version range. The README's
-[Which test to write](../README.md#which-test-to-write) has the same table for any rule.
+| You change | CI runs | Locally |
+|---|---|---|
+| A pattern rule, a gate or their tests | `codeguard test`: each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard test` |
+| A judge rule's skill, binding or rule eval | `codeguard test` (each case's triggers), then `codeguard eval` on that rule, 20 runs | `codeguard test`, then `codeguard eval --rule <id> --repeat 20` |
+| Anything else a judge rule depends on, such as a shared gate | `codeguard eval` on each affected judge rule, 3 runs | `codeguard eval --rule <id> --repeat 3` |
 
-## In an app: otter
+Run both commands at the package root; they cover every ruleset. CI tests with the
+latest codeguard release. A merged change is ready to tag: CI has already held each
+changed rule to the bar.
 
-An app uses codeguard to check its own code. Its rules come mostly from a package, and it
-tests only the rules it writes. otter opts into codeguard-rules' `general` ruleset's
-`dry` judge rule and a list of `python` pattern rules, and has one pattern rule of its
-own, `django-model-inherits-base-model`.
+The README's [Write a rule package](../README.md#write-a-rule-package) has the rule,
+binding and rule eval formats.
 
-| Check | Run by | It checks | Calls a model | When |
-|---|---|---|---|---|
-| Review at agent Stop | the codeguard plugin's Stop hook, enabled in `.claude/settings.json` | the session's changes against otter's rules; an error blocks the agent | for judge rules | every time an agent stops |
-| Review in CI | the `jig-code/codeguard@v0` action | the pull request's changed files against the same rules | yes | every pull request |
-| Rule tests for otter's own rule | the same action step, or `codeguard test` locally | `django-model-inherits-base-model` matches its snippets in `.codeguard/rule-tests/` | no | every pull request |
+## Changing an app
 
-otter doesn't test the package's rules; codeguard-rules does that before it tags a
-release.
+| You change | Checked by | When |
+|---|---|---|
+| The app's code | the codeguard plugin's Stop hook, `codeguard review`, against the rules in `.codeguard/config.yaml`; an `error` blocks the agent | every time an agent stops |
+| The app's code | the review action, `jig-code/codeguard@v0`, on the PR's changed files; an `error` fails the PR | every pull request |
+| A rule in the app's own `.codeguard/` | the test action, `jig-code/codeguard/test@v0`: `codeguard test`, and with `eval: true` the judge rules' evals at the bar above | every pull request |
+
+- An app with no rules of its own runs only the review action.
+- To change a packaged rule for the app, override or exclude it in
+  `.codeguard/config.yaml`; never copy it into `.codeguard/`. The package's CI tests the
+  rule.
+- Opt into the latest tag of each rule package, and move to a new tag when it ships.
+- A finding you think is wrong is fixed in the rule or its cases, never by changing the
+  code to get past it.
