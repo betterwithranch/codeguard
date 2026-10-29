@@ -49,7 +49,8 @@ rule eval: a pattern rule, a gate no judge rule uses, or another rule. CI applie
 wherever judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own
 fixtures in `evals/judge/`.
 
-When a case fails or flips, fix the rule or the case; never re-run until it passes.
+When a case fails or flips, fix the rule or the case, as the writing-rules skill
+describes; never re-run until it passes.
 
 Rule test warnings, such as broad triggers, are advisory: they don't fail a change.
 
