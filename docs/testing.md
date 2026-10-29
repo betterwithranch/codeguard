@@ -58,11 +58,11 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
-| Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` |
+| Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | Same |
 | Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, the Stop hook reviews the session's uncommitted and untracked files each time the agent stops | `codeguard review --base <base branch>` | `codeguard review` |
-| The judge: its review, provider, rules or syntax code, the rule eval harness, or the dependencies | Each fixture case's verdict, 3 runs | `uv run pytest -m llm -n 8` | `uv run pytest -m llm -n 8` |
-| A fixture rule for the LLM tests | That rule's verdicts, 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
-| The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval . --runs 3 --threshold 0.8` | `claude plugin eval . --runs 3 --threshold 0.8` |
+| The judge: its review, provider, rules or syntax code, the rule eval harness, or the dependencies | Each fixture case's verdict, 3 runs | `uv run pytest -m llm -n 8` | Same |
+| A fixture rule for the LLM tests | That rule's verdicts, 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` | Same |
+| The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval . --runs 3 --threshold 0.8` | Same |
 
 The writing-rules skill and its evals are in `skills/writing-rules/` and
 `evals/writing-rules/`, the LLM tests' fixture rules are in `evals/judge/`, and the
@@ -120,9 +120,9 @@ A grader checks what the agent produced, not what it said or the steps it took.
 
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
-| A pattern rule, a gate or their tests | Each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard rules test` | `codeguard rules test` |
-| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | Each case's triggers, then each such rule's verdicts, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` |
-| The codeguard version CI tests with | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | `codeguard rules test`, `codeguard rules eval --repeat 3` |
+| A pattern rule, a gate or their tests | Each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard rules test` | Same |
+| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | Each case's triggers, then each such rule's verdicts, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
+| The codeguard version CI tests with | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | Same |
 
 Run both commands at the package root; they cover every ruleset. A merged change is
 ready to tag: CI has already held each changed rule to the bar.
@@ -135,8 +135,8 @@ binding and rule eval formats.
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
 | The app's code | The changed files against the app's rules; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, the Stop hook reviews the session's uncommitted and untracked files each time the agent stops, and an error blocks the agent | `codeguard review --base <base branch>` | `codeguard review` |
-| A rule the app defines | Each rule's tests and each case's triggers, then the verdicts of each judge rule whose definition changed, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` |
-| The codeguard release the actions are pinned to | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | `codeguard rules test`, `codeguard rules eval --repeat 3` |
+| A rule the app defines | Each rule's tests and each case's triggers, then the verdicts of each judge rule whose definition changed, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
+| The codeguard release the actions are pinned to | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | Same |
 
 - In CI, the review action, `jig-code/codeguard@v<version>`, runs `codeguard review`.
   The test action, `jig-code/codeguard/test@v<version>`, runs `codeguard rules test`,
