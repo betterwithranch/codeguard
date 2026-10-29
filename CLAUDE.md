@@ -2,6 +2,15 @@
 
 [README.md](README.md) explains the CLI, rule packages and how to work on codeguard.
 
+## Testing
+
+Before testing any change, follow [docs/testing.md](docs/testing.md).
+
+- Run only the checks the change's row names. Never write a script, a copy of the
+  repository or a workaround to test a change some other way.
+- If a change fits no row, or a listed check can't run, say so and propose a change to
+  the guide; don't change the guide without approval.
+
 ## Rules
 
 Before adding or changing a rule, and whenever a rule eval, an LLM test or a judged

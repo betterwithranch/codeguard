@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: jig-code/codeguard@v0
+      - uses: jig-code/codeguard@v0.9.1
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -97,8 +97,9 @@ jobs:
       || github.event.label.name == 'codeguard-allow-judge-errors'
 ```
 
-`v0` moves to each 0.x release, so the plugin and the action update together with no
-project edits. A release that breaks the rule format starts `v1`.
+Pin the action to a release tag, as above, and adopt each codeguard release in its own
+PR ([Upgrade](#upgrade)), so a new release never changes a review without a change in
+the project.
 
 ### Run formatters first
 
@@ -185,7 +186,7 @@ codeguard fails when that version is outside a package's `ast-grep` range.
 For a private package in CI, pass a token that can read it:
 
 ```yaml
-      - uses: jig-code/codeguard@v0
+      - uses: jig-code/codeguard@v0.9.1
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
@@ -529,19 +530,30 @@ uv tool install git+https://github.com/jig-code/codeguard@v0
 
 ### Upgrade
 
-Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
-A commit on `main` reaches no one until it is released. After a release:
+Pin in CI, auto-update in your dev environment. A commit on `main` reaches no one until
+it is released.
 
-- Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
-- Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
-  ```sh
-  claude plugin marketplace update codeguard
-  claude plugin update codeguard@codeguard --scope project
-  ```
-  To get releases without updating by hand, turn on auto-update for the codeguard
-  marketplace in `/plugin` (Marketplaces, then codeguard). Auto-update is off by
-  default for marketplaces outside Anthropic's own. It applies new releases in the
-  background, and they take effect in the next session.
+**Pin in CI.** A project adopts each codeguard release and each rule package tag in its
+own PR, so whatever the upgrade changes in reviews and rule tests shows up there and
+nowhere else:
+
+- Move the action's tag (`jig-code/codeguard@v<version>`, and `jig-code/codeguard/test@v<version>`
+  if the project defines rules) to the new release.
+- Move a rule package's `ref` in `.codeguard/config.yaml` to its new tag.
+
+**Auto-update in your dev environment**, so you meet a release's changes before CI does:
+turn on auto-update for the codeguard marketplace in `/plugin` (Marketplaces, then
+codeguard). Auto-update is off by default for marketplaces outside Anthropic's own. It
+applies new releases in the background, and they take effect in the next session. If a
+release breaks a branch you're working on, turn auto-update off until the fix ships. To
+update by hand, run these, then `/reload-plugins` or start a new session:
+
+```sh
+claude plugin marketplace update codeguard
+claude plugin update codeguard@codeguard --scope project
+```
+
+Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 
 ## What the hooks check
 
@@ -785,6 +797,9 @@ codeguard eval                # judge rule evals; calls the configured judge
 
 ## Working on codeguard
 
+[docs/testing.md](docs/testing.md) says how to test a change to codeguard, a rule
+package or an app.
+
 Tests:
 
 ```sh
@@ -799,25 +814,20 @@ deselects. CI runs them; run them after changing the judge's instructions, reque
 tools:
 
 ```sh
-uv run pytest -m llm -n 8                  # each case 3 times, as CI does
-uv run pytest -m llm -n 8 --llm-runs 20    # before merging a change to the judge
+uv run pytest -m llm -n 8    # each case 3 times, as CI does
 ```
 
-`-n 8` runs eight tests at once, each with its own `claude` call.
+`-n 8` runs eight tests at once, each with its own `claude` call. It only saves time: any
+number gives the same result. [docs/testing.md](docs/testing.md) says which to run for a
+change.
 
 Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skills and
 bindings beside them. When a case flips between runs or comes back uncertain, follow the
 `writing-rules` skill, and look at the judge prompt as well. The plain suite checks each
 case's triggers.
 
-The `writing-rules` skill has its own evals in `evals/writing-rules/`: tasks an agent
-does with the plugin loaded, each graded against what the skill should lead it to. Run
-them after changing the skill, with the Claude Code CLI; they cost tokens too, and each
-case also runs without the plugin, for comparison:
-
-```sh
-claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
-```
+The `writing-rules` skill has its own evals in `evals/writing-rules/`;
+[docs/skill-evals.md](docs/skill-evals.md) says how to run and write them.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
