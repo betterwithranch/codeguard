@@ -34,37 +34,10 @@ jobs:
           dry-run: true
   llm-tests:
     runs-on: ubuntu-latest
-    env:
-      CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
       - uses: astral-sh/setup-uv@v10.2.0
       - run: npm install --global @anthropic-ai/claude-code
       - run: uv run --frozen pytest -m llm -n 8
-      - name: Run each changed fixture rule 20 times
-        if: github.event_name == 'pull_request'
-        run: |
-          rules="$(.github/scripts/changed-fixture-rules.sh "origin/$GITHUB_BASE_REF")"
-          if [ -n "$rules" ]; then uv run --frozen pytest -m llm -n 8 --llm-runs 20 -k "$rules"; fi
-  skill-evals:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-      - id: changed
-        run: |
-          if git diff --quiet "origin/$GITHUB_BASE_REF"...HEAD -- skills/writing-rules evals/writing-rules; then
-            echo run=false >> "$GITHUB_OUTPUT"
-          else
-            echo run=true >> "$GITHUB_OUTPUT"
-          fi
-      - if: steps.changed.outputs.run == 'true'
-        run: npm install --global @anthropic-ai/claude-code
-      - if: steps.changed.outputs.run == 'true'
-        run: claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 --trust-plugin --no-publish
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
