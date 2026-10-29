@@ -28,9 +28,6 @@ that directory, and the layout is fixed.
 - The judge is the code in codeguard that sends a judge rule and a change to the model
   and turns its reply into a review.
 
-The README's [Write a rule package](../README.md#write-a-rule-package) has the full
-formats.
-
 `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
 triggers fire and the judge reports a violation. `valid`: the triggers fire and the
 judge reports none. `skipped`: the triggers don't fire.
@@ -61,7 +58,7 @@ CI runs a rule's eval only for a change that can change its verdicts:
 
 | You change | Each case of the rule passes |
 |---|---|
-| The rule: its skill or a language supplement, its binding (paths, triggers), or a gate its triggers name (the judge is sent the whole trigger node around a change). Or the rule's eval cases | 20 runs of 20 |
+| The rule: its skill or a language supplement, its binding (paths, triggers), or a gate its triggers name. Or the rule's eval cases | 20 runs of 20 |
 | The judge: codeguard's judge prompt, request, tools or harness, or the codeguard version a package or app tests with | 3 runs of 3 |
 
 Twenty clean runs show, with 95% confidence, that a case fails less than 1 run in 7.
@@ -71,8 +68,7 @@ wherever rules that review code live: a rule package and an app's `.codeguard/`.
 codeguard's fixture rules only exercise the judge, so a change to one is tested like a
 judge change.
 
-A case that fails or flips is fixed in the rule or the case, as the writing-rules skill
-describes. A passing re-run doesn't fix it.
+Re-running until a case passes doesn't meet the bar.
 
 Rule test warnings, such as broad triggers, are advisory: they don't fail a change.
 
@@ -81,13 +77,12 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
 | Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | Same |
-| Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files; codeguard's Claude Code plugin runs it each time Claude stops | `codeguard review --base <base branch>` | `codeguard review` |
+| Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files | `codeguard review --base <base branch>` | `codeguard review` |
 | The judge: its review, provider, rules or syntax code, or the dependencies. Or a fixture rule or its fixture cases | Each fixture case's review, 3 runs | `uv run pytest -m llm -n 8` | Same |
 | The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval .` with the flags in [Testing the writing-rules skill](skill-evals.md) | Same |
 
-The judge's code is under `src/codeguard/`. The LLM tests review each fixture case the
-way `codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
-them. `-n 8` only sets how many run at once: any number gives the same result.
+The judge's code is under `src/codeguard/`. Plain `uv run pytest` deselects the LLM
+tests. `-n 8` only sets how many run at once: any number gives the same result.
 
 codeguard ships no rules, so `codeguard rules test` and `codeguard rules eval` don't
 run here. The rules in `evals/judge/` are fixtures for codeguard's own tests, and the
@@ -101,22 +96,15 @@ rules codeguard reviews itself with are tested in their package's CI.
 | A judge rule's skill, supplement, binding or rule eval, or a gate it uses | Each case's triggers, then each such rule's verdicts, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
 | The codeguard version CI tests with | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | Same |
 
-Run both commands at the package root; they cover every ruleset. A merged change is
-ready to tag: CI has already held each changed rule to the bar.
-
-The README's [Write a rule package](../README.md#write-a-rule-package) has the rule,
-binding and rule eval formats.
+Run both commands at the package root; they cover every ruleset.
 
 ## Changing an app
 
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
-| The app's code | The changed files against the app's rules; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files; codeguard's Claude Code plugin runs it each time Claude stops | `codeguard review --base <base branch>` | `codeguard review` |
+| The app's code | The changed files against the app's rules; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files | `codeguard review --base <base branch>` | `codeguard review` |
 | A rule the app defines | Each rule's tests and each case's triggers, then the verdicts of each judge rule whose rule or eval cases changed, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
 | The codeguard release the actions are pinned to | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | Same |
 
-- In CI, the review action, `jig-code/codeguard@v<version>`, runs `codeguard review`.
-  The test action, `jig-code/codeguard/test@v<version>`, runs `codeguard rules test`,
-  and `codeguard rules eval` when `eval: true` is set.
-- An app with no rules of its own runs only the review action.
+- An app with no rules of its own has only the first row.
 - A packaged rule is tested in its package's CI, not the app's.
