@@ -530,20 +530,29 @@ uv tool install git+https://github.com/jig-code/codeguard@v0
 
 ### Upgrade
 
-A commit on `main` reaches no one until it is released. A project adopts each codeguard
-release and each rule package tag explicitly, in its own PR, so whatever the upgrade
-changes in reviews and rule tests shows up there and nowhere else:
+A commit on `main` reaches no one until it is released.
+
+In CI, a project adopts each codeguard release and each rule package tag explicitly, in
+its own PR, so whatever the upgrade changes in reviews and rule tests shows up there and
+nowhere else:
 
 - Move the action's tag (`jig-code/codeguard@v<version>`, and `jig-code/codeguard/test@v<version>`
   if the project defines rules) to the new release.
 - Move a rule package's `ref` in `.codeguard/config.yaml` to its new tag.
-- Update the Claude Code plugin to the same release, then run `/reload-plugins` or start
-  a new session:
-  ```sh
-  claude plugin marketplace update codeguard
-  claude plugin update codeguard@codeguard --scope project
-  ```
-- Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
+
+Locally, keep the plugin current, so you meet a release's changes before CI does: turn
+on auto-update for the codeguard marketplace in `/plugin` (Marketplaces, then
+codeguard). Auto-update is off by default for marketplaces outside Anthropic's own. It
+applies new releases in the background, and they take effect in the next session. If a
+release breaks a branch you're working on, turn auto-update off until the fix ships. To
+update by hand, run these, then `/reload-plugins` or start a new session:
+
+```sh
+claude plugin marketplace update codeguard
+claude plugin update codeguard@codeguard --scope project
+```
+
+Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 
 ## What the hooks check
 
