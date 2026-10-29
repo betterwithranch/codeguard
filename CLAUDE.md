@@ -10,8 +10,6 @@ Before testing any change, follow [docs/testing.md](docs/testing.md).
   repository or a workaround to test a change some other way.
 - If a change fits no row, or a listed check can't run, say so and propose a change to
   the guide; don't change it without approval.
-- Don't list the checks CI runs in a pull request description: their results already
-  show on the pull request.
 
 ## Rules
 
