@@ -6,4 +6,9 @@ set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 data="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/codeguard}"
 unset VIRTUAL_ENV
+# The SessionStart hook built this session's environment outside Claude Code's sandbox,
+# which denies the writes and downloads uv run needs.
+if [ -n "${CODEGUARD_ENVIRONMENT:-}" ] && [ -x "$CODEGUARD_ENVIRONMENT/bin/codeguard" ]; then
+    exec "$CODEGUARD_ENVIRONMENT/bin/codeguard" "$@"
+fi
 UV_PROJECT_ENVIRONMENT="$data/venv" exec uv run --quiet --frozen --no-dev --project "$root" codeguard "$@"

@@ -513,7 +513,8 @@ claude plugin install codeguard@codeguard --scope project
 ```
 
 In Claude Code, the plugin also puts `codeguard` on the PATH of the commands Claude
-runs, for skills such as writing a rule.
+runs, for skills such as writing a rule. A hook builds its environment when a session
+starts, outside Claude Code's sandbox, so it runs under the sandbox too.
 
 In Codex, trust codeguard's hooks in `/hooks`. Codex doesn't give plugins a command, so
 writing rules there needs the CLI on its own.
@@ -818,6 +819,9 @@ case also runs without the plugin, for comparison:
 ```sh
 claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
 ```
+
+On Linux, set `TMPDIR` to a directory outside `/tmp`: the eval puts each run under it,
+and its sandbox denies writes under `/tmp`, so every command fails.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
