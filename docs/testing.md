@@ -40,7 +40,7 @@ CI runs a rule's eval only for a change that can change its verdicts:
 
 | You change | Each case of the rule passes |
 |---|---|
-| The rule's definition: its skill or a language supplement, its binding (paths, triggers), its rule eval, or a gate its triggers name (the judge is sent the whole trigger node around a change) | 20 runs of 20 |
+| The rule: its skill or a language supplement, its binding (paths, triggers), or a gate its triggers name (the judge is sent the whole trigger node around a change). Or the rule's eval cases | 20 runs of 20 |
 | The judge: codeguard's judge prompt, request, tools or harness, or the codeguard version a package or app tests with | 3 runs of 3 |
 
 Twenty clean runs show, with 95% confidence, that a case fails less than 1 run in 7.
@@ -49,8 +49,7 @@ rule eval: a pattern rule, a gate no judge rule uses, or another rule. CI applie
 wherever judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own
 fixtures in `evals/judge/`.
 
-When a case fails or flips, follow the writing-rules skill: fix the rule or the case,
-never re-run until it passes.
+When a case fails or flips, fix the rule or the case; never re-run until it passes.
 
 Rule test warnings, such as broad triggers, are advisory: they don't fail a change.
 
@@ -103,7 +102,7 @@ how the rule behaves: the rule's own tests and evals check its behavior.
 
 - The prompt names the rule's id, so the grader knows each file's path.
 - A grader reads one file: its `focus` or `target` is
-  `{ source: file, path: .codeguard/skills/<id>/SKILL.md }`, or the binding or rule eval.
+  `{ source: file, path: .codeguard/skills/<id>/SKILL.md }`, or the rule's binding.
 - Structure, such as a `## Why` heading or triggers other than `any`, is a `regex`
   grader. Judgement, such as whether the convention is one declarative sentence, is an
   `llm` grader on that one short file, with `PASS` and `FAIL` stated concretely.
@@ -132,7 +131,7 @@ binding and rule eval formats.
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
 | The app's code | The changed files against the app's rules; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, the Stop hook reviews the session's uncommitted and untracked files each time the agent stops, and an error blocks the agent | `codeguard review --base <base branch>` | `codeguard review` |
-| A rule the app defines | Each rule's tests and each case's triggers, then the verdicts of each judge rule whose definition changed, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
+| A rule the app defines | Each rule's tests and each case's triggers, then the verdicts of each judge rule whose rule or eval cases changed, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` | Same |
 | The codeguard release the actions are pinned to | Each case's triggers, then every judge rule's verdicts, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` | Same |
 
 - In CI, the review action, `jig-code/codeguard@v<version>`, runs `codeguard review`.
