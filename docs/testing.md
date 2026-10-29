@@ -52,14 +52,11 @@ change.
 
 | You change | CI runs | Locally |
 |---|---|---|
-| Anything but docs | lint, format, import boundaries, types and the offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` |
-| Anything but docs | codeguard reviews the PR's changed files against the rules it opts into in `.codeguard/config.yaml`, judge rules included; an `error` fails the PR | the Stop hook reviews each session's changes |
+| Anything | lint, format, import boundaries, types and the offline tests, on every push | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` |
+| Anything | codeguard reviews the PR's changed files against the rules it opts into in `.codeguard/config.yaml`, judge rules included; an `error` fails the PR | the Stop hook reviews each session's changes |
 | The judge: `src/codeguard/` review, provider, rules or syntax code, the rule eval harness, `pyproject.toml` or `uv.lock` | the LLM tests, every fixture 3 times | `uv run pytest -m llm -n 8` |
 | A fixture rule in `evals/judge/` | the LLM tests, that rule's cases 20 times | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
 | `skills/writing-rules/` or `evals/writing-rules/` | the writing-rules skill evals | [below](#the-writing-rules-skill-evals) |
-
-Docs (`docs/`, `README.md`, `CLAUDE.md`) run no CI: they can't cause a regression. The
-skill's own Markdown and the eval fixtures aren't docs; the rows above cover them.
 
 `uv run pytest` calls no model. The LLM tests review each fixture case the way
 `codeguard review` does, with the real `claude` CLI; plain `pytest` deselects them.

@@ -2,7 +2,9 @@ name: codeguard CI
 on:
   push:
     branches: [main]
+    paths-ignore: &docs [docs/**, README.md, CLAUDE.md]
   pull_request:
+    paths-ignore: *docs
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
