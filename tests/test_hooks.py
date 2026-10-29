@@ -473,3 +473,40 @@ class TestBundledCommand:
         assert result.returncode == 0, result.stderr
         assert result.stdout.startswith("usage: codeguard")
         assert (home / ".cache" / "codeguard" / "venv" / "bin" / "codeguard").exists()
+
+    def test_a_read_only_cache_says_which_directories_to_allow(self, uv_only, tmp_path):
+        read_only = tmp_path / "read-only"
+        read_only.write_text("")
+        result = subprocess.run(
+            [PROJECT / "bin" / "codeguard", "--help"],
+            capture_output=True,
+            text=True,
+            env={
+                **without_codeguard(),
+                "XDG_CACHE_HOME": str(read_only / "cache"),
+                "UV_CACHE_DIR": str(read_only / "uv"),
+                "PATH": os.pathsep.join([str(uv_only), "/usr/bin", "/bin"]),
+            },
+        )
+
+        assert result.returncode == 1
+        assert f'"allowWrite": [ "{read_only}/cache/codeguard", "{read_only}/uv" ]' in result.stderr
+
+    def test_an_unreadable_project_stops_the_launcher(self, uv_only, tmp_path):
+        launcher = tmp_path / "plugin" / "bin" / "codeguard"
+        launcher.parent.mkdir(parents=True)
+        shutil.copy(PROJECT / "bin" / "codeguard", launcher)
+        result = subprocess.run(
+            [launcher, "--help"],
+            capture_output=True,
+            text=True,
+            env={
+                **without_codeguard(),
+                "PATH": os.pathsep.join([str(launcher.parent), str(uv_only), "/usr/bin", "/bin"]),
+            },
+        )
+
+        assert result.returncode == 1
+        assert result.stderr == (
+            f"codeguard can't start: it can't read {tmp_path}/plugin/pyproject.toml.\n"
+        )

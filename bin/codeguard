@@ -6,4 +6,33 @@ set -eu
 root="$(cd "$(dirname "$0")/.." && pwd)"
 data="${CLAUDE_PLUGIN_DATA:-${XDG_CACHE_HOME:-$HOME/.cache}/codeguard}"
 unset VIRTUAL_ENV
+
+# Without the project, uv run would run the codeguard on PATH: this script, again.
+if ! [ -r "$root/pyproject.toml" ]; then
+    echo "codeguard can't start: it can't read $root/pyproject.toml." >&2
+    exit 1
+fi
+
+# Claude Code's sandbox lets commands write only to the working directory and $TMPDIR, so
+# uv can't build the environment. Say which directories to allow rather than uv's error.
+cache="$(uv cache dir 2>/dev/null)"
+unwritable=""
+for directory in "$data" ${cache:+"$cache"}; do
+    if ! mkdir -p "$directory" 2>/dev/null || ! [ -w "$directory" ]; then
+        unwritable="$unwritable \"$(printf '%s' "$directory" | sed "s|^$HOME/|~/|")\","
+    fi
+done
+if [ -n "$unwritable" ]; then
+    cat >&2 <<EOF
+codeguard can't start: uv needs to write its cache and codeguard's environment, and these
+directories are read-only here, likely because Claude Code's sandbox confines writes:
+ ${unwritable%,}
+Allow them in ~/.claude/settings.json, then run the command again:
+  "sandbox": { "filesystem": { "allowWrite": [${unwritable%,} ] } }
+The first run also downloads codeguard's dependencies from pypi.org and
+files.pythonhosted.org, which the sandbox's "network": { "allowedDomains": [...] } allows.
+EOF
+    exit 1
+fi
+
 UV_PROJECT_ENVIRONMENT="$data/venv" exec uv run --quiet --frozen --no-dev --project "$root" codeguard "$@"
