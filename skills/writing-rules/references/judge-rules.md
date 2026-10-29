@@ -72,7 +72,8 @@ how triggers select what the judge sees.
   "a getter that saves surprises a caller who only reads", not "calls save".
 - A case tests one thing. It doesn't mix in a second defect, such as a CSV split on
   `","`, which is a bug whatever the rule says, so the judge can't flag the case for the
-  wrong reason.
+  wrong reason. Its code defines or imports every name it uses and keeps no state shared
+  between calls.
 - Pair the cases: for each form the convention allows, a `valid` case, and beside it an
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
