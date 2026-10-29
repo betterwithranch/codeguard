@@ -14,6 +14,22 @@ on the pull request.
 
 ## Words
 
+A codeguard rule is one of two kinds, and the tables below name their parts:
+
+- A pattern rule is an ast-grep rule that matches code exactly, in
+  `rules/pattern/<id>.yml`.
+- A judge rule is a convention a model checks. Its skill, `skills/<id>/SKILL.md`, states
+  the convention. A supplement beside it gives one language's forms of the convention.
+- A rule's binding, `bindings/<id>.yaml`, sets the paths it reviews. A judge rule's
+  binding also sets its triggers: the code a change must touch for the judge to check
+  it. A trigger is a built-in change kind or a gate, an ast-grep rule in
+  `gates/<id>.yml`.
+- The judge is the code in codeguard that sends a judge rule and a change to the model
+  and turns its reply into a review.
+
+The README's [Write a rule package](../README.md#write-a-rule-package) has the full
+formats.
+
 Four kinds of test run here, and they share words like "case" and "eval".
 
 | Test | Run with | It checks | Calls a model | A case is | Cases live in |
