@@ -28,7 +28,7 @@ this order:
    illustrations of it. A judge wavers on code in a form the skill doesn't place, such
    as a framework's validated data or an ORM's rows.
 6. `## Not a violation`: code near the boundary that keeps the convention.
-7. `## Why`: the harm the rule prevents, in one or two sentences. It is part of the judge's prompt, so it helps
+7. `## Why`: the harm the rule prevents. It is part of the judge's prompt, so it helps
    the judge apply the convention to code the examples don't name, but it never widens
    the convention: the convention alone decides each case.
 
