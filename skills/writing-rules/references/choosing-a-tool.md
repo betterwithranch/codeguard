@@ -6,15 +6,16 @@ rule it needs.
 
 ## Conventions that aren't codeguard's
 
-Write no codeguard rule for a convention another tool decides exactly, even when asked
-for one. An exact tool gives the same answer every run, costs nothing and already runs
-in the editor; a judge rule sees one changed file and guesses at the rest. Tell the user
-the convention isn't a codeguard rule and which kind of tool checks it. Setting up that
-tool isn't part of writing rules.
+Write no codeguard rule for a convention another tool can decide exactly, even when
+asked for one, and whether or not the project runs that tool or has the check turned on.
+An exact tool gives the same answer every run, costs nothing and runs in the editor; a
+judge rule sees one changed file and guesses at the rest. Tell the user the convention
+isn't a codeguard rule and which kind of tool can check it. Setting up that tool isn't
+part of writing rules.
 
 | The convention | Decided by |
 |---|---|
-| A check a linter or type checker the project runs already has, or can be configured to have | That linter or type checker |
+| A check a linter or type checker has, or can be configured to have | That linter or type checker |
 | A value's type and where it flows, such as an argument that may be `None` | A type checker |
 | Which modules may import which | An import linter |
 | Logic across nodes (counting, state, types), or an autocorrect | A custom linter rule |
