@@ -9,13 +9,17 @@ commands run the same checks on your machine, so you can find a failure before C
 
 ## Words
 
-Three programs run tests here, and they share words like "case" and "eval".
+These commands run tests here, and they share words like "case" and "eval".
 
-| Runner | What it tests | A case is |
+| Runner | What it tests, and why you'd use it | A case is |
 |---|---|---|
 | `pytest` | codeguard's own code, in `tests/` | a test function |
-| `codeguard rules test`, `codeguard rules eval` | a rule author's rules, against the rules' own cases. `codeguard review` is different: it runs the rules on your code | a snippet a pattern rule must or must not match (`rule-tests/<id>-test.yml`), or an edit and the review it should get (`rule-evals/<id>.yaml`) |
+| `codeguard rules test` | Whether each pattern rule and gate matches the code it should, and whether each judge rule's triggers send the judge the edits they should. It calls no model and gives the same result every run, so it runs on every rule change | a snippet a pattern rule or gate must or must not match (`rule-tests/<id>-test.yml`), or an edit in a rule eval, for its triggers only |
+| `codeguard rules eval` | Whether a judge rule's model gives each edit the review it should. It calls the model and its verdicts can vary, so it runs each case several times, and only for a change that can change a verdict | an edit and the review it should get (`rule-evals/<id>.yaml`) |
 | `claude plugin eval` | an agent doing a task with the codeguard plugin loaded | a prompt and its graders (`evals/writing-rules/<case>/`) |
+
+`codeguard rules test` and `codeguard rules eval` check the rules themselves.
+`codeguard review` is different: it runs the rules on your code.
 
 - `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
   triggers fire and the judge reports a violation. `valid`: the triggers fire and the
