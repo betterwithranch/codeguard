@@ -2,10 +2,10 @@
 
 ## Idiomatic code and the project's own code
 
-Calling Django's `User.objects.get_or_create(...)` and unpacking `(user, created)` is
-idiomatic; a rule against returning a created flag doesn't flag the call. Writing a
-project function that returns `(user, created)` copies the framework's shape and is what
-such a rule judges.
+A Django model declares its fields as class attributes, which Django's metaclass turns
+into instance fields. That is idiomatic: a rule that a class sets up its instance state in
+`__init__` doesn't flag the model. A project class that builds its instance state through
+its own metaclass copies the framework's machinery and is what such a rule judges.
 
 ## A pattern rule
 

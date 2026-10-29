@@ -34,15 +34,18 @@ review should get:
 
 ```yaml
 cases:
-  - name: caller can't tell a new order from an existing one
+  - name: a getter that saves surprises a caller who only reads
     inputs:
       file: src/shop/orders.py
       before: |
-        def open_order(number):
-            return Order(number)
+        def get_order(number):
+            return Order.objects.get(number=number)
       after: |
-        def open_order(number):
-            return Order(number), True
+        def get_order(number):
+            order = Order.objects.get(number=number)
+            order.viewed_at = now()
+            order.save()
+            return order
     expected_output:
       outcome: invalid
 ```

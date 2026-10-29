@@ -18,8 +18,8 @@ to code that matches a case, sign or example the skill describes. Write the skil
 this order:
 
 1. A title.
-2. The convention, as `SKILL.md` says to state it: "A function's result says what
-   happened without the caller unpacking it", not "is this clean?".
+2. The convention, as `SKILL.md` says to state it: "A function named as a query
+   changes no state", not "is this clean?".
 3. Definitions of the convention's terms.
 4. `## Violation`: statements of what breaks the convention, and the line a violation is
    reported on: the line a fix would change. The judge reports a violation only where a
@@ -69,7 +69,7 @@ how triggers select what the judge sees.
   could argue a case either way, make it clear or remove it.
 - A case shows what's at stake. A reader of the case alone sees why the code is a
   problem or why it's fine, and its name says that, not only what the code does:
-  "caller can't tell a new customer from an existing one", not "returns a tuple".
+  "a getter that saves surprises a caller who only reads", not "calls save".
 - A case tests one thing. It doesn't mix in a second defect, such as a CSV split on
   `","`, which is a bug whatever the rule says, so the judge can't flag the case for the
   wrong reason.

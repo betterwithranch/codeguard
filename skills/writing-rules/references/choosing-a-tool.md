@@ -15,10 +15,10 @@ tool isn't part of writing rules.
 | The convention | Decided by |
 |---|---|
 | A check a linter or type checker the project runs already has, or can be configured to have | That linter or type checker |
-| Where untyped values flow, such as a `json.loads` result used without validation | A type checker that reports values typed `Any` |
+| A value's type and where it flows, such as an argument that may be `None` | A type checker |
 | Which modules may import which | An import linter |
 | Logic across nodes (counting, state, types), or an autocorrect | A custom linter rule |
-| Who implements, calls or references a symbol, such as a function nobody calls | A language server's find-references, or a dead-code tool |
+| Who implements, calls or references a symbol, such as every class that implements an interface | A language server's find-references |
 
 ## Pattern rule or judge rule
 
