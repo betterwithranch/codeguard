@@ -6,8 +6,9 @@ on codeguard itself, on a rule package such as
 on an app that uses codeguard. Find the section for the repository you are changing,
 then the row for the kind of change you made. Each row says what CI checks and which
 commands run the same checks on your machine, so you can find a failure before CI does.
-The rows are the whole list: a change needs no check its row doesn't name. If a change
-fits no row, change this guide rather than testing it some other way.
+The rows are the whole list: a change needs no check its row doesn't name. Never write a
+script, a copy of the repository or a workaround to test a change some other way. If a
+change fits no row, or a listed check can't run, say so and change this guide instead.
 
 ## Words
 
@@ -70,8 +71,9 @@ says how to run and write the skill's evals.
 `codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
 them.
 
-codeguard ships no rules, so its CI runs no rule tests. The rules it reviews itself
-with are tested in their package's CI.
+codeguard ships no rules, so never run `codeguard rules test` or `codeguard rules eval`
+here. The rules in `evals/judge/` are fixtures for codeguard's own tests, and the rules
+codeguard reviews itself with are tested in their package's CI.
 
 A pull request description doesn't list the checks CI runs.
 
