@@ -25,17 +25,20 @@ Three programs run tests here, and they share words like "case" and "eval".
 
 A review judges each change once, so a case that flips between runs is a review that
 wrongly blocks or misses. A judge rule passes its rule eval when every case gets its
-expected review on every run:
+expected review on every run.
 
-| The change | Each affected case passes |
+CI runs a rule's eval only for a change that can change its verdicts:
+
+| The change | Each case of the rule passes |
 |---|---|
-| Defines the rule: its skill or a language supplement, its binding (paths, triggers), or its rule eval | 20 runs of 20 |
-| Reaches the rule only through the framework: codeguard's judge prompt, request, tools or harness, a shared gate, a new codeguard release | 3 runs of 3 |
+| The rule's definition: its skill or a language supplement, its binding (paths, triggers), its rule eval, or a gate its triggers name (the judge is sent the whole trigger node around a change) | 20 runs of 20 |
+| The judge: codeguard's judge prompt, request, tools or harness, or the codeguard version a package or app tests with | 3 runs of 3 |
 
 Twenty clean runs show, with 95% confidence, that a case fails less than 1 run in 7.
-Three clean runs catch a rule that a change has broken. CI applies this bar wherever
-judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own fixtures
-in `evals/judge/`.
+Three clean runs catch a rule that a judge change has broken. No other change runs a
+rule eval: a pattern rule, a gate no judge rule uses, or another rule. CI applies this
+wherever judge rules live: a rule package, an app's `.codeguard/`, and codeguard's own
+fixtures in `evals/judge/`.
 
 When a case fails or flips, follow the `writing-rules` skill: fix the rule or the case,
 never re-run until it passes.
@@ -104,12 +107,13 @@ A grader checks what the agent produced, not what it said or the steps it took.
 | You change | CI runs | Locally |
 |---|---|---|
 | A pattern rule, a gate or their tests | `codeguard test`: each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard test` |
-| A judge rule's skill, binding or rule eval | `codeguard test` (each case's triggers), then `codeguard eval` on that rule, 20 runs | `codeguard test`, then `codeguard eval --rule <id> --repeat 20` |
-| Anything else a judge rule depends on, such as a shared gate | `codeguard eval` on each affected judge rule, 3 runs | `codeguard eval --rule <id> --repeat 3` |
+| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | `codeguard test` (each case's triggers), then `codeguard eval` on each such rule, 20 runs | `codeguard test`, then `codeguard eval --rule <id> --repeat 20` |
+| The codeguard version CI tests with | `codeguard test`, then `codeguard eval` on every judge rule, 3 runs | `codeguard eval --repeat 3` |
 
-Run both commands at the package root; they cover every ruleset. CI tests with the
-latest codeguard release. A merged change is ready to tag: CI has already held each
-changed rule to the bar.
+Run both commands at the package root; they cover every ruleset. CI pins the codeguard
+version it tests with, and each new codeguard release moves the pin in its own PR, so a
+judge change fails that PR rather than an unrelated one. A merged change is ready to
+tag: CI has already held each changed rule to the bar.
 
 The README's [Write a rule package](../README.md#write-a-rule-package) has the rule,
 binding and rule eval formats.
@@ -127,5 +131,7 @@ binding and rule eval formats.
   `.codeguard/config.yaml`; never copy it into `.codeguard/`. The package's CI tests the
   rule.
 - Opt into the latest tag of each rule package, and move to a new tag when it ships.
+- An app with its own judge rules pins the codeguard version its test action runs, and
+  moves it to each new release in its own PR, which runs those rules' evals 3 times.
 - A finding you think is wrong is fixed in the rule or its cases, never by changing the
   code to get past it.
