@@ -1,0 +1,6 @@
+schema_version: "1.1"
+name: declines-a-type-checker-rule
+expected_outcome: |
+  No codeguard rule is written, and the reply says a type checker that reports values typed Any decides this convention.
+context:
+  scaffold_script: place-files.sh

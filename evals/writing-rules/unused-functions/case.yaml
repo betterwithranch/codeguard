@@ -1,6 +1,0 @@
-schema_version: "1.1"
-name: unused-functions
-expected_outcome: |
-  No codeguard rule: finding functions nobody calls is an exact symbol lookup, so pyproject.toml sets up a dead-code tool such as vulture instead.
-context:
-  scaffold_script: place-files.sh

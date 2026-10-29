@@ -12,7 +12,8 @@ rule that misjudged code.
 
 ## Workflow
 
-1. **Pick the tool.** Read `references/choosing-a-tool.md` before writing any rule.
+1. **Decide whether it's a codeguard rule**, and which kind. Read
+   `references/choosing-a-tool.md` before writing any rule.
 2. **State the convention and why it exists**, as the two sections below say. Reread
    them when two rules, or a rule and its cases, disagree about the same code.
 3. **Gate it**: a pattern rule's match (Pattern rules, below), or a judge rule's

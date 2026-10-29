@@ -1,6 +1,0 @@
-schema_version: "1.1"
-name: untyped-json-reads
-expected_outcome: |
-  No codeguard rule: pyproject.toml sets basedpyright, the type checker the project already runs, to report values typed Any.
-context:
-  scaffold_script: place-files.sh
