@@ -59,10 +59,14 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 | You change | CI runs | Locally |
 |---|---|---|
 | Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` |
-| Anything | A review of the pull request's changed files against the rules in `.codeguard/config.yaml`, judge rules included; an `error` fails the pull request | The Stop hook reviews each session's changes |
-| The judge: `src/codeguard/` review, provider, rules or syntax code, the rule eval harness, `pyproject.toml` or `uv.lock` | The LLM tests, each fixture case 3 runs | `uv run pytest -m llm -n 8` |
-| A fixture rule in `evals/judge/` | The LLM tests, that rule's cases 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
-| `skills/writing-rules/` or `evals/writing-rules/` | The skill evals | [The writing-rules skill evals](#the-writing-rules-skill-evals) |
+| Anything | A review of the pull request's changed files against the rules codeguard opts into, judge rules included; an error fails the pull request | `codeguard review` |
+| The judge: its review, provider, rules or syntax code, the rule eval harness, or the dependencies | The LLM tests, each fixture case 3 runs | `uv run pytest -m llm -n 8` |
+| A fixture rule for the LLM tests | The LLM tests, that rule's cases 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` |
+| The writing-rules skill or its evals | The skill evals | `claude plugin eval .` |
+
+The writing-rules skill and its evals are in `skills/writing-rules/` and
+`evals/writing-rules/`, the LLM tests' fixture rules are in `evals/judge/`, and the
+judge's code is under `src/codeguard/`.
 
 `uv run pytest` calls no model. The LLM tests review each fixture case the way
 `codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
@@ -116,9 +120,9 @@ A grader checks what the agent produced, not what it said or the steps it took.
 
 | You change | CI runs | Locally |
 |---|---|---|
-| A pattern rule, a gate or their tests | The rule tests: each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard rules test` |
-| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | The rule tests, then each such rule's evals, 20 runs | `codeguard rules test`, then `codeguard rules eval --rule <id> --repeat 20` |
-| The codeguard version CI tests with | The rule tests, then every judge rule's evals, 3 runs | `codeguard rules test`, then `codeguard rules eval --repeat 3` |
+| A pattern rule, a gate or their tests | The rule tests: each rule and gate matches its invalid snippets and none of its valid ones | `codeguard rules test` |
+| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | The rule tests, then each such rule's evals, 20 runs | `codeguard rules test`, `codeguard rules eval --rule <id> --repeat 20` |
+| The codeguard version CI tests with | The rule tests, then every judge rule's evals, 3 runs | `codeguard rules test`, `codeguard rules eval --repeat 3` |
 
 Run both commands at the package root; they cover every ruleset. A merged change is
 ready to tag: CI has already held each changed rule to the bar.
@@ -130,11 +134,13 @@ binding and rule eval formats.
 
 | You change | Checked by | When |
 |---|---|---|
-| The app's code | The codeguard plugin's Stop hook reviews the session's changes against the rules in `.codeguard/config.yaml`; an `error` blocks the agent | Every time an agent stops |
-| The app's code | The review action, `jig-code/codeguard@v<version>`, reviews the pull request's changed files; an `error` fails the pull request | Every pull request |
-| A rule in the app's own `.codeguard/` | The test action, `jig-code/codeguard/test@v<version>`, runs the rule tests, and with `eval: true` the judge rules' evals at the bar above | Every pull request |
+| The app's code | The codeguard plugin's Stop hook reviews the session's changes against the app's rules; an error blocks the agent | Every time an agent stops |
+| The app's code | The review action reviews the pull request's changed files; an error fails the pull request | Every pull request |
+| A rule the app defines | The test action runs the rule tests, and the judge rules' evals at the bar above | Every pull request |
 | The codeguard release the actions are pinned to | The test action runs each of the app's own judge rules' evals, 3 runs | The upgrade's pull request |
 
+- The review action is `jig-code/codeguard@v<version>`. The test action is
+  `jig-code/codeguard/test@v<version>`; set `eval: true` to run rule evals.
 - An app with no rules of its own runs only the review action.
 - To change a packaged rule for the app, override or exclude it in
   `.codeguard/config.yaml`; never copy it into `.codeguard/`. The package's CI tests the
