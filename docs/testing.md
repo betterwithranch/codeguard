@@ -10,42 +10,46 @@ The rows list every check a change needs: a change needs no check its row doesn'
 
 ## Words
 
-A codeguard rule is one of two kinds, and the tables below name their parts:
+A codeguard rule is one of two kinds. Its files sit in a rule directory: `.codeguard/` in
+an app, or each ruleset's directory in a rule package. The paths below are relative to
+that directory, and the layout is fixed.
 
 - A pattern rule is an ast-grep rule that matches code exactly, in
-  `rules/pattern/<id>.yml`.
+  `rules/pattern/<id>.yml`. Its rule tests, `rule-tests/<id>-test.yml`, list code it
+  must and must not match.
 - A judge rule is a convention a model checks. Its skill, `skills/<id>/SKILL.md`, states
   the convention. A supplement beside it gives one language's forms of the convention.
+  Its rule eval, `rule-evals/<id>.yaml`, lists cases: each is an edit and the review it
+  should get.
 - A rule's binding, `bindings/<id>.yaml`, sets the paths it reviews. A judge rule's
   binding also sets its triggers: the code a change must touch for the judge to check
   it. A trigger is a built-in change kind or a gate, an ast-grep rule in
-  `gates/<id>.yml`.
+  `gates/<id>.yml`, tested like a pattern rule.
 - The judge is the code in codeguard that sends a judge rule and a change to the model
   and turns its reply into a review.
 
 The README's [Write a rule package](../README.md#write-a-rule-package) has the full
 formats.
 
-Four kinds of test run here, and they share words like "case" and "eval".
-
-| Test | Run with | It checks | Calls a model | A case is | Cases live in |
-|---|---|---|---|---|---|
-| codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge, with no model | No | A test function | `tests/` |
-| LLM tests | `uv run pytest -m llm` | The judge gives each fixture case its expected review from a real model | Yes, and its verdicts can vary, so each case runs several times | A fixture case | `evals/judge/` |
-| Rule tests | `codeguard rules test` | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and it gives the same result every run | A snippet a rule or gate must or must not match, or a rule eval's edit, checked for its triggers only | `rule-tests/<id>-test.yml`, `rule-evals/<id>.yaml` |
-| Rule evals | `codeguard rules eval` | Each judge rule's model gives each edit the review it should | Yes, and its verdicts can vary, so each case runs several times | An edit and the review it should get | `rule-evals/<id>.yaml` |
-
-Rule tests are free and exact, so they run on every rule change. Rule evals cost model
-calls, so they run only for a change that can change a verdict. Both check the rules
-themselves; `codeguard review` is different: it runs the rules on your code.
-
 `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
 triggers fire and the judge reports a violation. `valid`: the triggers fire and the
 judge reports none. `skipped`: the triggers don't fire.
 
-The LLM tests' fixtures are a small rule package in `evals/judge/` that exists only to
-test the judge. A fixture rule is a judge rule there, and a fixture case is one of its
-rule eval cases. They are part of codeguard's tests, not rules codeguard reviews with.
+codeguard ships no rules of its own. Its fixtures, in `evals/judge/`, are a small rule
+package that exists only to test the judge. A fixture rule is a judge rule there, and a
+fixture case is one of its rule eval cases.
+
+Four kinds of test share words like "case" and "eval":
+
+| Test | It checks | Calls a model | A case is |
+|---|---|---|---|
+| codeguard's tests | The CLI, config, triggers, hooks and judge, with no model | No | A test function |
+| LLM tests | The judge gives each fixture case its expected review from a real model | Yes, and verdicts can vary between runs | A fixture case |
+| Rule tests | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and the result is the same every run | Code a rule or gate must or must not match, or a rule eval case, checked for its triggers only |
+| Rule evals | Each judge rule's model gives each edit the review it should | Yes, and verdicts can vary between runs | A rule eval case |
+
+Rule tests and rule evals check the rules themselves. `codeguard review` is different: it
+runs the rules on your code.
 
 ## The bar for a judge rule
 
