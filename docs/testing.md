@@ -11,12 +11,12 @@ commands run the same checks on your machine, so you can find a failure before C
 
 Four kinds of test run here, and they share words like "case" and "eval".
 
-| Test | Run with | It checks | Calls a model | A case is |
-|---|---|---|---|---|
-| codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge, through `tests/` | Only the LLM tests | A test function |
-| Rule tests | `codeguard rules test` | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and it gives the same result every run | A snippet in `rule-tests/<id>-test.yml`, or an edit in `rule-evals/<id>.yaml`, checked for its triggers only |
-| Rule evals | `codeguard rules eval` | Each judge rule's model gives each edit the review it should | Yes, and its verdicts can vary, so each case runs several times | An edit and the review it should get, in `rule-evals/<id>.yaml` |
-| Skill evals | `claude plugin eval` | The writing-rules skill leads an agent to a good rule | Yes | A prompt and its graders, in `evals/writing-rules/<case>/` |
+| Test | Run with | It checks | Calls a model | A case is | Cases live in |
+|---|---|---|---|---|---|
+| codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge | Only the LLM tests | A test function | `tests/` |
+| Rule tests | `codeguard rules test` | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and it gives the same result every run | A snippet a rule or gate must or must not match, or a rule eval's edit, checked for its triggers only | `rule-tests/<id>-test.yml`, `rule-evals/<id>.yaml` |
+| Rule evals | `codeguard rules eval` | Each judge rule's model gives each edit the review it should | Yes, and its verdicts can vary, so each case runs several times | An edit and the review it should get | `rule-evals/<id>.yaml` |
+| Skill evals | `claude plugin eval` | The writing-rules skill leads an agent to a good rule | Yes | A prompt and its graders | `evals/writing-rules/<case>/` |
 
 Rule tests are free and exact, so they run on every rule change. Rule evals cost model
 calls, so they run only for a change that can change a verdict. Both check the rules
