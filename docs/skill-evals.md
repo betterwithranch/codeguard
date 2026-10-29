@@ -17,9 +17,8 @@ whether that rule's tests or evals pass, or how reliably they pass. Testing a ru
 the job of its own rule tests and evals, wherever the rule lives, and is out of scope
 here.
 
-CI doesn't run the skill evals. Before merging a change to `skills/writing-rules/` or
-`evals/writing-rules/`, run them; each case gets 3 runs and passes at a score of 0.8 or
-more:
+CI runs them when `skills/writing-rules/` or `evals/writing-rules/` changes: each case
+gets 3 runs and passes at a score of 0.8 or more.
 
 ```sh
 claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 \

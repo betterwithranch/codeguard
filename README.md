@@ -815,7 +815,7 @@ tools:
 
 ```sh
 uv run pytest -m llm -n 8                             # each case 3 times, as CI does
-uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>     # after changing a fixture rule
+uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>     # a changed fixture rule 20 times, as CI does
 ```
 
 `-n 8` runs eight tests at once, each with its own `claude` call. It only saves time: any
