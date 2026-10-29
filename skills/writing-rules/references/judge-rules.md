@@ -6,7 +6,6 @@ back as a warning. That is a defect in the rule or in the case:
 
 - Don't re-run until it passes.
 - Don't loosen a gate to get past it.
-- Don't change the rule's wording to get a weak case to pass. Fix the case, or drop it.
 - Don't add a failing case's code to the skill as an example. The case would then pass
   by memory; restate the convention instead.
 
@@ -44,8 +43,6 @@ through a hard case ("follow the value: does it go into building a declared valu
 the convention itself is never a question.
 
 When a judge can't decide a case, restate the convention so the case is decided by it.
-Don't add a carve-out for the code that was just flagged. A rule that needs a new
-example each time it meets new code has a bad convention.
 
 ## Gate every form of the violation
 
@@ -64,9 +61,6 @@ how triggers select what the judge sees.
 ## Write eval cases at the boundary
 
 - Every judge rule's eval has an `invalid` case.
-- Each case is clear. An `invalid` case breaks the rule beyond argument, a `valid` case
-  obviously keeps it, and a `skipped` case is outside the gate. If a reasonable reviewer
-  could argue a case either way, make it clear or remove it.
 - A case shows what's at stake. A reader of the case alone sees why the code is a
   problem or why it's fine, and its name says that, not only what the code does:
   "a getter that saves surprises a caller who only reads", not "calls save".

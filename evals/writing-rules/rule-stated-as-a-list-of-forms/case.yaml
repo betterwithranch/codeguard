@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: rule-stated-as-a-list-of-forms
 expected_outcome: |
-  The broad-catch form that contradicts the convention is dropped from the rule or split into another one.
+  The rule is restated as one plain declarative convention that no longer points at its forms; the broad-catch form that contradicts it is dropped or split into another rule; no exception is written for the log-and-re-raise case; that case is made clear or removed; and the rule eval keeps codeguard's format.
 context:
   scaffold_script: place-files.sh
