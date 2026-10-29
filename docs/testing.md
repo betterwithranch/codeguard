@@ -14,7 +14,7 @@ Three programs run tests here, and they share words like "case" and "eval".
 | Runner | What it tests | A case is |
 |---|---|---|
 | `pytest` | codeguard's own code, in `tests/` | a test function |
-| `codeguard test`, `codeguard eval` | a rule author's rules | a snippet a pattern rule must or must not match (`rule-tests/<id>-test.yml`), or an edit and the review it should get (`rule-evals/<id>.yaml`) |
+| `codeguard rules test`, `codeguard rules eval` | a rule author's rules, against the rules' own cases. `codeguard review` is different: it runs the rules on your code | a snippet a pattern rule must or must not match (`rule-tests/<id>-test.yml`), or an edit and the review it should get (`rule-evals/<id>.yaml`) |
 | `claude plugin eval` | an agent doing a task with the codeguard plugin loaded | a prompt and its graders (`evals/writing-rules/<case>/`) |
 
 - `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
@@ -45,7 +45,7 @@ fixtures in `evals/judge/`.
 When a case fails or flips, follow the `writing-rules` skill: fix the rule or the case,
 never re-run until it passes.
 
-`codeguard test` warnings, such as broad triggers, are advisory: they don't fail a
+`codeguard rules test` warnings, such as broad triggers, are advisory: they don't fail a
 change.
 
 ## Changing codeguard
@@ -61,7 +61,7 @@ change.
 `uv run pytest` calls no model. The LLM tests review each fixture case the way
 `codeguard review` does, with the real `claude` CLI; plain `pytest` deselects them.
 
-codeguard ships no rules, so its CI doesn't run `codeguard test`. The rules it reviews
+codeguard ships no rules, so its CI doesn't run `codeguard rules test`. The rules it reviews
 itself with are tested in their package's CI.
 
 A PR description doesn't list the checks CI runs.
@@ -98,8 +98,8 @@ A grader checks what the agent produced, not what it said or the steps it took.
   `llm` grader on that one short file, with PASS and FAIL stated concretely.
 - Never grade the trace with an `llm` grader: its judge sees only the first and last 12
   lines of the session, never the files.
-- That `codeguard test` ran is a `tool_used` grader on `Bash` whose `input_match` is
-  `codeguard test`.
+- That `codeguard rules test` ran is a `tool_used` grader on `Bash` whose `input_match` is
+  `codeguard rules test`.
 - Nothing in the skill gives a case's answer: no example in `SKILL.md` or `references/`
   shares a case's convention, domain or names. A case the skill answers measures
   copying.
@@ -108,9 +108,9 @@ A grader checks what the agent produced, not what it said or the steps it took.
 
 | You change | CI runs | Locally |
 |---|---|---|
-| A pattern rule, a gate or their tests | `codeguard test`: each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard test` |
-| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | `codeguard test` (each case's triggers), then `codeguard eval` on each such rule, 20 runs | `codeguard test`, then `codeguard eval --rule <id> --repeat 20` |
-| The codeguard version CI tests with | `codeguard test`, then `codeguard eval` on every judge rule, 3 runs | `codeguard eval --repeat 3` |
+| A pattern rule, a gate or their tests | `codeguard rules test`: each rule and gate matches its `invalid` snippets and none of its `valid` ones | `codeguard rules test` |
+| A judge rule's skill, supplement, binding or rule eval, or a gate it uses | `codeguard rules test` (each case's triggers), then `codeguard rules eval` on each such rule, 20 runs | `codeguard rules test`, then `codeguard rules eval --rule <id> --repeat 20` |
+| The codeguard version CI tests with | `codeguard rules test`, then `codeguard rules eval` on every judge rule, 3 runs | `codeguard rules eval --repeat 3` |
 
 Run both commands at the package root; they cover every ruleset. A merged change is
 ready to tag: CI has already held each changed rule to the bar.
@@ -124,7 +124,7 @@ binding and rule eval formats.
 |---|---|---|
 | The app's code | the codeguard plugin's Stop hook, `codeguard review`, against the rules in `.codeguard/config.yaml`; an `error` blocks the agent | every time an agent stops |
 | The app's code | the review action, `jig-code/codeguard@v<version>`, on the PR's changed files; an `error` fails the PR | every pull request |
-| A rule in the app's own `.codeguard/` | the test action, `jig-code/codeguard/test@v<version>`: `codeguard test`, and with `eval: true` the judge rules' evals at the bar above | every pull request |
+| A rule in the app's own `.codeguard/` | the test action, `jig-code/codeguard/test@v<version>`: `codeguard rules test`, and with `eval: true` the judge rules' evals at the bar above | every pull request |
 | The codeguard release the actions are pinned to | the test action, with each of the app's own judge rules' evals 3 times | the upgrade's pull request |
 
 - An app with no rules of its own runs only the review action.
