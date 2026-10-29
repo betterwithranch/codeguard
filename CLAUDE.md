@@ -1,6 +1,7 @@
 # codeguard
 
 [README.md](README.md) explains the CLI, rule packages and how to work on codeguard.
+[docs/testing.md](docs/testing.md) says which test to run for a change.
 
 ## Rules
 
