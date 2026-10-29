@@ -125,9 +125,10 @@ has the rest.
 - Use made-up code and names (`ExampleModel`), so a case shows the pattern rather than
   one class in the codebase. A public rule package never holds code copied from a
   private repository.
-- Name each case for why its code breaks or keeps the convention, not only for what the
-  code does: "caller can't tell a new customer from an existing one", not "returns a
-  tuple".
+- Name every case for why its code breaks or keeps the convention, not only for what
+  the code does: "caller can't tell a new customer from an existing one", not "returns a
+  tuple"; and for another form of the same violation, "a dict's created key still
+  leaves the caller two cases", not "returns a dict with a created key".
 - Give the idiomatic form a `valid` case beside the `invalid` one. A judge rule's `valid`
   case is an edit its triggers reach, so the judge sees it and passes it; an edit
   outside the triggers is a `skipped` case, which never reaches the judge.
