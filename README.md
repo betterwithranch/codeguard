@@ -515,22 +515,6 @@ claude plugin install codeguard@codeguard --scope project
 In Claude Code, the plugin also puts `codeguard` on the PATH of the commands Claude
 runs, for skills such as writing a rule.
 
-That command keeps codeguard's environment in `~/.cache/codeguard` and uv's cache in
-`~/.cache/uv`. With [sandboxing](https://code.claude.com/docs/en/sandboxing) on, Claude's
-commands can write only to the working directory and `$TMPDIR`, so `codeguard` stops and
-names the directories to allow. A plugin can't allow them for you; add them to
-`~/.claude/settings.json`. The first run also downloads codeguard's dependencies, so allow
-PyPI's domains too, or run `codeguard --help` once outside the sandbox:
-
-```json
-{
-  "sandbox": {
-    "filesystem": { "allowWrite": ["~/.cache/codeguard", "~/.cache/uv"] },
-    "network": { "allowedDomains": ["pypi.org", "files.pythonhosted.org"] }
-  }
-}
-```
-
 In Codex, trust codeguard's hooks in `/hooks`. Codex doesn't give plugins a command, so
 writing rules there needs the CLI on its own.
 
@@ -834,13 +818,6 @@ case also runs without the plugin, for comparison:
 ```sh
 claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
 ```
-
-The agent's commands run in a sandbox with no network, so each case's scaffold builds
-codeguard's environment in the run's home first. On Linux, set `TMPDIR` to a directory
-outside `/tmp`: the run's sandbox denies writes under `/tmp`, where it puts the run
-itself, so every command fails with a read-only file system. A codeguard plugin
-installed at user scope also comes first on the run's PATH, and the run can't read its
-project, so `codeguard` stops; run the evals where it isn't installed at user scope.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
