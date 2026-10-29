@@ -55,7 +55,7 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 |---|---|---|---|
 | Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | Same |
 | Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, the Stop hook reviews the session's uncommitted and untracked files each time the agent stops | `codeguard review --base <base branch>` | `codeguard review` |
-| The judge: its review, provider, rules or syntax code, the rule eval harness, or the dependencies | Each fixture case's verdict, 3 runs | `uv run pytest -m llm -n 8` | Same |
+| The judge: its review, provider, rules or syntax code, or the dependencies | Each fixture case's verdict, 3 runs | `uv run pytest -m llm -n 8` | Same |
 | A fixture rule for the LLM tests | That rule's verdicts, 20 runs | `uv run pytest -m llm -n 8 --llm-runs 20 -k <rule>` | Same |
 | The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval . --runs 3 --threshold 0.8` | Same |
 
