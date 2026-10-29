@@ -9,26 +9,21 @@ commands run the same checks on your machine, so you can find a failure before C
 
 ## Words
 
-Four kinds of test run here, and they share words like "case" and "eval".
+Three kinds of test run here, and they share words like "case" and "eval".
 
 | Test | Run with | It checks | Calls a model | A case is | Cases live in |
 |---|---|---|---|---|---|
 | codeguard's tests | `uv run pytest` | The CLI, config, triggers, hooks and judge | Only the LLM tests | A test function | `tests/` |
 | Rule tests | `codeguard rules test` | Each pattern rule and gate matches the code it should, and each judge rule's triggers fire on the edits they should | No, and it gives the same result every run | A snippet a rule or gate must or must not match, or a rule eval's edit, checked for its triggers only | `rule-tests/<id>-test.yml`, `rule-evals/<id>.yaml` |
 | Rule evals | `codeguard rules eval` | Each judge rule's model gives each edit the review it should | Yes, and its verdicts can vary, so each case runs several times | An edit and the review it should get | `rule-evals/<id>.yaml` |
-| Skill evals | `claude plugin eval` | The writing-rules skill leads an agent to a good rule | Yes | A prompt and its graders | `evals/writing-rules/<case>/` |
 
 Rule tests are free and exact, so they run on every rule change. Rule evals cost model
 calls, so they run only for a change that can change a verdict. Both check the rules
 themselves; `codeguard review` is different: it runs the rules on your code.
 
-- `valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
-  triggers fire and the judge reports a violation. `valid`: the triggers fire and the
-  judge reports none. `skipped`: the triggers don't fire.
-- `claude plugin eval` has its own words: a grader checks a run, its `focus` or
-  `target` says what it reads, an arm is a set of runs with or without the plugin, and a
-  scaffold seeds each run's workspace. See
-  [Test plugins with evals](https://code.claude.com/docs/en/plugin-evals.md).
+`valid`, `invalid` and `skipped` are what a rule eval case expects. `invalid`: the
+triggers fire and the judge reports a violation. `valid`: the triggers fire and the
+judge reports none. `skipped`: the triggers don't fire.
 
 ## The bar for a judge rule
 
@@ -66,7 +61,8 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 
 The writing-rules skill and its evals are in `skills/writing-rules/` and
 `evals/writing-rules/`, the LLM tests' fixture rules are in `evals/judge/`, and the
-judge's code is under `src/codeguard/`.
+judge's code is under `src/codeguard/`. [Testing the writing-rules skill](skill-evals.md)
+says how to run and write the skill's evals.
 
 `uv run pytest` calls no model. The LLM tests review each fixture case the way
 `codeguard review` does, with the real `claude` CLI; plain `uv run pytest` deselects
@@ -76,42 +72,6 @@ codeguard ships no rules, so its CI runs no rule tests. The rules it reviews its
 with are tested in their package's CI.
 
 A pull request description doesn't list the checks CI runs.
-
-### The writing-rules skill evals
-
-Each case in `evals/writing-rules/` asks an agent to write or fix a rule with the
-plugin loaded, then grades what it wrote. The skill is guidance and the rules it leads
-to have their own evals, so the bar is lower than a judge rule's: CI gives each case 3
-runs and passes a case scoring 0.8 or more.
-
-```sh
-claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 \
-  --trust-plugin --no-publish --keep-temp
-```
-
-- Run it from a checkout with no `.venv`: the eval copies the plugin and refuses the hard
-  links uv makes there.
-- `--keep-temp` keeps each run's workspace. When a grader fails, open the files the
-  agent wrote there and check them against the verdict before changing the skill.
-- `--case <name>` runs one case.
-- `--ablation none` skips the runs without the plugin.
-
-### Writing a skill eval case
-
-A grader checks the rule files the agent wrote, not what it said, the steps it took or
-how the rule behaves: the rule's own tests and evals check its behavior.
-
-- The prompt names the rule's id, so the grader knows each file's path.
-- A grader reads one file: its `focus` or `target` is
-  `{ source: file, path: .codeguard/skills/<id>/SKILL.md }`, or the rule's binding.
-- Structure, such as a `## Why` heading or triggers other than `any`, is a `regex`
-  grader. Judgement, such as whether the convention is one declarative sentence, is an
-  `llm` grader on that one short file, with `PASS` and `FAIL` stated concretely.
-- Never grade the trace with an `llm` grader: its judge sees only the first and last 12
-  lines of the session, never the files.
-- Nothing in the skill gives a case's answer: no example in `SKILL.md` or `references/`
-  shares a case's convention, domain or names. A case the skill answers measures
-  copying.
 
 ## Changing a rule package
 

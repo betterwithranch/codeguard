@@ -825,14 +825,8 @@ bindings beside them. When a case flips between runs or comes back uncertain, fo
 `writing-rules` skill, and look at the judge prompt as well. The plain suite checks each
 case's triggers.
 
-The `writing-rules` skill has its own evals in `evals/writing-rules/`: tasks an agent
-does with the plugin loaded, each graded against what the skill should lead it to. Run
-them after changing the skill, with the Claude Code CLI; they cost tokens too, and each
-case also runs without the plugin, for comparison:
-
-```sh
-claude plugin eval . --scaffold --allow-tools Write,Edit,Bash
-```
+The `writing-rules` skill has its own evals in `evals/writing-rules/`;
+[docs/skill-evals.md](docs/skill-evals.md) says how to run and write them.
 
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
