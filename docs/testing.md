@@ -17,8 +17,9 @@ that directory, and the layout is fixed.
 - A pattern rule is an ast-grep rule that matches code exactly, in
   `rules/pattern/<id>.yml`. Its rule tests, `rule-tests/<id>-test.yml`, list code it
   must and must not match.
-- A judge rule is a convention a model checks. Its skill, `skills/<id>/SKILL.md`, states
-  the convention. A supplement beside it gives one language's forms of the convention.
+- A judge rule is a convention a model checks. Its skill, `skills/<id>/SKILL.md`, is the
+  convention's text, which codeguard puts in the judge's prompt; it isn't a Claude Code
+  skill. A supplement beside it gives one language's forms of the convention.
   Its rule eval, `rule-evals/<id>.yaml`, lists cases: each is an edit and the review it
   should get.
 - A rule's binding, `bindings/<id>.yaml`, sets the paths it reviews. A judge rule's
@@ -77,7 +78,7 @@ Rule test warnings, such as broad triggers, are advisory: they don't fail a chan
 | You change | It checks | CI runs | Locally, run |
 |---|---|---|---|
 | Anything | Lint, format, import boundaries, types and codeguard's offline tests | `uv run ruff check`, `uv run ruff format --check`, `uv run lint-imports`, `uv run basedpyright`, `uv run pytest` | Same |
-| Anything | The changed files against the rules codeguard opts into, judge rules included; an error fails. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files | `codeguard review --base <base branch>` | `codeguard review` |
+| Anything | The changed files against the rules codeguard opts into in `.codeguard/config.yaml`, judge rules included; an error fails. This dogfoods codeguard: every change to it must pass the rules in its own config. In CI, the review action reviews the pull request's changes since its base branch. Locally, `codeguard review` reviews uncommitted and untracked files | `codeguard review --base <base branch>` | `codeguard review` |
 | The judge: its review, provider, rules or syntax code, or the dependencies. Or a fixture rule or its fixture cases | Each fixture case's review, 3 runs | `uv run pytest -m llm -n 8` | Same |
 | The writing-rules skill or its evals | Each skill eval case's graders, 3 runs | `claude plugin eval .` with the flags in [Testing the writing-rules skill](skill-evals.md) | Same |
 
