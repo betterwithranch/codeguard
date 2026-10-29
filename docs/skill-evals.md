@@ -26,6 +26,8 @@ whether it sets that tool up. So:
 - A case never runs codeguard. The agent gets `Write` and `Edit`, never `Bash`.
 - A grader reads one file the agent wrote, checks that it wrote no rule file, or, in a
   case that declines a rule, reads the agent's final reply.
+- Each case also has a `tool_used` grader that checks the agent invoked the skill. It
+  shows whether the skill fired and doesn't count toward the score.
 
 ## Writing a case
 
