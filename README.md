@@ -62,7 +62,7 @@ jobs:
       - uses: actions/checkout@v7
         with:
           fetch-depth: 0
-      - uses: jig-code/codeguard@v0
+      - uses: jig-code/codeguard@v0.9.1
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 ```
@@ -97,8 +97,9 @@ jobs:
       || github.event.label.name == 'codeguard-allow-judge-errors'
 ```
 
-`v0` moves to each 0.x release, so the plugin and the action update together with no
-project edits. A release that breaks the rule format starts `v1`.
+Pin the action to a release tag, as above, and adopt each codeguard release in its own
+PR ([Upgrade](#upgrade)), so a new release never changes a review without a change in
+the project.
 
 ### Run formatters first
 
@@ -185,7 +186,7 @@ codeguard fails when that version is outside a package's `ast-grep` range.
 For a private package in CI, pass a token that can read it:
 
 ```yaml
-      - uses: jig-code/codeguard@v0
+      - uses: jig-code/codeguard@v0.9.1
         with:
           claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           packages-token: ${{ secrets.CODEGUARD_PACKAGES_TOKEN }}
@@ -529,19 +530,20 @@ uv tool install git+https://github.com/jig-code/codeguard@v0
 
 ### Upgrade
 
-Projects get codeguard from the `v0` tag, which moves only when a release is tagged.
-A commit on `main` reaches no one until it is released. After a release:
+A commit on `main` reaches no one until it is released. A project adopts each codeguard
+release and each rule package tag explicitly, in its own PR, so whatever the upgrade
+changes in reviews and rule tests shows up there and nowhere else:
 
-- Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
-- Update the Claude Code plugin, then run `/reload-plugins` or start a new session:
+- Move the action's tag (`jig-code/codeguard@v<version>`, and `jig-code/codeguard/test@v<version>`
+  if the project defines rules) to the new release.
+- Move a rule package's `ref` in `.codeguard/config.yaml` to its new tag.
+- Update the Claude Code plugin to the same release, then run `/reload-plugins` or start
+  a new session:
   ```sh
   claude plugin marketplace update codeguard
   claude plugin update codeguard@codeguard --scope project
   ```
-  To get releases without updating by hand, turn on auto-update for the codeguard
-  marketplace in `/plugin` (Marketplaces, then codeguard). Auto-update is off by
-  default for marketplaces outside Anthropic's own. It applies new releases in the
-  background, and they take effect in the next session.
+- Upgrade the CLI with `uv tool upgrade codeguard`, if you installed it.
 
 ## What the hooks check
 

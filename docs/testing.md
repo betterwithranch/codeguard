@@ -110,10 +110,8 @@ A grader checks what the agent produced, not what it said or the steps it took.
 | A judge rule's skill, supplement, binding or rule eval, or a gate it uses | `codeguard test` (each case's triggers), then `codeguard eval` on each such rule, 20 runs | `codeguard test`, then `codeguard eval --rule <id> --repeat 20` |
 | The codeguard version CI tests with | `codeguard test`, then `codeguard eval` on every judge rule, 3 runs | `codeguard eval --repeat 3` |
 
-Run both commands at the package root; they cover every ruleset. CI pins the codeguard
-version it tests with, and each new codeguard release moves the pin in its own PR, so a
-judge change fails that PR rather than an unrelated one. A merged change is ready to
-tag: CI has already held each changed rule to the bar.
+Run both commands at the package root; they cover every ruleset. A merged change is
+ready to tag: CI has already held each changed rule to the bar.
 
 The README's [Write a rule package](../README.md#write-a-rule-package) has the rule,
 binding and rule eval formats.
@@ -123,15 +121,13 @@ binding and rule eval formats.
 | You change | Checked by | When |
 |---|---|---|
 | The app's code | the codeguard plugin's Stop hook, `codeguard review`, against the rules in `.codeguard/config.yaml`; an `error` blocks the agent | every time an agent stops |
-| The app's code | the review action, `jig-code/codeguard@v0`, on the PR's changed files; an `error` fails the PR | every pull request |
-| A rule in the app's own `.codeguard/` | the test action, `jig-code/codeguard/test@v0`: `codeguard test`, and with `eval: true` the judge rules' evals at the bar above | every pull request |
+| The app's code | the review action, `jig-code/codeguard@v<version>`, on the PR's changed files; an `error` fails the PR | every pull request |
+| A rule in the app's own `.codeguard/` | the test action, `jig-code/codeguard/test@v<version>`: `codeguard test`, and with `eval: true` the judge rules' evals at the bar above | every pull request |
+| The codeguard release the actions are pinned to | the test action, with each of the app's own judge rules' evals 3 times | the upgrade's pull request |
 
 - An app with no rules of its own runs only the review action.
 - To change a packaged rule for the app, override or exclude it in
   `.codeguard/config.yaml`; never copy it into `.codeguard/`. The package's CI tests the
   rule.
-- Opt into the latest tag of each rule package, and move to a new tag when it ships.
-- An app with its own judge rules pins the codeguard version its test action runs, and
-  moves it to each new release in its own PR, which runs those rules' evals 3 times.
 - A finding you think is wrong is fixed in the rule or its cases, never by changing the
   code to get past it.
