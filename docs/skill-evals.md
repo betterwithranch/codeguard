@@ -21,8 +21,8 @@ wherever the rule lives, and is out of scope here. So:
 
 ## Running them
 
-CI runs them when `skills/writing-rules/` or `evals/writing-rules/` changes: each case
-runs 3 times and passes at a score of 0.8 or more.
+CI runs them when `skills/writing-rules/` or `evals/writing-rules/` changes. Each case
+runs 3 times, and passes when at least 80% of its graders pass, averaged over the runs.
 
 ```sh
 claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 \
