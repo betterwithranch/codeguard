@@ -145,10 +145,9 @@ other code finds code to fix, not evidence that the rule is right.
 
 ```sh
 codeguard test                 # rule tests and eval triggers; --update-all regenerates snapshots
-codeguard eval --rule <id> --repeat 20  # a judge rule: every case passes 20 runs of 20; calls the model
+codeguard eval --rule <id> --repeat <n>  # a judge rule's cases, each judged n times; calls the model
 codeguard review --all --dry-run  # existing violations of pattern rules; calls no model
 ```
 
-In CI, run the evals of the rules a change touches. Never run `codeguard review --all`
-without `--dry-run`: it judges every file against every judge rule. codeguard's README
-has every command's options.
+Never run `codeguard review --all` without `--dry-run`: it judges every file against
+every judge rule. codeguard's README has every command's options.
