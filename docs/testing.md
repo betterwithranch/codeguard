@@ -85,14 +85,12 @@ to have their own evals, so the bar is lower than a judge rule's: CI gives each 
 runs and passes a case scoring 0.8 or more.
 
 ```sh
-claude plugin eval . --scaffold --allow-tools Write Edit Bash --runs 3 --threshold 0.8 \
+claude plugin eval . --scaffold --allow-tools Write Edit --runs 3 --threshold 0.8 \
   --trust-plugin --no-publish --keep-temp
 ```
 
-- Run it from a checkout with no `.venv`.
-- Granting `Bash` runs the agent's commands in Claude Code's sandbox. On Linux, install
-  `bubblewrap` and `socat`, and set `TMPDIR` to a directory outside `/tmp`, where the
-  sandbox denies writes.
+- Run it from a checkout with no `.venv`: the eval copies the plugin and refuses the hard
+  links uv makes there.
 - `--keep-temp` keeps each run's workspace. When a grader fails, open the files the
   agent wrote there and check them against the verdict before changing the skill.
 - `--case <name>` runs one case.
@@ -100,7 +98,8 @@ claude plugin eval . --scaffold --allow-tools Write Edit Bash --runs 3 --thresho
 
 ### Writing a skill eval case
 
-A grader checks what the agent produced, not what it said or the steps it took.
+A grader checks the rule files the agent wrote, not what it said, the steps it took or
+how the rule behaves: the rule's own tests and evals check its behavior.
 
 - The prompt names the rule's id, so the grader knows each file's path.
 - A grader reads one file: its `focus` or `target` is
@@ -110,8 +109,6 @@ A grader checks what the agent produced, not what it said or the steps it took.
   `llm` grader on that one short file, with `PASS` and `FAIL` stated concretely.
 - Never grade the trace with an `llm` grader: its judge sees only the first and last 12
   lines of the session, never the files.
-- That the agent ran the rule tests is a `tool_used` grader on `Bash` whose
-  `input_match` is `codeguard rules test`.
 - Nothing in the skill gives a case's answer: no example in `SKILL.md` or `references/`
   shares a case's convention, domain or names. A case the skill answers measures
   copying.
