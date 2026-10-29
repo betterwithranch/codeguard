@@ -10,14 +10,16 @@ codeguard, testing rules and reviewing code.
 
 ## What the evals check
 
-Each case asks an agent with the skill to write or fix a rule, then grades the rule files
-it wrote against what the skill says: its `.codeguard/skills/<id>/SKILL.md`,
-`.codeguard/bindings/<id>.yaml` or `.codeguard/rule-evals/<id>.yaml`. The evals never
-check whether the rule works, whether its rule tests or rule evals pass. That is tested
-wherever the rule lives, and is out of scope here. So:
+Each case asks an agent with the skill to write or fix a rule, then grades the files it
+wrote against what the skill says: the rule's `.codeguard/skills/<id>/SKILL.md`,
+`.codeguard/bindings/<id>.yaml` or `.codeguard/rule-evals/<id>.yaml`, or, when the skill
+sends the convention to another tool, that tool's settings in `pyproject.toml`. The evals
+never check whether the rule works, whether its rule tests or rule evals pass. That is
+tested wherever the rule lives, and is out of scope here. So:
 
 - A case never runs codeguard. The agent gets `Write` and `Edit`, never `Bash`.
-- A grader reads one of the rule's files, never the agent's replies or session.
+- A grader reads one file the agent wrote, or checks that it wrote no rule file, never
+  the agent's replies or session.
 
 ## Running them
 
