@@ -20,8 +20,10 @@ rule that misjudged code.
 4. **Write the cases** (Cases, below).
 5. **Verify** (Verify, below).
 
-For a judge rule, also read `references/judge-rules.md` before writing or changing it,
-and whenever its eval fails, flips between runs or reports a warning. For examples in the
+For a judge rule, also read `references/judge-rules.md` and
+`references/judge-rule-files.md` before writing or changing it, and read
+`references/judge-rules.md` whenever its eval fails, flips between runs or reports a
+warning. For examples in the
 project's language, read `references/python.md`, `references/typescript.md` or
 `references/ruby.md`.
 
@@ -98,7 +100,8 @@ a rule without one.
   `.codeguard/config.yaml`. To change a packaged rule for this project, override or
   exclude it there; don't copy it into `.codeguard/`.
 
-codeguard's README has the binding and rule eval formats.
+`references/judge-rule-files.md` has the judge rule's file formats; codeguard's README
+has the rest.
 
 ## Pattern rules
 
@@ -122,7 +125,12 @@ codeguard's README has the binding and rule eval formats.
 - Use made-up code and names (`ExampleModel`), so a case shows the pattern rather than
   one class in the codebase. A public rule package never holds code copied from a
   private repository.
-- Give the idiomatic form a `valid` case beside the `invalid` one.
+- Name each case for why its code breaks or keeps the convention, not only for what the
+  code does: "caller can't tell a new customer from an existing one", not "returns a
+  tuple".
+- Give the idiomatic form a `valid` case beside the `invalid` one. A judge rule's `valid`
+  case is an edit its triggers reach, so the judge sees it and passes it; an edit
+  outside the triggers is a `skipped` case, which never reaches the judge.
 - A pattern rule: one `valid` or `invalid` case per branch, so deleting a branch fails a
   case, with a comment above each case naming its branch. Give each matched construct a
   `valid` case where the convention allows it, if it has such a position, so a rule that
