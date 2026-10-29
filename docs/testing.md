@@ -6,6 +6,8 @@ on codeguard itself, on a rule package such as
 on an app that uses codeguard. Find the section for the repository you are changing,
 then the row for the kind of change you made. Each row says what CI checks and which
 commands run the same checks on your machine, so you can find a failure before CI does.
+The rows are the whole list: a change needs no check its row doesn't name. If a change
+fits no row, change this guide rather than testing it some other way.
 
 ## Words
 
