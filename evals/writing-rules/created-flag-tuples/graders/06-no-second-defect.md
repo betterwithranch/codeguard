@@ -4,4 +4,4 @@ focus: {source: file, path: .codeguard/rule-evals/created-flag-results.yaml}
 weight: 1
 ---
 
-In every case of this rule eval, the code defines or imports every name it uses and keeps no state shared between calls, such as a module-level dict or list it changes.
+No case in this rule eval mixes in a second defect: code that is a bug whatever the rule says. A helper a case calls without defining it is not a second defect.

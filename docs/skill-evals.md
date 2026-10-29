@@ -40,6 +40,9 @@ a failure means the skill didn't get the agent there:
   measures whether the agent copied it.
 - The skill's instructions decide the case's prompt: the right result follows from the
   skill alone, with no outside knowledge and no judgment call either way.
+- A grader the agent passes as often without the skill as with it measures nothing the
+  skill adds: drop it. `claude plugin eval` runs each case with and without the plugin,
+  and reports the difference as `Δ`.
 - When a grader fails or flips, find which side is wrong. If the agent missed an
   instruction, make the instruction clearer or put it where the agent reads it. If the
   grader asks for more than the skill says, fix the grader. Neither is reworded only to
