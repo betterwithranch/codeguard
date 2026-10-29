@@ -1,6 +1,6 @@
 schema_version: "1.1"
 name: declines-a-dead-code-rule
 expected_outcome: |
-  No codeguard rule is written, and the reply says finding a function nobody calls is a repository-wide lookup for a language server or dead-code tool.
+  No codeguard rule is written, and the reply says finding a function nobody calls is another tool's job.
 context:
   scaffold_script: place-files.sh
