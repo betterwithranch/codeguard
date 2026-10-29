@@ -1,9 +1,11 @@
-# Testing
+# How to test your changes
 
-How to test a change to codeguard, to a rule package such as
+This guide tells you how to test a change before you merge it, whether you are working
+on codeguard itself, on a rule package such as
 [betterwithranch/codeguard-rules](https://github.com/betterwithranch/codeguard-rules), or
-to an app that uses codeguard. CI enforces each check below; run the same commands
-locally to find a failure before CI does.
+on an app that uses codeguard. Find the section for the repository you are changing,
+then the row for the kind of change you made. Each row says what CI checks and which
+commands run the same checks on your machine, so you can find a failure before CI does.
 
 ## Words
 
