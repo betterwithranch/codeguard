@@ -497,7 +497,8 @@ class TestBundledCommand:
         )
         environment = tmp_path / "plugin-data" / "venv"
 
-        assert (started.returncode, started.stdout) == (0, "")
+        assert started.returncode == 0, started.stderr
+        assert started.stdout == ""
         assert env_file.read_text() == f'export CODEGUARD_ENVIRONMENT="{environment}"\n'
 
         result = subprocess.run(
