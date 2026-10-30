@@ -16,6 +16,7 @@ UV = Path(shutil.which("uv") or "uv")
 CLAUDE_CODE_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" claude-code'
 CODEX_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/stop.py" codex'
 RULE_FILES_COMMAND = 'uv run --quiet --script "${CLAUDE_PLUGIN_ROOT}/hooks/rule_files.py"'
+SESSION_START_COMMAND = 'sh "${CLAUDE_PLUGIN_ROOT}/hooks/session_start.sh"'
 LOAD_THE_SKILL = (
     "Load codeguard's writing-rules skill before editing codeguard rule files: it holds "
     "the conventions for rules, gates, bindings and their cases. Invoke it with the Skill "
@@ -175,6 +176,9 @@ class TestHookConfig:
         assert result.returncode == 0, result.stderr
         assert result.stdout == ""
         assert (project / ".venv" / "bin" / "tool").exists()
+
+    def test_claude_code_builds_the_bash_tools_codeguard_when_a_session_starts(self):
+        assert commands(PROJECT / "hooks" / "hooks.json", "SessionStart") == [SESSION_START_COMMAND]
 
     def test_claude_code_checks_edits_and_writes_to_rule_files(self):
         hooks = json.loads((PROJECT / "hooks" / "hooks.json").read_text())["hooks"]
@@ -473,3 +477,36 @@ class TestBundledCommand:
         assert result.returncode == 0, result.stderr
         assert result.stdout.startswith("usage: codeguard")
         assert (home / ".cache" / "codeguard" / "venv" / "bin" / "codeguard").exists()
+
+    def test_a_session_runs_codeguard_without_writing_or_downloading(
+        self, uv_only, bundled, tmp_path
+    ):
+        env_file = tmp_path / "session-env.sh"
+        started = subprocess.run(
+            ["sh", "-c", SESSION_START_COMMAND],
+            capture_output=True,
+            text=True,
+            env={
+                **without_codeguard(),
+                **bundled,
+                "CLAUDE_PLUGIN_ROOT": str(PROJECT),
+                "CLAUDE_PLUGIN_DATA": str(tmp_path / "plugin-data"),
+                "CLAUDE_ENV_FILE": str(env_file),
+                "PATH": os.pathsep.join([str(uv_only), "/usr/bin", "/bin"]),
+            },
+        )
+        environment = tmp_path / "plugin-data" / "venv"
+
+        assert started.returncode == 0, started.stderr
+        assert started.stdout == ""
+        assert env_file.read_text() == f'export CODEGUARD_ENVIRONMENT="{environment}"\n'
+
+        result = subprocess.run(
+            ["sh", "-c", f". {env_file} && {PROJECT}/bin/codeguard --help"],
+            capture_output=True,
+            text=True,
+            env={**without_codeguard(), "HOME": "/nonexistent", "PATH": "/usr/bin:/bin"},
+        )
+
+        assert result.returncode == 0, result.stderr
+        assert result.stdout.startswith("usage: codeguard")

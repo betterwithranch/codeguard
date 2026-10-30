@@ -514,7 +514,8 @@ claude plugin install codeguard@codeguard --scope project
 ```
 
 In Claude Code, the plugin also puts `codeguard` on the PATH of the commands Claude
-runs, for skills such as writing a rule.
+runs, for skills such as writing a rule. A hook builds its environment when a session
+starts, outside Claude Code's sandbox, so it runs under the sandbox too.
 
 In Codex, trust codeguard's hooks in `/hooks`. Codex doesn't give plugins a command, so
 writing rules there needs the CLI on its own.
