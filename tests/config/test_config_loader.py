@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from codeguard.config import (
@@ -260,6 +262,26 @@ class TestRulesetLoader:
         assert ruleset.selected_bindings()["responsibility-placement"].triggers == {
             "gate:enum-value"
         }
+
+    def test_ci_only_rule_is_selected_in_ci(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        repo.write(BINDING, 'skill: .claude/skills/responsibility-placement\npaths: ["**"]\n')
+        ruleset = replace(
+            RulesetLoader.local(repo.root).load(), selection=RulesetConfig(ci_only=True)
+        )
+
+        assert list(ruleset.selected_bindings()) == ["responsibility-placement"]
+
+    def test_ci_only_rule_is_not_selected_when_skipped(self, repo, make_skill):
+        repo.write(SKILL, make_skill().text)
+        repo.write(BINDING, 'skill: .claude/skills/responsibility-placement\npaths: ["**"]\n')
+        ruleset = replace(
+            RulesetLoader.local(repo.root).load(),
+            selection=RulesetConfig(ci_only=True),
+            skip_ci_only=True,
+        )
+
+        assert ruleset.selected_bindings() == {}
 
     def test_gate_named_after_a_change_kind_is_an_error(self, repo, make_skill):
         repo.write(SKILL, make_skill().text)

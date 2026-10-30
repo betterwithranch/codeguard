@@ -279,6 +279,17 @@ class TestRulesetConfig:
             triggers=frozenset({"any"}), skill=skill, paths=("app/**",), severity=Severity.WARNING
         )
 
+    def test_rule_runs_outside_ci_by_default(self):
+        assert not RulesetConfig().is_ci_only("placement")
+
+    def test_ruleset_ci_only_applies_to_a_rule_without_an_override(self):
+        assert RulesetConfig(ci_only=True).is_ci_only("placement")
+
+    def test_rule_ci_only_wins_over_the_ruleset_ci_only(self):
+        selection = RulesetConfig(ci_only=True, rules={"placement": RuleOverride(ci_only=False)})
+
+        assert not selection.is_ci_only("placement")
+
     def test_rule_override_model_is_an_error(self):
         with pytest.raises(ValidationError) as error:
             RuleOverride.model_validate({"model": "claude-haiku-5-5"})

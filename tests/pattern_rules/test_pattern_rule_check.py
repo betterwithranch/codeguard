@@ -1,3 +1,5 @@
+from dataclasses import replace
+
 import pytest
 
 from codeguard.config import (
@@ -74,6 +76,25 @@ class TestPatternRuleCheck:
         diagnostics = PatternRuleCheck(repo.root, ruleset).check(["a.py"])
 
         assert diagnostics == [make_diagnostic(rule="example/python/no-print")]
+
+    def test_ci_only_rule_reports_in_ci(self, repo, make_diagnostic):
+        repo.write("a.py", "print(1)\n")
+        selection = RulesetConfig(rules={"no-print": RuleOverride(ci_only=True)})
+
+        diagnostics = PatternRuleCheck(repo.root, packaged_ruleset(repo.root, selection)).check(
+            ["a.py"]
+        )
+
+        assert diagnostics == [make_diagnostic(rule="example/python/no-print")]
+
+    def test_skipped_ci_only_rule_reports_nothing(self, repo):
+        repo.write("a.py", "print(1)\n")
+        selection = RulesetConfig(rules={"no-print": RuleOverride(ci_only=True)})
+        ruleset = replace(packaged_ruleset(repo.root, selection), skip_ci_only=True)
+
+        diagnostics = PatternRuleCheck(repo.root, ruleset).check(["a.py"])
+
+        assert diagnostics == []
 
     def test_overridden_severity_applies(self, repo, make_diagnostic):
         repo.write("a.py", "breakpoint()\n")

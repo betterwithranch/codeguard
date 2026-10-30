@@ -8,6 +8,7 @@ from pathlib import Path
 
 import pytest
 from claude_output import fake_claude_script
+from rules_package import write_package
 
 PROJECT = Path(__file__).resolve().parent.parent
 SCRIPTS = sysconfig.get_path("scripts")
@@ -198,6 +199,24 @@ class TestStopHook:
             "decision": "block",
             "reason": f"{make_diagnostic()}\n{REQUIRED_FIXES}",
         }
+
+    def test_ci_only_rule_does_not_run(self, repo):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n"
+            "  - kind: path\n"
+            "    path: rules\n"
+            "    rulesets:\n"
+            "      python:\n"
+            "        ci_only: true\n",
+        )
+        (repo.root / ".codeguard/rules/pattern/no-print.yml").unlink()
+        repo.write("a.py", "print(1)\n")
+
+        response = run_stop_hook(repo, stop())
+
+        assert response == {}
 
     def test_the_same_error_blocks_every_time(self, repo):
         repo.write("a.py", "print(1)\n")
