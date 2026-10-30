@@ -33,3 +33,13 @@ class TestJudges:
         assert isinstance(judge, GeminiJudge)
         assert judge.model == "gemini-3.1-pro-preview"
         assert judge.processes is judges.processes[JudgeProvider.GEMINI]
+
+    def test_bedrock_model_builds_a_judge_cached_apart_from_gemini(self, tmp_path):
+        judges = Judges(store=Cache(tmp_path))
+        model = JudgeModel(provider=JudgeProvider.BEDROCK, name="us.anthropic.claude-haiku-5-5")
+
+        judge = judges.uncached(tmp_path, model)
+
+        assert isinstance(judge, GeminiJudge)
+        assert judge.identity == "bedrock\0us.anthropic.claude-haiku-5-5"
+        assert judge.processes is judges.processes[JudgeProvider.BEDROCK]

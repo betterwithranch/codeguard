@@ -36,11 +36,12 @@ class BindingConfig(BaseModel):
 
     @model_validator(mode="before")
     @classmethod
-    def require_a_gemini_model(cls, data: object) -> object:
+    def require_a_model_off_claude_cli(cls, data: object) -> object:
         if not isinstance(data, dict):
             return data
-        if data.get("provider") == JudgeProvider.GEMINI and "model" not in data:
-            raise ValueError("provider gemini needs a model")
+        provider = data.get("provider", JudgeProvider.CLAUDE_CLI)
+        if provider != JudgeProvider.CLAUDE_CLI and "model" not in data:
+            raise ValueError(f"provider {provider} needs a model")
         return data
 
     @property

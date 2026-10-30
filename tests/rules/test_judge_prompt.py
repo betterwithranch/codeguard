@@ -1,8 +1,10 @@
+import shutil
 from pathlib import Path
 
 import pytest
 import yaml
 
+from codeguard.config import JudgeProvider
 from codeguard.review import Category, Review
 from codeguard.rule_tests import EditCase, EditRepo, Outcome, RuleEvalCase, rule_evals
 from codeguard.rules import Rules, judges
@@ -25,6 +27,19 @@ def pytest_generate_tests(metafunc: pytest.Metafunc) -> None:
         metafunc.parametrize("run", range(1, runs + 1), ids=lambda run: f"{run}/{runs}")
 
 
+@pytest.fixture
+def judged_evals(request: pytest.FixtureRequest, tmp_path: Path) -> Path:
+    provider: JudgeProvider | None = request.config.getoption("judge_provider")
+    if provider is None:
+        return EVALS
+    model: str = request.config.getoption("judge_model") or provider.default_model
+    evals = shutil.copytree(EVALS, tmp_path / "evals")
+    for binding in (evals / "python" / "bindings").glob("*.yaml"):
+        config = yaml.safe_load(binding.read_text()) | {"provider": str(provider), "model": model}
+        binding.write_text(yaml.safe_dump(config))
+    return evals
+
+
 @pytest.fixture(autouse=True)
 def judgement_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(judges, "_JUDGEMENT_CACHE_DIR", tmp_path / "judgements")
@@ -33,7 +48,7 @@ def judgement_cache(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
 class TestJudgePrompt:
     @pytest.mark.parametrize(("rule", "case"), CASES)
     def test_triggers_fire_on_each_case_the_judge_sees(self, rule: str, case: RuleEvalCase):
-        with EditRepo.of(_edits(rule, case.inputs)) as repo:
+        with EditRepo.of(_edits(EVALS, rule, case.inputs)) as repo:
             working_tree = WorkingTree(repo.root)
             plan = Rules(working_tree).plan(working_tree.changed_lines("HEAD"))
 
@@ -43,8 +58,10 @@ class TestJudgePrompt:
 
     @pytest.mark.llm
     @pytest.mark.parametrize(("rule", "case"), JUDGED_CASES)
-    def test_review_reaches_each_case_verdict(self, rule: str, case: RuleEvalCase, run: int):
-        with EditRepo.of(_edits(rule, case.inputs)) as repo:
+    def test_review_reaches_each_case_verdict(
+        self, rule: str, case: RuleEvalCase, run: int, judged_evals: Path
+    ):
+        with EditRepo.of(_edits(judged_evals, rule, case.inputs)) as repo:
             working_tree = WorkingTree(repo.root)
             review = Rules(working_tree).review(working_tree.changed_lines("HEAD"))
 
@@ -58,11 +75,11 @@ class TestJudgePrompt:
         assert _outcome(review) is case.expected_output.outcome, listing
 
 
-def _edits(rule: str, inputs: EditCase) -> dict[str, EditCase]:
+def _edits(evals: Path, rule: str, inputs: EditCase) -> dict[str, EditCase]:
     config = yaml.safe_dump(
         {
             "packages": [
-                {"kind": "path", "path": str(EVALS), "rulesets": {"python": {"include": [rule]}}}
+                {"kind": "path", "path": str(evals), "rulesets": {"python": {"include": [rule]}}}
             ]
         }
     )

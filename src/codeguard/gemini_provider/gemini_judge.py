@@ -8,7 +8,7 @@ from pathlib import Path
 import httpx2
 import logfire
 from google.genai.types import ThinkingLevel
-from pydantic_ai import Agent, NativeOutput, RunContext, UsageLimits
+from pydantic_ai import Agent, NativeOutput, RunContext, ToolOutput, UsageLimits
 from pydantic_ai.exceptions import (
     ModelAPIError,
     ModelHTTPError,
@@ -33,7 +33,6 @@ from codeguard.review import (
     Verdict,
 )
 
-_PROVIDER = "gemini"
 _MAX_REQUESTS = 10
 _REQUEST_LIMIT_SECONDS = 120
 _MAX_ATTEMPTS = 5
@@ -53,10 +52,11 @@ class GeminiJudge:
     deadline: Deadline | None = None
     max_requests: int = _MAX_REQUESTS
     request_limit_seconds: float = _REQUEST_LIMIT_SECONDS
+    provider: str = "gemini"
 
     @property
     def identity(self) -> str:
-        return "\0".join((_PROVIDER, self.model))
+        return "\0".join((self.provider, self.model))
 
     def judge(self, request: JudgeRequest) -> Judgement:
         with (
@@ -80,7 +80,10 @@ class GeminiJudge:
         agent = Agent[object, Verdict](
             deps_type=object,
             instructions=request.instructions,
-            output_type=NativeOutput(Verdict),
+            # Bedrock's Converse API has no structured output, so Claude there calls a tool.
+            output_type=ToolOutput(Verdict)
+            if self.provider == "bedrock"
+            else NativeOutput(Verdict),
             tools=tools.tools,
             model_settings=self._settings,
         )

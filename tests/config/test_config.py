@@ -287,13 +287,14 @@ class TestRulesetConfig:
             "Value error, model: a rule is judged with the model its binding names"
         ]
 
-    def test_gemini_binding_without_a_model_is_an_error(self, tmp_path):
+    @pytest.mark.parametrize("provider", ["gemini", "bedrock"])
+    def test_api_binding_without_a_model_is_an_error(self, tmp_path, provider):
         skill = write_skill(tmp_path)
 
         with pytest.raises(ValidationError) as error:
-            BindingConfig.model_validate({"skill": skill, "paths": ["**"], "provider": "gemini"})
+            BindingConfig.model_validate({"skill": skill, "paths": ["**"], "provider": provider})
 
-        assert messages(error) == ["Value error, provider gemini needs a model"]
+        assert messages(error) == [f"Value error, provider {provider} needs a model"]
 
 
 class TestJudgeConfig:

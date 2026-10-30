@@ -33,11 +33,17 @@ jobs:
           dry-run: true
   llm-tests:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v7
+      # Workload Identity Federation: no key is stored. The project comes from the service
+      # account.
       - uses: google-github-actions/auth@v3
         with:
-          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_SERVICE_ACCOUNT }}
       - uses: astral-sh/setup-uv@v10.2.0
       # Each worker makes 2 Gemini calls at once, which keeps the run under Vertex's
       # tokens-per-minute limit.

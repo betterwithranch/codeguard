@@ -308,8 +308,8 @@ triggers: [mock-use]
 something else:
 
 ```yaml
-provider: gemini                  # default: claude-cli
-model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
+provider: gemini                  # default: claude-cli; or gemini, bedrock
+model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini and bedrock need one
 ```
 
 A judge rule's id is its skill's directory name.
@@ -427,9 +427,10 @@ held to the same bar.
   eval with an `invalid` case covers only the rules selected.
 - `--case <text>` judges only the cases whose name contains the text; repeat it to
   judge the cases matching any of them. A rule with no matching case is left out.
-- `--provider claude-cli` or `--provider gemini` judges every selected rule with that
-  provider instead of its binding's. `--model` names the model; it defaults to
-  `claude-sonnet-5-5` for `claude-cli` and `gemini-3.1-pro-preview` for `gemini`.
+- `--provider claude-cli`, `--provider gemini` or `--provider bedrock` judges every
+  selected rule with that provider instead of its binding's. `--model` names the model;
+  it defaults to `claude-sonnet-5-5` for `claude-cli`, `gemini-3.1-pro-preview` for
+  `gemini` and `us.anthropic.claude-haiku-5-5` for `bedrock`.
 
 A `--rule` that names no judge rule, or a `--case` that no selected rule's case name
 contains, fails the eval before any case is judged.
@@ -678,7 +679,13 @@ Gemini rules in one review don't wait on each other. A request that Gemini turns
 then the rule is reported as not judged.
 
 Use `gemini-3.1-pro-preview`, the Gemini model codeguard was tested with. Flash was
-unreliable in testing.
+unreliable in testing. Gemini 4 Argon was as accurate, but some of its requests took 15
+to 37 s, where 3.1 Pro's longest of 79 took 13 s (median 6.5 s).
+
+`provider: bedrock` judges with Claude on Amazon Bedrock through the same tools, for a
+run that must be Claude. boto3 finds the credentials and region (`AWS_DEFAULT_REGION`)
+as the AWS CLI does, and the model is a Bedrock inference profile such as
+`us.anthropic.claude-haiku-5-5`.
 
 codeguard signs in with Application Default Credentials. Set it up once per project:
 
@@ -815,8 +822,10 @@ uv run pytest
 instructions, request and tools still get the right verdicts from a real model. Each
 one reviews an edit in a scratch repository the way `codeguard review` does, with the
 fixture bindings' judge, `gemini-3.1-pro-preview` on Vertex AI, so they need Gemini
-credentials (Judge with Gemini on Google Cloud, above) and cost tokens. They are marked `llm`, which plain `pytest`
-deselects. CI runs them; run them after changing the judge's instructions, request or
+credentials (Judge with Gemini on Google Cloud, above) and cost tokens. They are marked
+`llm`, which plain `pytest` deselects. `--judge-provider` and `--judge-model` judge them
+with another model, as `codeguard eval --provider` does: `--judge-provider bedrock` runs
+them on Haiku on Bedrock. CI runs them; run them after changing the judge's instructions, request or
 tools:
 
 ```sh
