@@ -3,9 +3,9 @@ from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-# Gemini's pay-as-you-go capacity is shared, so fewer calls at once keep a run under its
-# tokens-per-minute limit.
-_GEMINI_CALLS_AT_ONCE = 2
+# Gemini's and Bedrock's pay-as-you-go capacity is shared, so fewer calls at once keep a run
+# under its tokens-per-minute limit.
+_API_CALLS_AT_ONCE = 2
 # A rule is judged with the model its evals pass on, so only its binding names one.
 _RETIRED_FIELDS = {
     "provider": "a rule's binding names its provider",
@@ -16,6 +16,7 @@ _RETIRED_FIELDS = {
 class JudgeProvider(StrEnum):
     CLAUDE_CLI = "claude-cli"
     GEMINI = "gemini"
+    BEDROCK = "bedrock"
 
     @property
     def default_model(self) -> str:
@@ -26,6 +27,7 @@ class JudgeProvider(StrEnum):
 _DEFAULT_MODELS = {
     JudgeProvider.CLAUDE_CLI: "claude-sonnet-5-5",
     JudgeProvider.GEMINI: "gemini-3.1-pro-preview",
+    JudgeProvider.BEDROCK: "us.anthropic.claude-haiku-5-5",
 }
 
 
@@ -55,6 +57,6 @@ class JudgeConfig(BaseModel):
     def concurrency(self, provider: JudgeProvider) -> int:
         if self.calls_at_once is not None:
             return self.calls_at_once
-        if provider is JudgeProvider.GEMINI:
-            return _GEMINI_CALLS_AT_ONCE
+        if provider is not JudgeProvider.CLAUDE_CLI:
+            return _API_CALLS_AT_ONCE
         return os.process_cpu_count() or 1

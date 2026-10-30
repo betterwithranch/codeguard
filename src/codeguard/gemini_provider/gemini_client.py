@@ -1,27 +1,34 @@
+import os
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from functools import cached_property
 
-from google import genai
-from google.genai import models
-
-
-def gemini_client(project: str | None = None, location: str | None = None) -> genai.Client:
-    return genai.Client(
-        enterprise=True,
-        project=project,
-        location=location,
-    )
+from pydantic_ai.models import Model
+from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.providers.google_cloud import GoogleCloudProvider
 
 
 @dataclass(frozen=True)
-class DeferredGeminiClient:
+class VertexGemini:
     project: str | None = None
     location: str | None = None
 
-    @property
-    def models(self) -> models.Models:
-        return self._client.models
+    @asynccontextmanager
+    async def __call__(self, model: str) -> AsyncIterator[Model]:
+        # Each judgement runs on its own event loop, so it gets its own HTTP client.
+        async with GoogleModel(model, provider=self._provider()) as connected:
+            yield connected
 
-    @cached_property
-    def _client(self) -> genai.Client:
-        return gemini_client(self.project, self.location)
+    def _provider(self) -> GoogleCloudProvider:
+        project = self.project or os.environ.get("GOOGLE_CLOUD_PROJECT")
+        location = self.location or os.environ.get("GOOGLE_CLOUD_LOCATION")
+        if project is None and location is None and _api_key():
+            # An API key identifies the project.
+            return GoogleCloudProvider()
+        return GoogleCloudProvider(project=project, location=location or "global")
+
+
+def _api_key() -> bool:
+    return bool(os.environ.get("GOOGLE_API_KEY") or os.environ.get("GEMINI_API_KEY")) and not (
+        os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    )

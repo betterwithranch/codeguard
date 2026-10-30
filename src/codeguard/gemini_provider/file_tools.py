@@ -1,14 +1,33 @@
+import functools
 import itertools
 import re
 import subprocess
-from collections.abc import Callable, Iterator, Mapping
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from google.genai import types
+from pydantic_ai import Tool
 
 _MAX_LINES = 2000
 _MAX_RESULTS = 200
+
+
+def _answering_errors[**P](tool: Callable[P, str]) -> Callable[P, str]:
+    # A path or pattern the model got wrong is an answer it can act on, not a failed run.
+    @functools.wraps(tool)
+    def answer(*args: P.args, **kwargs: P.kwargs) -> str:
+        try:
+            return tool(*args, **kwargs)
+        except (OSError, ValueError, re.error) as error:
+            return f"Error: {error}"
+
+    return answer
+
+
+def _tool(function: Callable[..., str]) -> Tool[object]:
+    return Tool(
+        function, takes_ctx=False, docstring_format="google", require_parameter_descriptions=True
+    )
 
 
 @dataclass(frozen=True)
@@ -17,70 +36,24 @@ class FileTools:
     loaded_files: list[str] = field(default_factory=list)
 
     @property
-    def declarations(self) -> list[types.FunctionDeclaration]:
-        return [
-            types.FunctionDeclaration(
-                name="read_file",
-                description=(
-                    "Read a file in the working directory. Each line starts with its number "
-                    f"and a tab. Returns at most {_MAX_LINES} lines from offset."
-                ),
-                parameters_json_schema={
-                    "type": "object",
-                    "properties": {
-                        "path": {"type": "string", "description": "Relative to the root."},
-                        "offset": {"type": "integer", "description": "First line. Default: 1."},
-                    },
-                    "required": ["path"],
-                },
-            ),
-            types.FunctionDeclaration(
-                name="grep",
-                description=(
-                    "Search the files in the working directory for a Python regular expression. "
-                    f"Returns at most {_MAX_RESULTS} matches as path:line:text."
-                ),
-                parameters_json_schema={
-                    "type": "object",
-                    "properties": {
-                        "pattern": {"type": "string"},
-                        "glob": {
-                            "type": "string",
-                            "description": "Only search files matching this glob, like **/*.py.",
-                        },
-                    },
-                    "required": ["pattern"],
-                },
-            ),
-            types.FunctionDeclaration(
-                name="glob",
-                description=(
-                    "List the files in the working directory matching a glob, like **/*.py. "
-                    f"Returns at most {_MAX_RESULTS} paths."
-                ),
-                parameters_json_schema={
-                    "type": "object",
-                    "properties": {"pattern": {"type": "string"}},
-                    "required": ["pattern"],
-                },
-            ),
-        ]
+    def tools(self) -> list[Tool[object]]:
+        return [_tool(self.read_file), _tool(self.grep), _tool(self.glob)]
 
-    def call(self, name: str, arguments: Mapping[str, object]) -> str:
-        tools: dict[str, Callable[..., str]] = {
-            "read_file": self.read_file,
-            "grep": self.grep,
-            "glob": self.glob,
-        }
-        tool = tools.get(name)
-        if tool is None:
-            return f"Error: there is no tool {name}."
-        try:
-            return tool(**arguments)
-        except (OSError, TypeError, ValueError, re.error) as error:
-            return f"Error: {error}"
-
+    @_answering_errors
     def read_file(self, path: str, offset: int = 1) -> str:
+        """Read a file in the working directory.
+
+        Use it when the convention needs code the `changes` element doesn't show: the rest of
+        the file under review, or a file it imports, calls or names. Don't use it to see lines
+        the `changes` element already shows.
+
+        Args:
+            path: The file's path relative to the working directory, such as `orders/order.py`.
+            offset: The number of the first line to return. Default: 1.
+
+        Returns:
+            Up to 2000 lines from `offset`, each starting with its line number and a tab.
+        """
         file = self._inside(path)
         self.loaded_files.append(path)
         lines = file.read_text(errors="replace").splitlines()
@@ -90,7 +63,22 @@ class FileTools:
             for number, line in enumerate(lines[start - 1 : start - 1 + _MAX_LINES], start=start)
         )
 
+    @_answering_errors
     def grep(self, pattern: str, glob: str = "**/*") -> str:
+        """Search the contents of the files in the working directory.
+
+        Use it to find code by what it contains when you don't know which file holds it: where
+        a name is defined, what calls it, or other code that does the same thing. When you know
+        the file, use `read_file`. Hidden files and files git ignores aren't searched.
+
+        Args:
+            pattern: A Python regular expression, matched against each line.
+            glob: Only search files whose paths match this glob, such as `**/*.py`. Default: all
+                files.
+
+        Returns:
+            Up to 200 matching lines, each as `path:line:text`, or `No matches.`.
+        """
         expression = re.compile(pattern)
         matches = (
             (relative, f"{relative}:{number}:{line}")
@@ -100,7 +88,21 @@ class FileTools:
         )
         return self._shown(matches) or "No matches."
 
+    @_answering_errors
     def glob(self, pattern: str) -> str:
+        """List the files in the working directory whose paths match a glob.
+
+        Use it to find files by name or place, such as the modules of a package or the tests of
+        a module. It doesn't read the files: use `grep` to search their contents and
+        `read_file` to read one. Hidden files and files git ignores aren't listed.
+
+        Args:
+            pattern: A glob matched against paths relative to the working directory, such as
+                `orders/**/*.py`.
+
+        Returns:
+            Up to 200 paths, one per line, or `No files.`.
+        """
         return (
             self._shown((relative, relative) for relative, _ in self._files(pattern)) or "No files."
         )

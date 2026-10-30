@@ -1,6 +1,6 @@
 [project]
 name = "codeguard"
-version = "0.10.0"
+version = "0.11.0"
 description = "Runs a project's own rules on its changed files, at agent Stop and in CI."
 authors = [
     { name = "Craig Israel", email = "craig@theisraels.net" }
@@ -13,6 +13,7 @@ dependencies = [
     "logfire>=5.2.0",
     "packaging>=26.3",
     "pydantic>=2.13.5",
+    "pydantic-ai-slim[bedrock,google]~=2.57.0",
     "pydantic-evals~=2.57.0",
     "pyyaml>=6.0.3",
 ]
@@ -28,7 +29,7 @@ build-backend = "uv_build"
 testpaths = ["tests"]
 pythonpath = ["tests"]
 addopts = ["--import-mode=importlib", "-m", "not llm"]
-markers = ["llm: calls the real claude CLI; run with pytest -m llm"]
+markers = ["llm: calls the real Gemini judge on Vertex AI; run with pytest -m llm"]
 
 [tool.ruff]
 line-length = 100

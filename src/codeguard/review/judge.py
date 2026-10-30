@@ -39,20 +39,39 @@ class JudgeRequest:
 
     @property
     def instructions(self) -> str:
-        return f'{INSTRUCTIONS}\n<changes path="{self.file}">\n{self.changes}</changes>\n'
+        return INSTRUCTIONS
 
     @property
     def prompt(self) -> str:
-        return self.skill.text
+        return (
+            f'<convention name="{self.skill.name}">\n{self.skill.text}</convention>\n\n'
+            f'<changes path="{self.file}">\n{self.changes}</changes>\n'
+        )
 
 
 class Violation(BaseModel):
+    """A violation of the convention that a `+` or `-` line of the change is part of."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    file: str
-    line: int
-    message: str
-    confidence: float = Field(ge=0, le=1)
+    file: str = Field(
+        description="The file under review's path, exactly as the `changes` element gives it."
+    )
+    line: int = Field(description="The number of a `+` or `-` line that is part of the violation.")
+    message: str = Field(description="What breaks the convention, in one plain sentence.")
+    confidence: float = Field(
+        ge=0,
+        le=1,
+        description=(
+            "How certain you are that the code breaks the convention. Use one of these values, "
+            "not one between them. 1.0: the code matches a case, sign, or example the "
+            "convention describes, in substance if not in exact text. 0.9: the code breaks the "
+            "convention as written; you would block the change. 0.7: the code probably breaks "
+            "the convention, but something in the working directory points to an exception the "
+            "convention allows. 0.5: the code is as likely to follow the convention as to break "
+            "it. Below 0.5 the code probably follows the convention: don't report it."
+        ),
+    )
 
     def severity(self, severity: Severity, threshold: float) -> Severity:
         if severity is Severity.ERROR and self.confidence < threshold:
@@ -61,9 +80,13 @@ class Violation(BaseModel):
 
 
 class Verdict(BaseModel):
+    """The violations of the convention the change is part of."""
+
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    violations: tuple[Violation, ...]
+    violations: tuple[Violation, ...] = Field(
+        description="Each violation of the convention; none when the code follows it."
+    )
 
     def diagnostics_for(
         self, binding: Binding, file: str, threshold: float

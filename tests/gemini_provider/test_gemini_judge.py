@@ -1,13 +1,27 @@
 import time
-from collections.abc import Iterator
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
 
-import httpx
+import httpx2
 import pytest
-from google.genai import errors, types
+from pydantic_ai.exceptions import ModelAPIError, ModelHTTPError
+from pydantic_ai.messages import (
+    ModelMessage,
+    ModelRequest,
+    ModelResponse,
+    RetryPromptPart,
+    TextPart,
+    ToolCallPart,
+    ToolReturnPart,
+    UserPromptPart,
+)
+from pydantic_ai.models import Model
+from pydantic_ai.models.function import AgentInfo, FunctionModel
+from pydantic_ai.usage import RequestUsage
 from spans import finished_span_attributes
 
-from codeguard.gemini_provider import GeminiJudge
+from codeguard.gemini_provider import GeminiJudge, gemini_judge
 from codeguard.review import (
     Deadline,
     Judgement,
@@ -26,72 +40,64 @@ VIOLATION = {
 }
 
 
-def call(name: str, **args: object) -> types.Part:
-    return types.Part(function_call=types.FunctionCall(id=f"{name}-id", name=name, args=args))
-
-
-def response(*parts: types.Part, prompt_tokens: int = 10) -> types.GenerateContentResponse:
-    return types.GenerateContentResponse(
-        candidates=[types.Candidate(content=types.Content(role="model", parts=list(parts)))],
-        usage_metadata=types.GenerateContentResponseUsageMetadata(
-            prompt_token_count=prompt_tokens,
-            candidates_token_count=3,
-            cached_content_token_count=4,
-            thoughts_token_count=5,
-        ),
+def verdict(*violations: dict[str, object], input_tokens: int = 10) -> ModelResponse:
+    return ModelResponse(
+        parts=[TextPart(Verdict.model_validate({"violations": violations}).model_dump_json())],
+        usage=_usage(input_tokens),
     )
 
 
-@dataclass
-class ScriptedClient:
-    responses: list[list[types.GenerateContentResponse]]
-    requests: list[tuple[str, list[types.Content], types.GenerateContentConfig]] = field(
-        default_factory=list
+def calls(*tools: tuple[str, dict[str, object]], input_tokens: int = 10) -> ModelResponse:
+    return ModelResponse(
+        parts=[ToolCallPart(name, args, tool_call_id=f"{name}-id") for name, args in tools],
+        usage=_usage(input_tokens),
     )
 
-    @classmethod
-    def answering(cls, *responses: types.GenerateContentResponse) -> "ScriptedClient":
-        return cls([[response] for response in responses])
 
-    def generate_content_stream(
-        self, *, model: str, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> Iterator[types.GenerateContentResponse]:
-        self.requests.append((model, list(contents), config))
-        yield from self.responses.pop(0)
-
-    @property
-    def models(self) -> "ScriptedClient":
-        return self
+def _usage(input_tokens: int) -> RequestUsage:
+    return RequestUsage(
+        input_tokens=input_tokens,
+        output_tokens=3,
+        cache_read_tokens=4,
+        details={"thoughts_tokens": 5},
+    )
 
 
-@dataclass
-class FailingClient:
-    error: Exception
+def http_error(status: int, message: str) -> ModelHTTPError:
+    return ModelHTTPError(status, MODEL, body={"error": {"message": message}})
 
-    def generate_content_stream(
-        self, *, model: str, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> Iterator[types.GenerateContentResponse]:
-        raise self.error
 
-    @property
-    def models(self) -> "FailingClient":
-        return self
+def transport_error(cause: Exception) -> ModelAPIError:
+    error = ModelAPIError(MODEL, str(cause))
+    error.__cause__ = cause
+    return error
 
 
 @dataclass
-class SlowClient:
-    seconds: float
+class ScriptedGemini:
+    answers: list[ModelResponse | Exception]
+    requests: list[tuple[list[ModelMessage], AgentInfo]] = field(default_factory=list)
+    connected: list[str] = field(default_factory=list)
 
-    def generate_content_stream(
-        self, *, model: str, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> Iterator[types.GenerateContentResponse]:
-        while True:
-            time.sleep(self.seconds)
-            yield response(types.Part(text="Thinking.", thought=True))
+    @asynccontextmanager
+    async def __call__(self, model: str) -> AsyncIterator[Model]:
+        self.connected.append(model)
+        yield FunctionModel(self._answer)
 
-    @property
-    def models(self) -> "SlowClient":
-        return self
+    def _answer(self, messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+        self.requests.append((list(messages), info))
+        answer = self.answers.pop(0)
+        if isinstance(answer, Exception):
+            raise answer
+        return answer
+
+    def info(self, request: int = 0) -> AgentInfo:
+        return self.requests[request][1]
+
+    def sent(self, request: int) -> list[object]:
+        last = self.requests[request][0][-1]
+        assert isinstance(last, ModelRequest)
+        return list(last.parts)
 
 
 @dataclass
@@ -111,182 +117,249 @@ def reviewed_file(tmp_path) -> None:
     (tmp_path / "logger.py").write_text("def info(message): ...\n")
 
 
+@pytest.fixture
+def waits(monkeypatch) -> list[float]:
+    waited: list[float] = []
+
+    async def wait(seconds: float) -> None:
+        waited.append(seconds)
+
+    monkeypatch.setattr(gemini_judge.asyncio, "sleep", wait)
+    return waited
+
+
 def judge_with(tmp_path, models, **kwargs) -> GeminiJudge:
     return GeminiJudge(tmp_path, MODEL, models, RecordingProcesses(), **kwargs)
 
 
-def tool_replies(contents: list[types.Content]) -> list[object]:
-    return [
-        part.function_response.response["result"]
-        for part in contents[-1].parts or []
-        if part.function_response and part.function_response.response
-    ]
-
-
 class TestGeminiJudge:
-    def test_verdict_comes_from_the_submitted_verdict(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[VIOLATION])))
+    def test_verdict_is_the_structured_output(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict(VIOLATION)])
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
         assert judgement == Judgement(Verdict.model_validate({"violations": [VIOLATION]}))
 
-    def test_loaded_files_are_the_files_gemini_read_grepped_and_globbed(
+    def test_asks_for_the_verdict_as_native_structured_output(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict()])
+
+        judge_with(tmp_path, models).judge(make_judge_request())
+
+        parameters = models.info().model_request_parameters
+        assert parameters.output_mode == "native"
+        assert parameters.output_object
+        assert parameters.output_object.name == "Verdict"
+        assert parameters.output_object.description == Verdict.__doc__
+        assert parameters.output_tools == []
+
+    def test_offers_the_file_tools(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict()])
+
+        judge_with(tmp_path, models).judge(make_judge_request())
+
+        assert [tool.name for tool in models.info().function_tools] == [
+            "read_file",
+            "grep",
+            "glob",
+        ]
+
+    def test_sends_the_instructions_and_the_prompt(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict()])
+        request = make_judge_request()
+
+        judge_with(tmp_path, models).judge(request)
+
+        assert models.connected == [MODEL]
+        assert models.info().instructions == request.instructions.strip()
+        assert [part.content for part in models.sent(0) if isinstance(part, UserPromptPart)] == [
+            request.prompt
+        ]
+
+    def test_thinks_at_a_low_level(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict()])
+
+        judge_with(tmp_path, models).judge(make_judge_request())
+
+        settings = models.info().model_settings or {}
+        assert settings.get("google_thinking_config") == {
+            "thinking_level": "LOW",
+            "include_thoughts": True,
+        }
+
+    def test_loaded_files_are_the_files_gemini_read_grepped_and_globbed_in_any_order(
         self, tmp_path, make_judge_request
     ):
-        (tmp_path / "logger.py").write_text("def info(message): ...\n")
         (tmp_path / "audit.py").write_text("from logger import info\n")
         (tmp_path / "config.toml").write_text("level = 'info'\n")
-        models = ScriptedClient.answering(
-            response(
-                call("read_file", path="logger.py"),
-                call("grep", pattern="info", glob="**/*.py"),
-                call("glob", pattern="*.toml"),
-            ),
-            response(call("submit_verdict", violations=[])),
+        models = ScriptedGemini(
+            [
+                calls(
+                    ("read_file", {"path": "logger.py"}),
+                    ("grep", {"pattern": "info", "glob": "**/*.py"}),
+                    ("glob", {"pattern": "*.toml"}),
+                ),
+                verdict(),
+            ]
         )
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
-        assert judgement.loaded_files == ("logger.py", "audit.py", "config.toml")
+        assert sorted(judgement.loaded_files) == ["audit.py", "config.toml", "logger.py"]
 
     def test_missing_file_gemini_tried_to_read_is_a_loaded_file(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(
-            response(call("read_file", path="orders/__init__.py")),
-            response(call("submit_verdict", violations=[])),
-        )
+        models = ScriptedGemini([calls(("read_file", {"path": "orders/__init__.py"})), verdict()])
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
         assert judgement.loaded_files == ("orders/__init__.py",)
 
     def test_file_outside_the_root_is_not_a_loaded_file(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(
-            response(call("read_file", path="../outside.py")),
-            response(call("submit_verdict", violations=[])),
-        )
+        models = ScriptedGemini([calls(("read_file", {"path": "../outside.py"})), verdict()])
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
         assert judgement.loaded_files == ()
 
-    def test_sends_the_instructions_and_the_skill(self, tmp_path, make_skill, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-        request = make_judge_request()
-
-        judge_with(tmp_path, models).judge(request)
-
-        model, contents, config = models.requests[0]
-        assert model == MODEL
-        assert config.system_instruction == request.instructions
-        assert [part.text for part in contents[0].parts or []] == [make_skill().text]
-
-    def test_requires_a_tool_call_on_every_turn(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-
-        judge_with(tmp_path, models).judge(make_judge_request())
-
-        tool_config = models.requests[0][2].tool_config
-        assert tool_config and tool_config.function_calling_config
-        assert tool_config.function_calling_config.mode == types.FunctionCallingConfigMode.ANY
-
     def test_answers_file_tool_calls_before_the_verdict(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(
-            response(call("read_file", path="logger.py")),
-            response(call("submit_verdict", violations=[])),
-        )
+        models = ScriptedGemini([calls(("read_file", {"path": "logger.py"})), verdict()])
 
         judge_with(tmp_path, models).judge(make_judge_request())
 
-        assert tool_replies(models.requests[1][1]) == ["     1\tdef info(message): ...\n"]
-
-    def test_keeps_the_model_turn_in_the_conversation(self, tmp_path, make_judge_request):
-        read = response(call("read_file", path="logger.py"))
-        models = ScriptedClient.answering(read, response(call("submit_verdict", violations=[])))
-
-        judge_with(tmp_path, models).judge(make_judge_request())
-
-        assert read.candidates
-        assert models.requests[1][1][1] == read.candidates[0].content
+        assert [part.content for part in models.sent(1) if isinstance(part, ToolReturnPart)] == [
+            "     1\tdef info(message): ...\n"
+        ]
 
     def test_invalid_verdict_is_sent_back_to_correct(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(
-            response(call("submit_verdict", violations=[{"file": "a.py"}])),
-            response(call("submit_verdict", violations=[])),
-        )
+        invalid = ModelResponse(parts=[TextPart('{"violations": [{"file": "a.py"}]}')])
+        models = ScriptedGemini([invalid, verdict()])
 
         judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
         assert judgement == Judgement(Verdict(violations=()))
-        [reply] = tool_replies(models.requests[1][1])
-        assert str(reply).startswith("Error: the verdict is invalid.")
+        assert any(isinstance(part, RetryPromptPart) for part in models.sent(1))
 
-    def test_response_without_a_tool_call_is_a_judge_error(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(types.Part.from_text(text="It looks fine.")))
+    def test_no_verdict_within_the_request_limit_is_a_judge_error(
+        self, tmp_path, make_judge_request
+    ):
+        models = ScriptedGemini([calls(("glob", {"pattern": "*.py"})) for _ in range(2)])
 
-        with pytest.raises(JudgeNoVerdict, match=f"^{MODEL} called no tool"):
+        with pytest.raises(JudgeNoVerdict, match=f"^{MODEL} returned no verdict in 2 requests.$"):
+            judge_with(tmp_path, models, max_requests=2).judge(make_judge_request())
+
+    def test_http_error_is_a_judge_error(self, tmp_path, make_judge_request):
+        unsent = verdict()
+        models = ScriptedGemini([http_error(400, "Bad request."), unsent])
+
+        with pytest.raises(JudgeProcessError, match=f"^{MODEL} failed with 400: Bad request.$"):
             judge_with(tmp_path, models).judge(make_judge_request())
+        assert models.answers == [unsent]
 
-    def test_no_verdict_within_the_turn_limit_is_a_judge_error(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(
-            *[response(call("glob", pattern="*.py")) for _ in range(2)]
-        )
+    @pytest.mark.parametrize(
+        "error",
+        [
+            http_error(429, "Quota exceeded."),
+            http_error(503, "Unavailable."),
+            transport_error(httpx2.ReadError("Connection reset by peer")),
+            transport_error(httpx2.RemoteProtocolError("Server disconnected")),
+        ],
+        ids=["quota", "unavailable", "connection reset", "disconnected"],
+    )
+    def test_turned_away_or_broken_request_is_sent_again(
+        self, tmp_path, make_judge_request, waits, error
+    ):
+        models = ScriptedGemini([error, verdict()])
 
-        with pytest.raises(JudgeNoVerdict, match=f"^{MODEL} returned no verdict in 2 turns.$"):
-            judge_with(tmp_path, models, max_turns=2).judge(make_judge_request())
+        judgement = judge_with(tmp_path, models).judge(make_judge_request())
 
-    def test_api_error_is_a_judge_error(self, tmp_path, make_judge_request):
-        error = errors.ClientError(429, {"error": {"message": "Quota exceeded."}})
+        assert judgement == Judgement(Verdict(violations=()))
+        assert models.answers == []
+        assert 1 <= waits[0] < 2
+
+    def test_request_is_sent_at_most_five_times(self, tmp_path, make_judge_request, waits):
+        unsent = verdict()
+        models = ScriptedGemini([*(http_error(429, "Quota exceeded.") for _ in range(5)), unsent])
 
         with pytest.raises(JudgeProcessError, match=f"^{MODEL} failed with 429: Quota exceeded.$"):
-            judge_with(tmp_path, FailingClient(error)).judge(make_judge_request())
+            judge_with(tmp_path, models).judge(make_judge_request())
+        assert models.answers == [unsent]
+        assert [int(wait) for wait in waits] == [1, 2, 4, 8]
+
+    def test_sends_again_only_while_the_backoff_fits_before_the_deadline(
+        self, tmp_path, make_judge_request, waits
+    ):
+        models = ScriptedGemini([http_error(429, "Quota exceeded.") for _ in range(5)])
+        deadline = Deadline(minutes=1, started=time.monotonic() - 56)
+
+        with pytest.raises(JudgeProcessError):
+            judge_with(tmp_path, models, deadline=deadline).judge(make_judge_request())
+        assert [int(wait) for wait in waits] == [1, 2]
+
+    def test_timeout_is_the_request_limit_error_without_sending_again(
+        self, tmp_path, make_judge_request, waits
+    ):
+        models = ScriptedGemini([transport_error(httpx2.ReadTimeout("timed out"))])
+
+        with pytest.raises(JudgeTimeout, match=f"^{MODEL} took over 120s to answer.$"):
+            judge_with(tmp_path, models).judge(make_judge_request())
+        assert waits == []
+
+    def test_timeout_at_the_deadline_is_the_time_limit_error(self, tmp_path, make_judge_request):
+        @asynccontextmanager
+        async def slow(model: str) -> AsyncIterator[Model]:
+            def answer(messages: list[ModelMessage], info: AgentInfo) -> ModelResponse:
+                time.sleep(0.2)
+                raise transport_error(httpx2.ReadTimeout("timed out"))
+
+            yield FunctionModel(answer)
+
+        deadline = Deadline(minutes=1, started=time.monotonic() - 59.9)
+
+        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
+            judge_with(tmp_path, slow, deadline=deadline).judge(make_judge_request())
 
     def test_call_after_the_deadline_is_a_judge_error_without_calling_gemini(
         self, tmp_path, make_judge_request
     ):
-        models = ScriptedClient.answering()
+        models = ScriptedGemini([verdict()])
         deadline = Deadline(minutes=1, started=time.monotonic() - 60)
 
         with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
             judge_with(tmp_path, models, deadline=deadline).judge(make_judge_request())
         assert models.requests == []
 
+    def test_requests_time_out_at_the_request_limit(self, tmp_path, make_judge_request):
+        models = ScriptedGemini([verdict()])
+
+        judge_with(tmp_path, models, request_limit_seconds=90).judge(make_judge_request())
+
+        assert (models.info().model_settings or {}).get("timeout") == 90
+
     def test_request_times_out_at_the_deadline(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
+        models = ScriptedGemini([verdict()])
         deadline = Deadline(minutes=1, started=time.monotonic() - 30)
 
         judge_with(tmp_path, models, deadline=deadline).judge(make_judge_request())
 
-        http_options = models.requests[0][2].http_options
-        assert http_options and http_options.timeout
-        assert 29_000 < http_options.timeout <= 30_000
-
-    def test_timeout_before_the_deadline_is_the_request_limit_error(
-        self, tmp_path, make_judge_request
-    ):
-        models = FailingClient(httpx.ReadTimeout("timed out"))
-        deadline = Deadline(minutes=1)
-
-        with pytest.raises(JudgeTimeout, match=f"^{MODEL} took over 120s to answer.$"):
-            judge_with(tmp_path, models, deadline=deadline).judge(make_judge_request())
+        timeout = (models.info().model_settings or {}).get("timeout")
+        assert isinstance(timeout, float) and 29 < timeout <= 30
 
     def test_each_call_holds_a_process_slot(self, tmp_path, make_judge_request):
         processes = RecordingProcesses()
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
 
-        GeminiJudge(tmp_path, MODEL, models, processes).judge(make_judge_request())
+        GeminiJudge(tmp_path, MODEL, ScriptedGemini([verdict()]), processes).judge(
+            make_judge_request()
+        )
 
         assert processes.events == ["acquired", "released"]
 
     def test_identity_names_the_provider_and_model(self, tmp_path):
-        assert judge_with(tmp_path, ScriptedClient.answering()).identity == f"gemini\0{MODEL}"
+        assert judge_with(tmp_path, ScriptedGemini([])).identity == f"gemini\0{MODEL}"
 
-    def test_call_records_its_usage_across_turns(
+    def test_call_records_its_usage_across_requests(
         self, tmp_path, make_skill, capfire, make_judge_request
     ):
-        models = ScriptedClient.answering(
-            response(call("glob", pattern="*.py"), prompt_tokens=10),
-            response(call("submit_verdict", violations=[]), prompt_tokens=20),
+        models = ScriptedGemini(
+            [calls(("glob", {"pattern": "*.py"}), input_tokens=10), verdict(input_tokens=20)]
         )
 
         judge_with(tmp_path, models).judge(make_judge_request())
@@ -303,65 +376,3 @@ class TestGeminiJudge:
                 "thinking_tokens": 10,
             }
         ]
-
-    def test_streams_thought_summaries(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-
-        judge_with(tmp_path, models).judge(make_judge_request())
-
-        thinking_config = models.requests[0][2].thinking_config
-        assert thinking_config and thinking_config.include_thoughts
-
-    def test_joins_streamed_chunks_without_thought_summaries(self, tmp_path, make_judge_request):
-        thought = types.Part(text="Checking the logger.", thought=True)
-        read = call("read_file", path="logger.py")
-        models = ScriptedClient(
-            [
-                [response(thought), response(read)],
-                [response(call("submit_verdict", violations=[]))],
-            ]
-        )
-
-        judge_with(tmp_path, models).judge(make_judge_request())
-
-        assert models.requests[1][1][1] == types.Content(role="model", parts=[read])
-        assert tool_replies(models.requests[1][1]) == ["     1\tdef info(message): ...\n"]
-
-    def test_stream_running_past_the_deadline_is_the_time_limit_error(
-        self, tmp_path, make_judge_request
-    ):
-        deadline = Deadline(minutes=1, started=time.monotonic() - 59.9)
-
-        with pytest.raises(JudgeTimeout, match="^The review reached its 1-minute time limit.$"):
-            judge_with(tmp_path, SlowClient(seconds=0.2), deadline=deadline).judge(
-                make_judge_request()
-            )
-
-    def test_stream_running_past_the_request_limit_is_a_judge_error(
-        self, tmp_path, make_judge_request
-    ):
-        judge = judge_with(tmp_path, SlowClient(seconds=0.2), request_limit_seconds=0.1)
-
-        with pytest.raises(JudgeTimeout, match=f"^{MODEL} took over 0.1s to answer.$"):
-            judge.judge(make_judge_request())
-
-    def test_requests_time_out_at_the_request_limit(self, tmp_path, make_judge_request):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-
-        judge_with(tmp_path, models, request_limit_seconds=90).judge(make_judge_request())
-
-        assert models.requests[0][2].http_options == types.HttpOptions(
-            timeout=90_000, retry_options=types.HttpRetryOptions(attempts=5)
-        )
-
-    def test_retries_only_while_the_backoff_fits_before_the_deadline(
-        self, tmp_path, make_judge_request
-    ):
-        models = ScriptedClient.answering(response(call("submit_verdict", violations=[])))
-        deadline = Deadline(minutes=1, started=time.monotonic() - 52)
-
-        judge_with(tmp_path, models, deadline=deadline).judge(make_judge_request())
-
-        http_options = models.requests[0][2].http_options
-        assert http_options
-        assert http_options.retry_options == types.HttpRetryOptions(attempts=3)

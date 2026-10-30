@@ -9,6 +9,8 @@ from factories.skill import MakeBinding, MakeSkill
 from git_repo import GitRepo
 from pytest_factoryboy import register
 
+from codeguard.config import JudgeProvider
+
 register(MakeDiagnostic)
 register(MakeViolation)
 register(MakeSkill)
@@ -22,6 +24,16 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         type=int,
         default=3,
         help="Run each llm test this many times. Default: 3.",
+    )
+    parser.addoption(
+        "--judge-provider",
+        type=JudgeProvider,
+        choices=list(JudgeProvider),
+        help="Judge the llm tests' fixture cases with this provider instead of their bindings'.",
+    )
+    parser.addoption(
+        "--judge-model",
+        help="The model --judge-provider judges with. Default: the provider's default model.",
     )
 
 

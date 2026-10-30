@@ -1,18 +1,28 @@
-import time
-from collections.abc import Iterator, Sequence
-from contextlib import AbstractContextManager
+import asyncio
+import random
+from collections.abc import Callable
+from contextlib import AbstractAsyncContextManager, AbstractContextManager
 from dataclasses import dataclass
-from itertools import accumulate
 from pathlib import Path
-from typing import Protocol
 
-import httpx
+import httpx2
 import logfire
-from google.genai import errors, types
-from pydantic import ValidationError
+from google.genai.types import ThinkingLevel
+from pydantic_ai import Agent, NativeOutput, RunContext, ToolOutput, UsageLimits
+from pydantic_ai.exceptions import (
+    ModelAPIError,
+    ModelHTTPError,
+    UnexpectedModelBehavior,
+    UsageLimitExceeded,
+)
+from pydantic_ai.messages import ModelMessage, ModelResponse
+from pydantic_ai.models import Model, ModelRequestParameters
+from pydantic_ai.models.google import GoogleModelSettings
+from pydantic_ai.models.wrapper import WrapperModel
+from pydantic_ai.settings import ModelSettings
+from pydantic_ai.usage import RunUsage
 
 from codeguard.gemini_provider.file_tools import FileTools
-from codeguard.gemini_provider.gemini_usage import GeminiUsage
 from codeguard.review import (
     Deadline,
     Judgement,
@@ -23,128 +33,97 @@ from codeguard.review import (
     Verdict,
 )
 
-_PROVIDER = "gemini"
-_MAX_TURNS = 25
+_MAX_REQUESTS = 10
 _REQUEST_LIMIT_SECONDS = 120
 _MAX_ATTEMPTS = 5
-_SUBMIT_VERDICT = types.FunctionDeclaration(
-    name="submit_verdict",
-    description="Report the violations in the file under review. Call it once, last.",
-    parameters_json_schema=Verdict.model_json_schema(),
-)
+# Responses the request can succeed on when sent again.
+_RETRIED_STATUSES = frozenset({408, 429, 500, 502, 503, 504})
 
-
-class GeminiModels(Protocol):
-    def generate_content_stream(
-        self, *, model: str, contents: list[types.Content], config: types.GenerateContentConfig
-    ) -> Iterator[types.GenerateContentResponse]: ...
-
-
-class GeminiClient(Protocol):
-    @property
-    def models(self) -> GeminiModels: ...
+# Connects to Gemini and gives the model named, for the length of one judgement.
+type GeminiModels = Callable[[str], AbstractAsyncContextManager[Model]]
 
 
 @dataclass(frozen=True)
 class GeminiJudge:
     root: Path
     model: str
-    client: GeminiClient
+    models: GeminiModels
     processes: AbstractContextManager[object]
     deadline: Deadline | None = None
-    max_turns: int = _MAX_TURNS
+    max_requests: int = _MAX_REQUESTS
     request_limit_seconds: float = _REQUEST_LIMIT_SECONDS
+    provider: str = "gemini"
 
     @property
     def identity(self) -> str:
-        return "\0".join((_PROVIDER, self.model))
+        return "\0".join((self.provider, self.model))
 
     def judge(self, request: JudgeRequest) -> Judgement:
-        with logfire.span(
-            "gemini judges {rule} on {file}",
-            rule=request.skill.name,
-            file=request.file,
-            model=self.model,
-        ) as span:
-            instructions = request.instructions
-            usage = GeminiUsage()
+        with (
+            self.processes,
+            logfire.span(
+                "gemini judges {rule} on {file}",
+                rule=request.skill.name,
+                file=request.file,
+                model=self.model,
+            ) as span,
+        ):
+            tools = FileTools(self.root)
+            usage = RunUsage()
             try:
-                with self.processes:
-                    return self._converse(instructions, request.prompt, usage)
+                verdict = asyncio.run(self._judge(request, tools, usage))
             finally:
-                span.set_attributes(usage.telemetry)
+                span.set_attributes(_telemetry(usage))
+            return Judgement(verdict, tuple(dict.fromkeys(tools.loaded_files)))
 
-    def _converse(self, instructions: str, prompt: str, usage: GeminiUsage) -> Judgement:
-        tools = FileTools(self.root)
-        contents = [types.Content(role="user", parts=[types.Part.from_text(text=prompt)])]
-        for _ in range(self.max_turns):
-            response = self._generate(instructions, contents, tools)
-            usage.add(response)
-            calls = response.function_calls
-            if not response.candidates or not response.candidates[0].content or not calls:
-                raise JudgeNoVerdict(f"{self.model} called no tool:\n{response.model_dump_json()}")
-            contents.append(response.candidates[0].content)
-            replies: list[types.Part] = []
-            for call in calls:
-                arguments = call.args or {}
-                if call.name == _SUBMIT_VERDICT.name:
-                    try:
-                        return Judgement(
-                            Verdict.model_validate(arguments),
-                            tuple(dict.fromkeys(tools.loaded_files)),
-                        )
-                    except ValidationError as error:
-                        replies.append(_reply(call, f"Error: the verdict is invalid.\n{error}"))
-                        continue
-                replies.append(_reply(call, tools.call(call.name or "", arguments)))
-            contents.append(types.Content(role="user", parts=replies))
-        raise JudgeNoVerdict(f"{self.model} returned no verdict in {self.max_turns} turns.")
-
-    def _generate(
-        self, instructions: str, contents: list[types.Content], tools: FileTools
-    ) -> types.GenerateContentResponse:
-        limit = self.request_limit_seconds
-        remaining = None
-        if self.deadline is not None:
-            remaining = self.deadline.remaining_seconds()
-            limit = min(limit, remaining)
-            if limit <= 0:
-                raise self.deadline.reached()
-        config = types.GenerateContentConfig(
-            system_instruction=instructions,
-            tools=[types.Tool(function_declarations=[*tools.declarations, _SUBMIT_VERDICT])],
-            tool_config=types.ToolConfig(
-                function_calling_config=types.FunctionCallingConfig(
-                    mode=types.FunctionCallingConfigMode.ANY
-                )
-            ),
-            automatic_function_calling=types.AutomaticFunctionCallingConfig(disable=True),
-            # Streamed thought summaries keep bytes flowing while the model thinks, so proxies
-            # that drop a response slow to start don't cut long calls off.
-            thinking_config=types.ThinkingConfig(include_thoughts=True),
-            http_options=types.HttpOptions(
-                timeout=int(limit * 1000), retry_options=_retries(remaining)
-            ),
+    async def _judge(self, request: JudgeRequest, tools: FileTools, usage: RunUsage) -> Verdict:
+        agent = Agent[object, Verdict](
+            deps_type=object,
+            instructions=request.instructions,
+            # Bedrock's Converse API has no structured output, so Claude there calls a tool.
+            output_type=ToolOutput(Verdict)
+            if self.provider == "bedrock"
+            else NativeOutput(Verdict),
+            tools=tools.tools,
+            model_settings=self._settings,
         )
         try:
-            return _merged(list(self._stream(contents, config, time.monotonic() + limit)))
-        except httpx.TimeoutException as error:
-            raise self._timed_out() from error
-        except errors.APIError as error:
-            raise JudgeProcessError(
-                f"{self.model} failed with {error.code}: {error.message}"
+            async with self.models(self.model) as model:
+                result = await agent.run(
+                    request.prompt,
+                    model=_Retrying(model, self.deadline),
+                    usage=usage,
+                    usage_limits=UsageLimits(request_limit=self.max_requests),
+                )
+        except UsageLimitExceeded as error:
+            raise JudgeNoVerdict(
+                f"{self.model} returned no verdict in {self.max_requests} requests."
             ) from error
+        except UnexpectedModelBehavior as error:
+            raise JudgeNoVerdict(f"{self.model} returned no verdict: {error.message}") from error
+        except ModelHTTPError as error:
+            raise JudgeProcessError(
+                f"{self.model} failed with {error.status_code}: {_message(error)}"
+            ) from error
+        except ModelAPIError as error:
+            if _timed_out(error):
+                raise self._timed_out() from error
+            raise JudgeProcessError(f"{self.model} failed: {error.message}") from error
+        return result.output
 
-    def _stream(
-        self, contents: list[types.Content], config: types.GenerateContentConfig, until: float
-    ) -> Iterator[types.GenerateContentResponse]:
-        chunks = self.client.models.generate_content_stream(
-            model=self.model, contents=contents, config=config
-        )
-        for chunk in chunks:
-            if time.monotonic() > until:
-                raise self._timed_out()
-            yield chunk
+    def _settings(self, _: RunContext[object]) -> GoogleModelSettings:
+        limit = self.request_limit_seconds
+        if self.deadline is not None:
+            limit = min(limit, self.deadline.remaining_seconds())
+            if limit <= 0:
+                raise self.deadline.reached()
+        return {
+            "timeout": limit,
+            "google_thinking_config": {
+                "thinking_level": ThinkingLevel.LOW,
+                "include_thoughts": True,
+            },
+        }
 
     def _timed_out(self) -> JudgeTimeout:
         if self.deadline is not None and self.deadline.remaining_seconds() <= 0:
@@ -152,40 +131,64 @@ class GeminiJudge:
         return JudgeTimeout(f"{self.model} took over {self.request_limit_seconds:g}s to answer.")
 
 
-def _retries(seconds: float | None) -> types.HttpRetryOptions:
-    # The SDK backs off 1s doubling, plus up to 1s of jitter: about 15s over 5 attempts. With
-    # a deadline, retries stop once the backoff would pass it.
-    sleeps = accumulate(2**retry + 1 for retry in range(_MAX_ATTEMPTS - 1))
-    retries = sum(1 for slept in sleeps if seconds is None or slept <= seconds)
-    return types.HttpRetryOptions(attempts=1 + retries)
+# Sends a request again when Gemini turned it away or the connection broke, while the backoff
+# fits before the deadline. The SDK's own retries miss a connection that broke after the
+# response started.
+class _Retrying(WrapperModel):
+    def __init__(self, wrapped: Model, deadline: Deadline | None) -> None:
+        super().__init__(wrapped)
+        self.deadline = deadline
+
+    async def request(
+        self,
+        messages: list[ModelMessage],
+        model_settings: ModelSettings | None,
+        model_request_parameters: ModelRequestParameters,
+    ) -> ModelResponse:
+        attempt = 1
+        while True:
+            try:
+                return await super().request(messages, model_settings, model_request_parameters)
+            except ModelAPIError as error:
+                # Backs off 1s doubling, plus up to 1s of jitter: about 15s over 5 attempts.
+                wait = 2 ** (attempt - 1) + random.random()
+                if attempt == _MAX_ATTEMPTS or not _retried(error) or not self._fits(wait):
+                    raise
+            await asyncio.sleep(wait)
+            attempt += 1
+
+    def _fits(self, wait: float) -> bool:
+        return self.deadline is None or wait < self.deadline.remaining_seconds()
 
 
-def _merged(chunks: Sequence[types.GenerateContentResponse]) -> types.GenerateContentResponse:
-    candidates = [chunk.candidates[0] for chunk in chunks if chunk.candidates]
-    parts = [
-        part
-        for candidate in candidates
-        if candidate.content
-        for part in candidate.content.parts or []
-        if not part.thought or part.thought_signature
-    ]
-    usages = [chunk.usage_metadata for chunk in chunks if chunk.usage_metadata]
-    return types.GenerateContentResponse(
-        candidates=[
-            types.Candidate(
-                content=types.Content(role="model", parts=parts),
-                finish_reason=candidates[-1].finish_reason,
-            )
-        ]
-        if candidates
-        else [],
-        usage_metadata=usages[-1] if usages else None,
-    )
+def _retried(error: ModelAPIError) -> bool:
+    if isinstance(error, ModelHTTPError):
+        return error.status_code in _RETRIED_STATUSES
+    return _transport_error(error) and not _timed_out(error)
 
 
-def _reply(call: types.FunctionCall, result: str) -> types.Part:
-    return types.Part(
-        function_response=types.FunctionResponse(
-            id=call.id, name=call.name, response={"result": result}
-        )
-    )
+def _transport_error(error: ModelAPIError) -> bool:
+    return isinstance(error.__cause__, httpx2.TransportError)
+
+
+def _timed_out(error: ModelAPIError) -> bool:
+    return isinstance(error.__cause__, httpx2.TimeoutException)
+
+
+def _message(error: ModelHTTPError) -> str:
+    body = error.body
+    if isinstance(body, dict):
+        details = body.get("error")
+        if isinstance(details, dict) and isinstance(message := details.get("message"), str):
+            return message
+    return str(body)
+
+
+def _telemetry(usage: RunUsage) -> dict[str, object]:
+    return {
+        "num_turns": usage.requests,
+        "input_tokens": usage.input_tokens,
+        "output_tokens": usage.output_tokens,
+        "cache_read_input_tokens": usage.cache_read_tokens,
+        "thinking_tokens": usage.details.get("thoughts_tokens", 0),
+    }

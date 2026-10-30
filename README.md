@@ -315,8 +315,8 @@ triggers: [mock-use]
 something else:
 
 ```yaml
-provider: gemini                  # default: claude-cli
-model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini needs one
+provider: gemini                  # default: claude-cli; or gemini, bedrock
+model: gemini-3.1-pro-preview     # default: claude-sonnet-5-5; gemini and bedrock need one
 ```
 
 A judge rule's id is its skill's directory name.
@@ -434,9 +434,10 @@ held to the same bar.
   eval with an `invalid` case covers only the rules selected.
 - `--case <text>` judges only the cases whose name contains the text; repeat it to
   judge the cases matching any of them. A rule with no matching case is left out.
-- `--provider claude-cli` or `--provider gemini` judges every selected rule with that
-  provider instead of its binding's. `--model` names the model; it defaults to
-  `claude-sonnet-5-5` for `claude-cli` and `gemini-3.1-pro-preview` for `gemini`.
+- `--provider claude-cli`, `--provider gemini` or `--provider bedrock` judges every
+  selected rule with that provider instead of its binding's. `--model` names the model;
+  it defaults to `claude-sonnet-5-5` for `claude-cli`, `gemini-3.1-pro-preview` for
+  `gemini` and `us.anthropic.claude-haiku-5-5` for `bedrock`.
 
 A `--rule` that names no judge rule, or a `--case` that no selected rule's case name
 contains, fails the eval before any case is judged.
@@ -675,17 +676,25 @@ judge:
 ```
 
 Gemini reads the working directory through read-only `read_file`, `grep` and `glob`
-tools, limited to the repository, and reports through a `submit_verdict` tool that
-takes the same verdict schema as Claude. Verdicts are cached per provider and model,
-so switching providers doesn't reuse Claude's verdicts.
+tools, limited to the repository, thinks at the `LOW` level, and returns its verdict as
+structured output with the same verdict schema as Claude. A judgement that makes 10
+requests without a verdict is reported as not judged. Verdicts are cached per provider
+and model, so switching providers doesn't reuse Claude's verdicts.
 
 Gemini's pay-as-you-go capacity is shared and limited by tokens per minute, so the
 gemini provider makes 2 calls at once. Each provider has its own limit, so Claude and
-Gemini rules in one review don't wait on each other. A call that Gemini turns away with
-a 429 is retried for about 15 seconds, and then the rule is reported as not judged.
+Gemini rules in one review don't wait on each other. A request that Gemini turns away
+(408, 429 or a 5xx) or whose connection breaks is sent again for about 15 seconds, and
+then the rule is reported as not judged.
 
 Use `gemini-3.1-pro-preview`, the Gemini model codeguard was tested with. Flash was
-unreliable in testing.
+unreliable in testing. Gemini 4 Argon was as accurate, but some of its requests took 15
+to 37 s, where 3.1 Pro's longest of 79 took 13 s (median 6.5 s).
+
+`provider: bedrock` judges with Claude on Amazon Bedrock through the same tools, for a
+run that must be Claude. boto3 finds the credentials and region (`AWS_DEFAULT_REGION`)
+as the AWS CLI does, and the model is a Bedrock inference profile such as
+`us.anthropic.claude-haiku-5-5`.
 
 codeguard signs in with Application Default Credentials. Set it up once per project:
 
@@ -722,7 +731,10 @@ Without it, codeguard sends nothing. Set it where the agent runs: your shell pro
   `cache_creation_input_tokens` and `thinking_tokens`.
 - `gemini judges {rule} on {file}`: one span per Gemini judgement, with `model`,
   `num_turns`, `input_tokens`, `output_tokens`, `cache_read_input_tokens` and
-  `thinking_tokens`, summed over its turns.
+  `thinking_tokens`, summed over its requests. Its time starts once the call has a slot,
+  not while it waits for one. Inside it, Pydantic AI's spans record each request and
+  tool call with its content: the prompt, which holds the convention and the changed
+  code, Gemini's thought summaries, the files it read and its verdict.
 - `judge {rule} on {file}`: one span per rule and file, with `cache_hit`, `violations`,
   `loaded_files` (the files the verdict depends on) and `changed_files` (the loaded files
   that changed since the cached verdict, which is why it was judged again). The Claude or
@@ -819,17 +831,23 @@ uv run pytest
 
 `uv run pytest` runs offline: it calls no model. The LLM tests check that the judge's
 instructions, request and tools still get the right verdicts from a real model. Each
-one reviews an edit in a scratch repository the way `codeguard review` does, calling
-the real `claude` CLI, so they cost tokens. They are marked `llm`, which plain `pytest`
-deselects. CI runs them; run them after changing the judge's instructions, request or
+one reviews an edit in a scratch repository the way `codeguard review` does, with the
+fixture bindings' judge, `gemini-3.1-pro-preview` on Vertex AI, so they need Gemini
+credentials (Judge with Gemini on Google Cloud, above) and cost tokens. They are marked
+`llm`, which plain `pytest` deselects. CI signs in with the repository's
+`GOOGLE_CREDENTIALS` secret, a service account key with the Vertex AI User role, and
+its `GOOGLE_CLOUD_PROJECT` variable. `--judge-provider` and `--judge-model` judge them
+with another model, as `codeguard eval --provider` does: `--judge-provider bedrock` runs
+them on Haiku on Bedrock. CI runs them; run them after changing the judge's instructions, request or
 tools:
 
 ```sh
-uv run pytest -m llm -n 8    # each case 3 times, as CI does
+uv run pytest -m llm -n 4    # each case 3 times, as CI does
 ```
 
-`-n 8` runs eight tests at once, each with its own `claude` call. It only saves time: any
-number gives the same result. [docs/testing.md](docs/testing.md) says which to run for a
+`-n 4` runs four tests at once, each making up to 2 Gemini calls at once. It only saves
+time: any number gives the same result, though more may hit Gemini's tokens-per-minute
+limit. [docs/testing.md](docs/testing.md) says which to run for a
 change.
 
 Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skills and

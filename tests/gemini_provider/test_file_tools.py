@@ -17,55 +17,50 @@ def tools(tmp_path) -> FileTools:
 
 class TestFileTools:
     def test_read_file_numbers_its_lines(self, tools):
-        assert tools.call("read_file", {"path": "orders/order.py"}) == (
+        assert tools.read_file(path="orders/order.py") == (
             "     1\tclass Order:\n     2\t    total = 1\n"
         )
 
     def test_read_file_starts_at_the_offset(self, tools):
-        assert tools.call("read_file", {"path": "orders/order.py", "offset": 2}) == (
-            "     2\t    total = 1\n"
-        )
+        assert tools.read_file(path="orders/order.py", offset=2) == ("     2\t    total = 1\n")
 
     def test_read_file_outside_the_root_is_an_error(self, tools, tmp_path):
         (tmp_path.parent / "secret.txt").write_text("key\n")
 
-        assert tools.call("read_file", {"path": "../secret.txt"}) == (
+        assert tools.read_file(path="../secret.txt") == (
             "Error: ../secret.txt is outside the working directory"
         )
 
     def test_missing_file_is_an_error(self, tools):
-        assert tools.call("read_file", {"path": "missing.py"}).startswith("Error: ")
+        assert tools.read_file(path="missing.py").startswith("Error: ")
 
     def test_grep_lists_matching_lines(self, tools):
-        assert tools.call("grep", {"pattern": "^class"}) == "orders/order.py:1:class Order:"
+        assert tools.grep(pattern="^class") == "orders/order.py:1:class Order:"
 
     def test_grep_searches_only_the_glob(self, tools):
-        assert tools.call("grep", {"pattern": "Order", "glob": "**/invoice.py"}) == (
+        assert tools.grep(pattern="Order", glob="**/invoice.py") == (
             "orders/invoice.py:1:from orders.order import Order"
         )
 
     def test_grep_without_matches_says_so(self, tools):
-        assert tools.call("grep", {"pattern": "missing"}) == "No matches."
+        assert tools.grep(pattern="missing") == "No matches."
 
     def test_invalid_pattern_is_an_error(self, tools):
-        assert tools.call("grep", {"pattern": "("}).startswith("Error: ")
+        assert tools.grep(pattern="(").startswith("Error: ")
 
     def test_glob_lists_visible_files(self, tools):
-        assert tools.call("glob", {"pattern": "**/*"}) == "orders/invoice.py\norders/order.py"
+        assert tools.glob(pattern="**/*") == "orders/invoice.py\norders/order.py"
 
-    def test_unknown_tool_is_an_error(self, tools):
-        assert tools.call("write_file", {}) == "Error: there is no tool write_file."
-
-    def test_unexpected_argument_is_an_error(self, tools):
-        assert tools.call("glob", {"pattern": "*", "limit": 1}).startswith("Error: ")
+    def test_each_tool_says_what_it_returns(self, tools):
+        assert all("Returns:" in (tool.function.__doc__ or "") for tool in tools.tools)
 
     def test_grep_records_the_files_it_matched(self, tools):
-        tools.call("grep", {"pattern": "Order"})
+        tools.grep(pattern="Order")
 
         assert tools.loaded_files == ["orders/invoice.py", "orders/order.py"]
 
     def test_glob_records_the_files_it_listed(self, tools):
-        tools.call("glob", {"pattern": "orders/invoice.py"})
+        tools.glob(pattern="orders/invoice.py")
 
         assert tools.loaded_files == ["orders/invoice.py"]
 
