@@ -66,10 +66,12 @@ how triggers select what the judge sees.
 - A case shows what's at stake. A reader of the case alone sees why the code is a
   problem or why it's fine, and its name says that, not only what the code does:
   "a getter that saves surprises a caller who only reads", not "calls save".
-- A case tests one thing. It doesn't mix in a second defect, such as a CSV split on
-  `","`, which is a bug whatever the rule says, so the judge can't flag the case for the
-  wrong reason. A helper the case calls without defining it isn't a second defect: the
-  judge treats code it can't see as ordinary.
+- A case tests one thing. Besides its one point, it holds no code a reviewer could
+  question, so the judge can't flag the case for the wrong reason. Any other code that
+  might be a defect is a second defect: a CSV split on `","`, a parse that raises on
+  input it should handle, a function named as a check that writes. A helper the case
+  calls without defining it isn't a second defect: the judge treats code it can't see as
+  ordinary.
 - Pair the cases: for each form the convention allows, a `valid` case, and beside it an
   `invalid` case of the same shape that breaks the rule.
 - Add `invalid` cases in forms the skill doesn't name, so the eval shows the judge
