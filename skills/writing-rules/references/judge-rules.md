@@ -69,7 +69,8 @@ how triggers select what the judge sees.
 - A case tests one thing. Besides its one point, it holds no code a reviewer could
   question, so the judge can't flag the case for the wrong reason. Any other code that
   might be a defect is a second defect: a CSV split on `","`, a parse that raises on
-  input it should handle, a function named as a check that writes. A helper the case
+  input it should handle, a function named as a check that writes. If you're unsure
+  whether a line could be questioned, rewrite it so it can't be. A helper the case
   calls without defining it isn't a second defect: the judge treats code it can't see as
   ordinary.
 - Pair the cases: for each form the convention allows, a `valid` case, and beside it an
