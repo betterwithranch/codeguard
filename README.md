@@ -815,7 +815,7 @@ uv run pytest
 instructions, request and tools still get the right verdicts from a real model. Each
 one reviews an edit in a scratch repository the way `codeguard review` does, with the
 fixture bindings' judge, `gemini-3.1-pro-preview` on Vertex AI, so they need Gemini
-credentials (Gemini on Google Cloud, above) and cost tokens. They are marked `llm`, which plain `pytest`
+credentials (Judge with Gemini on Google Cloud, above) and cost tokens. They are marked `llm`, which plain `pytest`
 deselects. CI runs them; run them after changing the judge's instructions, request or
 tools:
 
