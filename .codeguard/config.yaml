@@ -4,9 +4,6 @@ packages:
     ref: v0.6.1
     rulesets:
       python:
-        # CI judges with Gemini on Vertex, so codeguard's own reviews make no Claude calls.
-        provider: gemini
-        model: gemini-3.1-pro-preview
         rules:
           no-assert-on-lookup-field: &tests-only
             paths:

@@ -3,7 +3,6 @@ from typing import Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from codeguard.config.binding_config import BindingConfig
-from codeguard.config.judge_config import JudgeProvider
 from codeguard.config.path_scope import PathScope
 from codeguard.config.severity import Severity
 
@@ -15,25 +14,21 @@ class RuleOverride(BaseModel):
     exclude_paths: tuple[str, ...] | None = None
     severity: Severity | None = None
     ci_only: bool | None = None
-    provider: JudgeProvider | None = None
-    model: str | None = None
 
-    @model_validator(mode="after")
-    def require_a_provider_for_a_model(self) -> Self:
-        _require_a_provider_for_a_model(self.provider, self.model)
-        return self
+    @model_validator(mode="before")
+    @classmethod
+    def reject_model(cls, data: object) -> object:
+        if isinstance(data, dict) and "model" in data:
+            raise ValueError("model: a rule is judged with the model its binding names")
+        return data
 
     def apply(self, binding: BindingConfig) -> BindingConfig:
         scope = self.apply_scope(PathScope(binding.paths, binding.exclude_paths))
-        judge = {}
-        if self.provider is not None:
-            judge = {"provider": self.provider, "model": self.model or self.provider.default_model}
         return binding.model_copy(
             update={
                 "paths": scope.paths,
                 "exclude_paths": scope.exclude_paths,
                 "severity": self.severity or binding.severity,
-                **judge,
             }
         )
 
@@ -49,8 +44,6 @@ class RulesetConfig(BaseModel):
 
     severity: Severity | None = None
     ci_only: bool = False
-    provider: JudgeProvider | None = None
-    model: str | None = None
     include: tuple[str, ...] | None = None
     exclude: tuple[str, ...] = ()
     rules: dict[str, RuleOverride] = {}
@@ -60,11 +53,6 @@ class RulesetConfig(BaseModel):
         overridden = [rule for rule in self.exclude if rule in self.rules]
         if overridden:
             raise ValueError(f"excluded rules are also overridden: {', '.join(overridden)}")
-        return self
-
-    @model_validator(mode="after")
-    def require_a_provider_for_a_model(self) -> Self:
-        _require_a_provider_for_a_model(self.provider, self.model)
         return self
 
     @model_validator(mode="after")
@@ -90,14 +78,7 @@ class RulesetConfig(BaseModel):
         override = self.rules.get(rule, RuleOverride())
         if override.severity is None:
             override = override.model_copy(update={"severity": self.severity})
-        if override.provider is None:
-            override = override.model_copy(update={"provider": self.provider, "model": self.model})
         return override.apply(binding)
 
     def apply_scope(self, rule: str, scope: PathScope) -> PathScope:
         return self.rules.get(rule, RuleOverride()).apply_scope(scope)
-
-
-def _require_a_provider_for_a_model(provider: JudgeProvider | None, model: str | None) -> None:
-    if model is not None and provider is None:
-        raise ValueError("model needs provider")

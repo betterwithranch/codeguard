@@ -10,7 +10,6 @@ from codeguard.config import (
     Config,
     GitPackageConfig,
     JudgeConfig,
-    JudgeModel,
     JudgeProvider,
     PathPackageConfig,
     RuleOverride,
@@ -291,63 +290,13 @@ class TestRulesetConfig:
 
         assert not selection.is_ci_only("placement")
 
-    @pytest.mark.parametrize("config", [RuleOverride, RulesetConfig])
-    def test_model_without_a_provider_is_an_error(self, config):
+    def test_rule_override_model_is_an_error(self):
         with pytest.raises(ValidationError) as error:
-            config.model_validate({"model": "gemini-3.1-pro-preview"})
+            RuleOverride.model_validate({"model": "claude-haiku-5-5"})
 
-        assert messages(error) == ["Value error, model needs provider"]
-
-    def test_ruleset_provider_judges_a_rule_without_an_override(self, tmp_path):
-        skill = write_skill(tmp_path)
-        bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"], "triggers": ["any"]}}
-        )
-        selection = RulesetConfig(provider=JudgeProvider.GEMINI, model="gemini-3.1-pro-preview")
-
-        binding = selection.apply("placement", bindings.root["placement.yaml"])
-
-        assert binding.judge_model == JudgeModel(
-            provider=JudgeProvider.GEMINI, name="gemini-3.1-pro-preview"
-        )
-
-    def test_rule_override_provider_wins_over_the_ruleset_provider(self, tmp_path):
-        skill = write_skill(tmp_path)
-        bindings = BindingsConfig.model_validate(
-            {"placement.yaml": {"skill": skill, "paths": ["**"], "triggers": ["any"]}}
-        )
-        selection = RulesetConfig(
-            provider=JudgeProvider.GEMINI,
-            model="gemini-3.1-pro-preview",
-            rules={"placement": RuleOverride(provider=JudgeProvider.CLAUDE_CLI)},
-        )
-
-        binding = selection.apply("placement", bindings.root["placement.yaml"])
-
-        assert binding.judge_model == JudgeModel(
-            provider=JudgeProvider.CLAUDE_CLI, name="claude-sonnet-5-5"
-        )
-
-    def test_rule_without_a_provider_override_keeps_its_binding_model(self, tmp_path):
-        skill = write_skill(tmp_path)
-        bindings = BindingsConfig.model_validate(
-            {
-                "placement.yaml": {
-                    "skill": skill,
-                    "paths": ["**"],
-                    "triggers": ["any"],
-                    "model": "claude-haiku-5-5",
-                }
-            }
-        )
-
-        binding = RulesetConfig(severity=Severity.WARNING).apply(
-            "placement", bindings.root["placement.yaml"]
-        )
-
-        assert binding.judge_model == JudgeModel(
-            provider=JudgeProvider.CLAUDE_CLI, name="claude-haiku-5-5"
-        )
+        assert messages(error) == [
+            "Value error, model: a rule is judged with the model its binding names"
+        ]
 
     @pytest.mark.parametrize("provider", ["gemini", "bedrock"])
     def test_api_binding_without_a_model_is_an_error(self, tmp_path, provider):
