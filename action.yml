@@ -5,7 +5,7 @@ inputs:
     description: Ref the changes are compared against. The checkout needs its history (fetch-depth 0).
     default: origin/${{ github.base_ref }}
   claude-code-oauth-token:
-    description: Claude subscription token the judge runs with, from `claude setup-token`. Needed when a binding uses a skill.
+    description: Claude subscription token the judge runs with, from `claude setup-token`. Needed when a judge rule is judged with `claude-cli`, the default. A rule judged with Gemini signs in with Google Cloud credentials instead; see the README.
     required: false
   packages-token:
     description: GitHub token that can read the project's private rule packages.
@@ -14,7 +14,7 @@ inputs:
     description: Logfire write token. When set, codeguard sends a trace of each run, with each judge call's tokens, cost and duration.
     required: false
   eval:
-    description: Also run `codeguard eval`, which calls Claude for each judge rule case. Needs claude-code-oauth-token.
+    description: Also run `codeguard eval`, which calls each judge rule's model for each of its cases. Needs claude-code-oauth-token for rules judged with `claude-cli`.
     default: 'false'
   dry-run:
     description: Run the pattern rules and list the judge calls the review would make, without calling a model. Fails only on pattern rule errors.

@@ -150,9 +150,9 @@ packages:
 - Only the listed rulesets run.
 - `include` lists the only rules that run, pattern and judged; rules the package adds
   later stay off. `exclude` turns rules off. Set one or the other.
-- `rules.<id>` overrides a rule's `paths`, `exclude_paths`, `severity` or `ci_only`.
-  `exclude_paths: []` brings back the files its binding leaves out. A judge rule's
-  model can't be overridden: its evals pass on the model its binding names.
+- `rules.<id>` overrides a rule's `paths`, `exclude_paths`, `severity`, `ci_only`,
+  `provider` or `model`. `exclude_paths: []` brings back the files its binding leaves
+  out.
 - `severity` on the ruleset sets every rule in it, including rules the package adds
   later; a rule's own `severity` override wins. Only `error` blocks Stop and fails CI,
   so `severity: warning` trials a package: its findings print without blocking. A
@@ -164,6 +164,11 @@ packages:
   developer's own Claude subscription, while CI reviews each push to a PR with the
   project's token.
   CI still fails the PR on the rule, so the agent meets it there instead of at Stop.
+- `provider` and `model` judge the ruleset's judge rules with another model than their
+  bindings name, such as `provider: gemini` with `model: gemini-3.1-pro-preview`. Set
+  them on the ruleset or on one rule; a rule's own `provider` wins, as with `severity`.
+  `model` defaults to the provider's default. A rule's eval passed on its binding's
+  model, so run `codeguard eval --provider` to check the rules on the new one.
 - An unknown ruleset or rule id is an error.
 - `kind: path` with `path: ../my-rules` in place of `git` uses a local package, for
   working on one. To use it without editing the committed config, put that config in a
@@ -759,11 +764,12 @@ gets the same review on every machine and in CI. Every setting is optional.
 | `packages[].rulesets.<name>.exclude` | none | Rules that don't run. | |
 | `packages[].rulesets.<name>.severity` | each rule's own | The severity of every rule in the ruleset, including rules the package adds later. A rule's own override wins. | `warning` trials a ruleset: its findings print without blocking. |
 | `packages[].rulesets.<name>.ci_only` | `false` | Runs every rule in the ruleset only in CI and in reviews run by hand, not in the agent's Stop hook. A rule's own override wins. | A hook review spends the developer's subscription each time an agent stops; `true` keeps a costly rule to CI. See [Rules](#rules). |
-| `packages[].rulesets.<name>.rules.<id>` | the binding's | Overrides a rule's `paths`, `exclude_paths`, `severity` or `ci_only`. | |
+| `packages[].rulesets.<name>.provider`, `.model` | the binding's | Judges every judge rule in the ruleset with this provider and model. A rule's own override wins. | A project can keep its reviews on one provider, such as Gemini where no Claude token is available. |
+| `packages[].rulesets.<name>.rules.<id>` | the binding's | Overrides a rule's `paths`, `exclude_paths`, `severity`, `ci_only`, `provider` or `model`. | |
 | `judge.calls_at_once` | one per CPU for `claude-cli`, `2` for `gemini` | How many judge calls run at once. | A `claude` call mostly waits on the network, so the limit follows the machine. Gemini's pay-as-you-go capacity is shared, so fewer calls keep a review under its tokens-per-minute limit. |
 | `judge.project`, `judge.location` | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Where Gemini runs; see [Judge with Gemini on Google Cloud](#judge-with-gemini-on-google-cloud). | |
 
-Two things have no setting on purpose:
+One thing has no setting on purpose:
 
 - **Judge errors fail the review.** A judge call that couldn't complete, including one
   cut off by the time limit, is reported at its rule's severity, so for an `error` rule
@@ -774,9 +780,6 @@ Two things have no setting on purpose:
   ([CI](#ci)), which shows in the PR's history. The Stop hook always passes
   `--judge-errors-as-warnings`, because the agent can't fix a judge failure. It shows
   the failure to you, and CI still fails on it.
-- **A rule's judge model.** A judge rule is judged with the model its binding names, the
-  one its rule eval passed on. A project can't switch it to a model the eval never ran
-  on.
 
 Settings that decide what a review reports belong in the committed config, not in the
 environment, so CI and every machine review a commit the same way. Environment variables
