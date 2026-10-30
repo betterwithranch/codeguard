@@ -252,6 +252,33 @@ class TestReviewWithPackages:
         assert result.stdout == ""
         assert result.returncode == 0
 
+    @pytest.mark.parametrize(("arguments", "reported"), [([], True), (["--skip-ci-only"], False)])
+    def test_ci_only_rule_is_skipped_only_when_asked(
+        self, repo, make_diagnostic, arguments, reported
+    ):
+        write_package(repo, prefix="rules/")
+        repo.write(
+            ".codeguard/config.yaml",
+            "packages:\n"
+            "  - kind: path\n"
+            "    path: rules\n"
+            "    rulesets:\n"
+            "      python:\n"
+            "        exclude: [responsibility-placement]\n"
+            "        rules:\n"
+            "          no-print:\n"
+            "            ci_only: true\n",
+        )
+        (repo.root / ".codeguard/rules/pattern/no-print.yml").unlink()
+        repo.write("a.py", "print(1)\n")
+        packaged = make_diagnostic(rule="example/python/no-print", note=None)
+
+        result = subprocess.run(
+            [CODEGUARD, "review", *arguments], cwd=repo.root, capture_output=True, text=True
+        )
+
+        assert result.stdout == (f"{packaged}\n" if reported else "")
+
     def test_unknown_excluded_rule_exits_2(self, repo):
         write_package(repo, prefix="rules/")
         repo.write(

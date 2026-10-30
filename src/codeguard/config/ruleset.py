@@ -40,6 +40,13 @@ class Ruleset:
     bindings: BindingsConfig = BindingsConfig({})
     selection: RulesetConfig = field(default_factory=RulesetConfig)
     pattern_bindings: PatternBindingsConfig = PatternBindingsConfig({})
+    # Outside CI, as in the agent's Stop hook, the rules the selection marks `ci_only` are off.
+    skip_ci_only: bool = False
+
+    def excludes(self, rule: str) -> bool:
+        return self.selection.excludes(rule) or (
+            self.skip_ci_only and self.selection.is_ci_only(rule)
+        )
 
     def qualified_rule_id(self, rule_id: str) -> str:
         return rule_id if self.name is None else f"{self.name}/{rule_id}"
@@ -90,7 +97,7 @@ class Ruleset:
                 self.selection.apply(binding.skill.name, binding)
             )
             for binding in self.bindings.root.values()
-            if not self.selection.excludes(binding.skill.name)
+            if not self.excludes(binding.skill.name)
         }
 
     def _qualified(self, binding: BindingConfig) -> BindingConfig:

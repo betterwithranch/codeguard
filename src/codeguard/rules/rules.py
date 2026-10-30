@@ -1,8 +1,8 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from functools import cached_property
 
 from codeguard.ast_grep import AstGrep
-from codeguard.config import Config, ConfigLoader
+from codeguard.config import Config, ConfigLoader, Ruleset
 from codeguard.pattern_rules import Layout, PatternRuleCheck, PatternRuleTestRunner
 from codeguard.review import (
     Bindings,
@@ -31,6 +31,7 @@ from codeguard.working_tree import AllLines, ChangedLines, WorkingTree
 @dataclass(frozen=True)
 class Rules:
     working_tree: WorkingTree
+    skip_ci_only: bool = False
 
     @cached_property
     def config(self) -> Config:
@@ -55,16 +56,14 @@ class Rules:
         root = self.working_tree.root
         return CheckStep(
             checks=tuple(
-                PatternRuleCheck(root, ruleset, self.ast_grep) for ruleset in self.resolver.rulesets
+                PatternRuleCheck(root, ruleset, self.ast_grep) for ruleset in self.rulesets
             )
         )
 
     def _classified(self, scope: ChangedLines | AllLines) -> ChangedLines | AllLines:
         if isinstance(scope, AllLines):
             return scope
-        classifier = ChangeClassifier.for_rulesets(
-            self.ast_grep, self.resolver.rulesets, self.working_tree
-        )
+        classifier = ChangeClassifier.for_rulesets(self.ast_grep, self.rulesets, self.working_tree)
         return classifier.classify(scope)
 
     def plan(self, scope: ChangedLines | AllLines) -> JudgePlan:
@@ -80,7 +79,7 @@ class Rules:
                     ),
                     triggered=binding.is_triggered(classified, file),
                 )
-                for binding in Bindings.from_rulesets(self.resolver.rulesets)
+                for binding in Bindings.from_rulesets(self.rulesets)
                 for file in binding.files(classified.files)
             )
         )
@@ -115,6 +114,13 @@ class Rules:
         return RulesetResolver(self.working_tree.root, self.config, self.ast_grep)
 
     @cached_property
+    def rulesets(self) -> tuple[Ruleset, ...]:
+        """The rulesets a review runs."""
+        return tuple(
+            replace(ruleset, skip_ci_only=self.skip_ci_only) for ruleset in self.resolver.rulesets
+        )
+
+    @cached_property
     def judges(self) -> Judges:
         return Judges(self.config.judge)
 
@@ -127,5 +133,5 @@ class Rules:
             JudgeCheck(
                 root, binding, self.judges.cached(root, binding.model, deadline), threshold, scope
             )
-            for binding in Bindings.from_rulesets(self.resolver.rulesets)
+            for binding in Bindings.from_rulesets(self.rulesets)
         )

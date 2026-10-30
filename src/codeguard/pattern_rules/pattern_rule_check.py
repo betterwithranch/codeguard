@@ -35,10 +35,13 @@ class PatternRuleCheck:
     def _options(self) -> list[str]:
         selection = self.ruleset.selection
         ruleset_severity = [] if selection.severity is None else [f"--{selection.severity}"]
+        # Only a rule the selection names can be off, unless include or a ruleset-wide
+        # ci_only turns off rules it doesn't name.
+        named = selection.include is None and not (self.ruleset.skip_ci_only and selection.ci_only)
         candidates = (
-            selection.exclude if selection.include is None else self.ruleset.pattern_rule_ids()
+            {*selection.exclude, *selection.rules} if named else self.ruleset.pattern_rule_ids()
         )
-        excluded = [f"--off={rule}" for rule in sorted(candidates) if selection.excludes(rule)]
+        excluded = [f"--off={rule}" for rule in sorted(candidates) if self.ruleset.excludes(rule)]
         severities = [
             f"--{override.severity}={rule}"
             for rule, override in selection.rules.items()

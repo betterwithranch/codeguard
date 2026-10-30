@@ -59,6 +59,12 @@ def main() -> int:
         "the review.",
     )
     review_command.add_argument(
+        "--skip-ci-only",
+        action="store_true",
+        help="Skip the rules .codeguard/config.yaml marks ci_only. The agent's Stop hook passes "
+        "it; CI and a review run by hand don't.",
+    )
+    review_command.add_argument(
         "--host",
         help="Name the caller (such as claude-code or codex) in telemetry. Changes nothing else.",
     )
@@ -183,7 +189,7 @@ def _configure_telemetry() -> None:
 def _review(args: argparse.Namespace) -> int:
     working_tree = WorkingTree.containing(Path.cwd())
     if args.dry_run:
-        rules = Rules(working_tree)
+        rules = Rules(working_tree, args.skip_ci_only)
         scope = _scope(working_tree, args)
         result = rules.check_patterns(scope)
         result.write(sys.stdout)
@@ -197,7 +203,7 @@ def _review(args: argparse.Namespace) -> int:
             files=len(scope.files),
             host=args.host,
         ) as span:
-            result = Rules(working_tree).review(scope)
+            result = Rules(working_tree, args.skip_ci_only).review(scope)
             if args.judge_errors_as_warnings:
                 result = result.with_judge_errors_as_warnings()
             span.set_attributes(
