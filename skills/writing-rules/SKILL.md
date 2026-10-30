@@ -14,10 +14,10 @@ rule that misjudged code.
 
 1. **Decide whether it's a codeguard rule**, and which kind. Read
    `references/choosing-a-tool.md` before writing any rule. Write no rule, even when
-   asked for one, for a convention another tool can decide exactly: a linter, a type
-   checker, an import linter or a language server. That tool is the right one whether
-   or not the project runs it or has the check turned on. Tell the user which kind of
-   tool can check it instead.
+   asked for one, for a convention a deterministic check can decide exactly: a linter,
+   a type checker, an import linter, a language server or, when no tool has the check,
+   a project script run in CI. That check is the right one whether or not the project
+   runs it or has it turned on. Tell the user which kind of check can decide it instead.
 2. **State the convention and why it exists**, as the two sections below say. Reread
    them when two rules, or a rule and its cases, disagree about the same code.
 3. **Gate it**: a pattern rule's match (Pattern rules, below), or a judge rule's

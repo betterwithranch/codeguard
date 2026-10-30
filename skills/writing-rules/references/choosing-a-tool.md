@@ -6,12 +6,13 @@ rule it needs.
 
 ## Conventions that aren't codeguard's
 
-Write no codeguard rule for a convention another tool can decide exactly, even when
-asked for one, and whether or not the project runs that tool or has the check turned on.
-An exact tool gives the same answer every run, costs nothing and runs in the editor; a
-judge rule sees one changed file and guesses at the rest. Tell the user the convention
-isn't a codeguard rule and which kind of tool can check it. Setting up that tool isn't
-part of writing rules.
+Write no codeguard rule for a convention a deterministic check can decide exactly, even
+when asked for one, and whether or not the project runs that check or has it turned on.
+Prefer another tool's check; when no tool has one, a project script run in CI decides it.
+A deterministic check gives the same answer every run and costs nothing; a judge rule
+sees one changed file, guesses at the rest and costs a model call. Tell the user the
+convention isn't a codeguard rule and which kind of check can decide it. Setting up or
+writing that check isn't part of writing rules.
 
 | The convention | Decided by |
 |---|---|
@@ -20,6 +21,7 @@ part of writing rules.
 | Which modules may import which | An import linter |
 | Logic across nodes (counting, state, types), or an autocorrect | A custom linter rule |
 | Who implements, calls or references a symbol, such as every class that implements an interface | A language server's find-references |
+| A fact about the whole repository, such as every package being covered by the import contract | The tool's own check if it has one, else a project script run in CI |
 
 ## Pattern rule or judge rule
 
