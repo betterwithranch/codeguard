@@ -13,6 +13,7 @@ class RuleOverride(BaseModel):
     paths: tuple[str, ...] | None = Field(default=None, min_length=1)
     exclude_paths: tuple[str, ...] | None = None
     severity: Severity | None = None
+    ci_only: bool | None = None
 
     @model_validator(mode="before")
     @classmethod
@@ -42,6 +43,7 @@ class RulesetConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     severity: Severity | None = None
+    ci_only: bool = False
     include: tuple[str, ...] | None = None
     exclude: tuple[str, ...] = ()
     rules: dict[str, RuleOverride] = {}
@@ -67,6 +69,10 @@ class RulesetConfig(BaseModel):
         if self.include is not None:
             return rule not in self.include
         return rule in self.exclude
+
+    def is_ci_only(self, rule: str) -> bool:
+        override = self.rules.get(rule, RuleOverride()).ci_only
+        return self.ci_only if override is None else override
 
     def apply(self, rule: str, binding: BindingConfig) -> BindingConfig:
         override = self.rules.get(rule, RuleOverride())

@@ -40,7 +40,16 @@ def response(host: str) -> dict[str, str]:
     codeguard = os.environ.get("CODEGUARD", str(BUNDLED))
     try:
         review = subprocess.run(
-            [codeguard, "review", "--format", "json", "--judge-errors-as-warnings", "--host", host],
+            [
+                codeguard,
+                "review",
+                "--format",
+                "json",
+                "--judge-errors-as-warnings",
+                "--skip-ci-only",
+                "--host",
+                host,
+            ],
             capture_output=True,
             text=True,
             check=False,
