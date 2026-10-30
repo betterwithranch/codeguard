@@ -813,17 +813,19 @@ uv run pytest
 
 `uv run pytest` runs offline: it calls no model. The LLM tests check that the judge's
 instructions, request and tools still get the right verdicts from a real model. Each
-one reviews an edit in a scratch repository the way `codeguard review` does, calling
-the real `claude` CLI, so they cost tokens. They are marked `llm`, which plain `pytest`
+one reviews an edit in a scratch repository the way `codeguard review` does, with the
+fixture bindings' judge, `gemini-3.1-pro-preview` on Vertex AI, so they need Gemini
+credentials (Gemini on Google Cloud, above) and cost tokens. They are marked `llm`, which plain `pytest`
 deselects. CI runs them; run them after changing the judge's instructions, request or
 tools:
 
 ```sh
-uv run pytest -m llm -n 8    # each case 3 times, as CI does
+uv run pytest -m llm -n 4    # each case 3 times, as CI does
 ```
 
-`-n 8` runs eight tests at once, each with its own `claude` call. It only saves time: any
-number gives the same result. [docs/testing.md](docs/testing.md) says which to run for a
+`-n 4` runs four tests at once, each making up to 2 Gemini calls at once. It only saves
+time: any number gives the same result, though more may hit Gemini's tokens-per-minute
+limit. [docs/testing.md](docs/testing.md) says which to run for a
 change.
 
 Their fixtures are the cases in `evals/judge/python/rule-evals/`, with the skills and

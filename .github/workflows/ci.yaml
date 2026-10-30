@@ -29,15 +29,16 @@ jobs:
           fetch-depth: 0
       - uses: ./
         with:
-          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           logfire-token: ${{ secrets.LOGFIRE_TOKEN }}
           dry-run: true
   llm-tests:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - uses: google-github-actions/auth@v3
+        with:
+          credentials_json: ${{ secrets.GOOGLE_CREDENTIALS }}
       - uses: astral-sh/setup-uv@v10.2.0
-      - run: npm install --global @anthropic-ai/claude-code
-      - run: uv run --frozen pytest -m llm -n 8
-        env:
-          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      # Each worker makes 2 Gemini calls at once, which keeps the run under Vertex's
+      # tokens-per-minute limit.
+      - run: uv run --frozen pytest -m llm -n 4
