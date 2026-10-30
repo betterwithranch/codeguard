@@ -830,9 +830,6 @@ case's triggers.
 The `writing-rules` skill has its own evals in `evals/writing-rules/`;
 [docs/skill-evals.md](docs/skill-evals.md) says how to run and write them.
 
-On Linux, set `TMPDIR` to a directory outside `/tmp`: the eval puts each run under it,
-and its sandbox denies writes under `/tmp`, so every command fails.
-
 Run the CLI from this clone. `--editable` links the tool to the source, so edits
 apply on the next run; reinstall only after changing dependencies:
 

@@ -479,7 +479,7 @@ class TestBundledCommand:
         assert (home / ".cache" / "codeguard" / "venv" / "bin" / "codeguard").exists()
 
     def test_a_session_runs_codeguard_without_writing_or_downloading(
-        self, uv_only, bundled, home, tmp_path
+        self, uv_only, bundled, tmp_path
     ):
         env_file = tmp_path / "session-env.sh"
         started = subprocess.run(
@@ -495,15 +495,13 @@ class TestBundledCommand:
                 "PATH": os.pathsep.join([str(uv_only), "/usr/bin", "/bin"]),
             },
         )
-        environment = home / ".cache" / "codeguard" / "venv"
+        environment = tmp_path / "plugin-data" / "venv"
 
         assert (started.returncode, started.stdout) == (0, "")
-        assert env_file.read_text() == (
-            f'export CODEGUARD_ENVIRONMENT="{environment}"\nexport PATH="{PROJECT}/bin:$PATH"\n'
-        )
+        assert env_file.read_text() == f'export CODEGUARD_ENVIRONMENT="{environment}"\n'
 
         result = subprocess.run(
-            ["sh", "-c", f". {env_file} && codeguard --help"],
+            ["sh", "-c", f". {env_file} && {PROJECT}/bin/codeguard --help"],
             capture_output=True,
             text=True,
             env={**without_codeguard(), "HOME": "/nonexistent", "PATH": "/usr/bin:/bin"},
