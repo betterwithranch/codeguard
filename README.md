@@ -597,7 +597,9 @@ the class it's in; for a changed `elif`, `else`, `except` or `finally` line, jus
 clause, with the `try` block an `except` guards; each class whose header changed, whole;
 each changed comment or docstring line alone; and, for each of the rule's
 triggers, the whole of each node of that kind around a changed line of code, so the judge
-sees the code that made the rule apply. Removed lines are sent with the code the change
+sees the code that made the rule apply. The file's module-level import statements are sent
+too, changed or not, so the judge sees which module each name the changed code uses comes
+from. Removed lines are sent with the code the change
 kept around them, the same way: the function or method they were in, the header of their
 class, the rest of a statement they were part of, or the header of the statement whose
 block they were in (for a removed `except`, its `try` and the block it guarded), never the

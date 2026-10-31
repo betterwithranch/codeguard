@@ -35,7 +35,8 @@ class ChangeClassifier:
             )
             before = base.get(file)
             kinds[file] = parsed.touched_kinds(added, before, removed)
-            judged[file] = parsed.judged_lines(added)
+            # The imports show the judge which module each name the changed code uses is from.
+            judged[file] = parsed.judged_lines(added) | parsed.import_lines
             kind_lines[file] = parsed.kind_lines(added)
             if before is None:
                 continue

@@ -1,9 +1,13 @@
 import pytest
+from git_repo import GitRepo
 from pydantic import ValidationError
 
+from codeguard.ast_grep import AstGrep
 from codeguard.review import JudgeRequest, Severity, Verdict
+from codeguard.review.binding import Binding
 from codeguard.review.judge import INSTRUCTIONS, Violation
-from codeguard.working_tree import AllLines, ChangedLines, Removal
+from codeguard.syntax import ChangeClassifier, SyntaxScanner
+from codeguard.working_tree import AllLines, ChangedLines, Removal, WorkingTree
 
 THRESHOLD = 0.9
 
@@ -233,3 +237,86 @@ class TestVerdict:
         assert diagnostics == (
             make_diagnostic(judged=True, severity=Severity.INFO, confidence=0.5),
         )
+
+
+def classified_changes(git_repo: GitRepo, binding: Binding, file: str) -> str:
+    working_tree = WorkingTree(git_repo.root)
+    classifier = ChangeClassifier(SyntaxScanner(AstGrep(), {}), working_tree)
+    scope = classifier.classify(working_tree.changed_lines("HEAD"))
+    return JudgeRequest.of_change(binding, git_repo.root, file, scope).changes
+
+
+class TestJudgeRequestOfAClassifiedChange:
+    def test_unchanged_import_the_changed_code_uses_is_context(self, tmp_path, make_binding):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("checkout/discounts.py", "from checkout.coupons import is_coupon_code\n")
+        git_repo.commit("Add discounts")
+        git_repo.write(
+            "checkout/discounts.py",
+            "import re\n"
+            "\n"
+            "from checkout.coupons import is_coupon_code\n"
+            "\n"
+            "\n"
+            "def discount_cents(code: str, subtotal_cents: int) -> int:\n"
+            "    normalized = code.strip().upper()\n"
+            '    if normalized.startswith("TEST-") or re.fullmatch(r"[A-Z]{4}-\\d{4}", '
+            "normalized) is None:\n"
+            "        return 0\n"
+            "    return subtotal_cents // 10\n",
+        )
+
+        changes = classified_changes(git_repo, make_binding(), "checkout/discounts.py")
+
+        assert changes == (
+            "+     1\timport re\n"
+            "      3\tfrom checkout.coupons import is_coupon_code\n"
+            "+     6\tdef discount_cents(code: str, subtotal_cents: int) -> int:\n"
+            "+     7\t    normalized = code.strip().upper()\n"
+            '+     8\t    if normalized.startswith("TEST-") or re.fullmatch(r"[A-Z]{4}-\\d{4}", '
+            "normalized) is None:\n"
+            "+     9\t        return 0\n"
+            "+    10\t    return subtotal_cents // 10\n"
+        )
+
+    def test_unchanged_import_below_an_added_one_is_context(self, tmp_path, make_binding):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("accounts/reminders.py", "from accounts.subscription import Subscription\n")
+        git_repo.commit("Add reminders")
+        git_repo.write(
+            "accounts/reminders.py",
+            "from datetime import date, timedelta\n"
+            "\n"
+            "from accounts.subscription import Subscription\n"
+            "\n"
+            "\n"
+            "def reminder_date(subscription: Subscription) -> date:\n"
+            "    trial_end = subscription.started_on + timedelta(\n"
+            "        days=subscription.trial_days + subscription.extended_days\n"
+            "    )\n"
+            "    return trial_end - timedelta(days=3)\n",
+        )
+
+        changes = classified_changes(git_repo, make_binding(), "accounts/reminders.py")
+
+        assert changes == (
+            "+     1\tfrom datetime import date, timedelta\n"
+            "      3\tfrom accounts.subscription import Subscription\n"
+            "+     6\tdef reminder_date(subscription: Subscription) -> date:\n"
+            "+     7\t    trial_end = subscription.started_on + timedelta(\n"
+            "+     8\t        days=subscription.trial_days + subscription.extended_days\n"
+            "+     9\t    )\n"
+            "+    10\t    return trial_end - timedelta(days=3)\n"
+        )
+
+    def test_import_inside_a_function_is_not_context_for_a_change_elsewhere(
+        self, tmp_path, make_binding
+    ):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "def load():\n    import json\n\n\nRATE = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "def load():\n    import json\n\n\nRATE = 2\n")
+
+        changes = classified_changes(git_repo, make_binding(), "a.py")
+
+        assert changes == "-     5\tRATE = 1\n+     5\tRATE = 2\n"
