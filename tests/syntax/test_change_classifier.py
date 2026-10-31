@@ -202,6 +202,14 @@ class TestChangeClassifier:
 
         assert classified_judged_lines(git_repo, "a.py") == {1}
 
+    def test_edit_judges_the_module_imports_with_the_changed_line(self, tmp_path):
+        git_repo = GitRepo.init(tmp_path.resolve())
+        git_repo.write("a.py", "import os\nfrom app import (\n    rates,\n)\nRATE = 1\n")
+        git_repo.commit("Add a")
+        git_repo.write("a.py", "import os\nfrom app import (\n    rates,\n)\nRATE = 2\n")
+
+        assert classified_judged_lines(git_repo, "a.py") == {1, 2, 3, 4, 5}
+
     def test_method_added_to_a_class_judges_the_method(self, tmp_path):
         git_repo = GitRepo.init(tmp_path.resolve())
         git_repo.write("a.py", "class Order:\n    def total(self):\n        return 1\n")

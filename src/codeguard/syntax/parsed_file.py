@@ -43,6 +43,12 @@ class ParsedFile:
             )
         )
 
+    @property
+    def import_lines(self) -> frozenset[int]:
+        """The lines of the module's import statements, which tie its code to the modules
+        it uses."""
+        return frozenset(line for node in self.of_kind(NodeKind.IMPORT) for line in node.lines)
+
     def kind_lines(
         self, points: frozenset[int], removed: frozenset[int] = frozenset()
     ) -> dict[str, frozenset[int]]:
