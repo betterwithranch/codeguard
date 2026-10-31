@@ -603,8 +603,9 @@ class, the rest of a statement they were part of, or the header of the statement
 block they were in (for a removed `except`, its `try` and the block it guarded), never the
 code beside them. A renamed file is compared with the file it was renamed from. Unless
 a class's header changed, its other members aren't sent, though the judge can read them.
-What is sent is what the judge has to read to decide; anything it only might need, it
-reads itself.
+What is sent is an excerpt: the judge is told the rest of the file, its imports included,
+isn't shown, and reads the whole file and the files defining the names the changed code
+imports before it judges. Anything else it needs, it reads itself.
 Lines carry the file's line numbers; added and changed lines are marked `+`, and the
 lines git's diff shows the change removed are marked `-`. A new file is sent whole but
 for its blank lines outside a function or method; every file with `--all` is sent whole,

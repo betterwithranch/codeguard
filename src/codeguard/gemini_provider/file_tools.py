@@ -45,9 +45,8 @@ class FileTools:
     def read_file(self, path: str, offset: int = 1) -> str:
         """Read a file in the working directory.
 
-        Use it when the convention needs code the `changes` element doesn't show: the rest of
-        the file under review, or a file it imports, calls or names. Don't use it to see lines
-        the `changes` element already shows.
+        Use it to read the file under review, which the `changes` element shows only part of,
+        and the files it imports, calls or names.
 
         Args:
             path: The file's path relative to the working directory, such as `orders/order.py`.
